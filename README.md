@@ -1,4 +1,4 @@
-# Framework for Autonomous Vehicle Risk Assessment
+# Autonomous Vehicle Risk Assessment Framework
 
 Several Julia packages will be located within this respository, which can be added via:
 
@@ -13,6 +13,11 @@ using Pkg
 Pkg.dev(PackageSpec(path="https://github.com/mossr/AutonomousRiskFramework", subdir="RiskSimulator.jl"))
 Pkg.dev(PackageSpec(path="https://github.com/mossr/AutonomousRiskFramework", subdir="STLComputationGraphs.jl"))
 ```
+
+## Notebooks
+[![Toy problem](https://img.shields.io/badge/pluto-running%20example-8c1515)](./notebooks/automotive_notebook.jl)
+
+Open Julia, install Pluto via `] add Pluto` (where `]` gets to the package manager). Then from the Julia prompt, run `using Pluto; Pluto.run()` and open the notebook located in `notebooks/`. 
 
 
 ## Related packages
