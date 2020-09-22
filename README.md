@@ -1,6 +1,6 @@
 # Autonomous Vehicle Risk Assessment Framework
 
-Several Julia packages will be located within this respository, which can be added via:
+**Note:** Julia v1.3+ is required for AutomotiveSimulator.
 
 Change directory to each ".jl" folder, then within `julia` run:
 ```julia
