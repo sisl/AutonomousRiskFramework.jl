@@ -13,8 +13,11 @@ macro bind(def, element)
     end
 end
 
-# ╔═╡ 3bca7980-fc80-11ea-0bde-b5e9b35bdc9b
-try using AddPackage catch; using Pkg; Pkg.add("AddPackage") end
+# ╔═╡ 15ef10d0-fc9f-11ea-1119-97dbd79f9b18
+using Pkg
+
+# ╔═╡ f2b54620-fc9e-11ea-39ff-359741466fb9
+try using AddPackage catch; pkg"add https://github.com/mossr/AddPackage.jl" end
 
 # ╔═╡ 4e5ea39e-fc80-11ea-103a-f3a1cea1550a
 @add using AutomotiveSimulator, AutomotiveVisualization
@@ -27,9 +30,6 @@ md"""
 # Automotive driving example
 Using the *straight roadways* example from [AutomotiveSimulator.jl](https://sisl.github.io/AutomotiveSimulator.jl/dev/)
 """
-
-# ╔═╡ 5bfe16ce-fc85-11ea-00e8-79b38894afdf
-# pkg"add https://github.com/mossr/BeautifulAlgorithms.jl"
 
 # ╔═╡ 65be6d50-fc85-11ea-3178-41eac8a5d2d9
 md"""
@@ -96,8 +96,8 @@ render([roadway, scenes[sim_t]], camera=camera)
 
 # ╔═╡ Cell order:
 # ╟─15cecfb0-fc80-11ea-259e-0dbe9a2978e0
-# ╠═5bfe16ce-fc85-11ea-00e8-79b38894afdf
-# ╠═3bca7980-fc80-11ea-0bde-b5e9b35bdc9b
+# ╠═15ef10d0-fc9f-11ea-1119-97dbd79f9b18
+# ╠═f2b54620-fc9e-11ea-39ff-359741466fb9
 # ╠═4e5ea39e-fc80-11ea-103a-f3a1cea1550a
 # ╟─65be6d50-fc85-11ea-3178-41eac8a5d2d9
 # ╠═adf91900-fc83-11ea-384f-412e4b296dd3
