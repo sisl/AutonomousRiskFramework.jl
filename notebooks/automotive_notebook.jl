@@ -17,7 +17,7 @@ end
 using Pkg
 
 # ╔═╡ f2b54620-fc9e-11ea-39ff-359741466fb9
-try using AddPackage catch; pkg"add https://github.com/mossr/AddPackage.jl" end
+try using AddPackage catch; Pkg.add("AddPackage") end
 
 # ╔═╡ 4e5ea39e-fc80-11ea-103a-f3a1cea1550a
 @add using AutomotiveSimulator, AutomotiveVisualization
