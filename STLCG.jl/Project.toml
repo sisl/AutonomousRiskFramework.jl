@@ -1,0 +1,17 @@
+name = "STLCG"
+uuid = "6ababdf7-4701-4f28-b3b2-5630f64e3c98"
+desc = "A toolbox to compute the robustness of STL formulas using computation graphs"
+authors = ["Karen Leung <karenl7@stanford.edu", "Nikos Arechiga <nikos.arechiga@tri.global", "Robert Moss <mossr@cs.stanford.edu>"]
+version = "0.1.0"
+
+[deps]
+Parameters = "d96e819e-fc66-5662-9728-84c9c7592b0a"
+
+[compat]
+julia = "1"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]

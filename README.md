@@ -10,8 +10,8 @@ Change directory to each ".jl" folder, then within `julia` run:
 Without cloning the entire repository, each sub-package can be added via:
 ```julia
 using Pkg
-Pkg.dev(PackageSpec(path="https://github.com/mossr/AutonomousRiskFramework", subdir="RiskSimulator.jl"))
-Pkg.dev(PackageSpec(path="https://github.com/mossr/AutonomousRiskFramework", subdir="STLComputationGraphs.jl"))
+Pkg.develop(PackageSpec(url="<PATH_TO_DIR>/AutonomousRiskFramework/RiskSimulator.jl"))
+Pkg.develop(PackageSpec(url="<PATH_TO_DIR>/AutonomousRiskFramework/STLCG.jl"))
 ```
 
 ## Notebooks
