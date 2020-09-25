@@ -14,6 +14,10 @@ Pkg.develop(PackageSpec(url="<PATH_TO_DIR>/AutonomousRiskFramework/RiskSimulator
 Pkg.develop(PackageSpec(url="<PATH_TO_DIR>/AutonomousRiskFramework/STLCG.jl"))
 ```
 
+## Code style
+
+See: https://github.com/invenia/BlueStyle
+
 ## Notebooks
 [![Toy problem](https://img.shields.io/badge/pluto-running%20example-8c1515)](./notebooks/automotive_notebook.jl)
 
