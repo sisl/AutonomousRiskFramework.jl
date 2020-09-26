@@ -1,6 +1,6 @@
 # Autonomous Vehicle Risk Assessment Framework
 
-**Note:** Julia v1.3+ is required for AutomotiveSimulator.
+**Note:** Julia v1.5+ is required for AutomotiveSimulator and POMDPStressTesting.
 
 Change directory to each ".jl" folder, then within `julia` run:
 ```julia
