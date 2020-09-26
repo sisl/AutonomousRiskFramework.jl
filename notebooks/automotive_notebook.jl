@@ -75,7 +75,7 @@ models = Dict{Int, LaneFollowingDriver}(
 )
 
 # ╔═╡ 1c9cd980-fc86-11ea-2573-79eb8a0a17be
-nticks, timestep = 200, 1.0;
+nticks, timestep = 30, 1.0;
 
 # ╔═╡ 41251d2e-fc86-11ea-1028-415f6f3994a0
 scenes = simulate(scene, roadway, models, nticks, timestep);
