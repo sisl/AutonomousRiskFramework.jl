@@ -19,7 +19,7 @@ Pkg.develop(PackageSpec(url="<PATH_TO_DIR>/AutonomousRiskFramework/STLCG.jl"))
 See: https://github.com/invenia/BlueStyle
 
 ## Notebooks
-[![Toy problem](https://img.shields.io/badge/pluto-running%20example-8c1515)](./notebooks/automotive_notebook.jl)
+[![Woring problem](https://img.shields.io/badge/pluto-running%20example-8c1515)](./notebooks/ast_notebook.jl)
 
 Open Julia, install Pluto via `] add Pluto` (where `]` gets to the package manager). Then from the Julia prompt, run `using Pluto; Pluto.run()` and open the notebook located in `notebooks/`. 
 

@@ -94,6 +94,9 @@ dt = 1
 # ╔═╡ 37463040-fc88-11ea-1048-01928fd99839
 render([roadway, scenes[sim_t]], camera=camera)
 
+# ╔═╡ 06a1a040-0481-11eb-26b5-9b4f8c8d7877
+get_distance(scenes[sim_t][1], scenes[sim_t][2])
+
 # ╔═╡ Cell order:
 # ╟─15cecfb0-fc80-11ea-259e-0dbe9a2978e0
 # ╠═15ef10d0-fc9f-11ea-1119-97dbd79f9b18
@@ -116,3 +119,4 @@ render([roadway, scenes[sim_t]], camera=camera)
 # ╠═838a4450-fc88-11ea-215e-5d246a672a9e
 # ╠═486ff4f0-fc88-11ea-3f52-79c9604b9bb2
 # ╠═37463040-fc88-11ea-1048-01928fd99839
+# ╠═06a1a040-0481-11eb-26b5-9b4f8c8d7877
