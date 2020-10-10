@@ -1,5 +1,5 @@
 module STLCG
-
+using Revise
 using EllipsisNotation
 using LinearAlgebra
 using Parameters # for @with_kw
@@ -187,15 +187,13 @@ end
 # end
 
 
-# function init_rnn_cell!(op::Operator)
-#     # Catch-all for non-specialized Operator type
-# end
+
 
 
 function init_rnn_cell!(op::TemporalFormula, x)
     n = [size(x)...]
-    n[2] = op.rnn_dim
-    h0 = ones(n...) .* x[:,1:1,..]
+    # n[2] = op.rnn_dim
+    h0 = ones(n...)[:,1:op.rnn_dim,..] .* x[:,1:1,..]
     ct = 0.0
     if (op._interval[2] == Inf) & (op._interval[1] > 0)
         d0 = x[:,1:1,..]
@@ -228,10 +226,10 @@ function rnn_cell(op::Always, x, hc; scale=0, distributed=false)
             d0, h00 = h0
             dh = cat(d0, h00[:,1:1,..], dims=2)
             output = op.operation(dh; scale, distributed, dims=2)
-            new_h = cat(h00[:,1:end-1,:], x, dims=2)
+            new_h = cat(h00[:,2:end,:], x, dims=2)
             state = ((output, new_h), nothing)
         else
-            state = cat(h0[:,1:end-1,:], x, dims=2)
+            state = cat(h0[:,2:end,:], x, dims=2)
             input_ = cat(h0, x, dims=2)[:,1:op.steps,..]
             output = op.operation(input_; scale, distributed, dims=2)
         end
@@ -260,50 +258,107 @@ function rnn_cell(op::Eventually, x, hc; scale=0, distributed=false)
             d0, h00 = h0
             dh = cat(d0, h00[:,1:1,..], dims=2)
             output = op.operation(dh; scale, distributed, dims=2)
-            new_h = cat(h00[:,1:end-1,:], x, dims=2)
+            new_h = cat(h00[:,2:end,:], x, dims=2)
             state = ((output, new_h), nothing)
         else
-            state = cat(h0[:,1:end-1,:], x, dims=2)
+            state = cat(h0[:,2:end,:], x, dims=2)
             input_ = cat(h0, x, dims=2)[:,1:op.steps,..]
             output = op.operation(input_; scale, distributed, dims=2)
         end
     end
-    return output, states
+    return (output, states)
 end
 
 
 
-function run_rnn_cell(op::TemporalFormula, x; scale=0, distributed=false)
-    outputs = []
-    states = []
-    hc = init_rnn_cell!(op, x)
+
+
+function run_rnn_cell(op::TemporalFormula, x, x0; scale=0, distributed=false)
+    states = ()
+    hc = STLCG.init_rnn_cell!(op, x0)
     time_dim = size(x)[2]
-    xs = [x[:,i:i,..] for i in 1:time_dim]
     for t in 1:time_dim
-        o, hc = rnn_cell(op, xs[t], hc)
-        push!(outputs, o)
-        push!(states, hc)
+        o, hc = rnn_cell(op, x[:,t:t,..], hc; scale, distributed)
+        if t == 1
+            global outputs = o
+        else
+            outputs = cat(outputs, o, dims=2)
+        end
+        states = (states..., hc)
     end
     return outputs, states
 end
 
 
-
-
-# function robustness_trace(formula::Formula)
-#     # Catch-all
+# function robustness_trace(op::TemporalFormula, trace; scale=0, dims=1, keepdims=True, distributed=false)
+#     robustness_trace(op, x,)
 # end
 
 
-# robustness_trace(formula::LessThan, trace, pscale=1.0) = (formula.val - trace)*pscale
-# robustness_trace(formula::GreaterThan, trace, pscale=1.0) = (trace - formula.val)*pscale
+
+robustness_trace(formula::LessThan, trace; pscale=1.0, kwargs...) = (formula.rhs .- trace)*pscale
+robustness_trace(formula::GreaterThan, trace; pscale=1.0, kwargs...) = (trace .- formula.rhs)*pscale
+robustness_trace(formula::Equal, trace; pscale=1.0, kwargs...) = -abs.(trace .- formula.rhs)*pscale
+robustness_trace(formula::Negation, trace; kwargs...) = -robustness_trace(formula.subformula, trace; kwargs...)
+
+function robustness_trace(formula::Implies, trace; pscale=1, scale=0, keepdims=true, distributed=false)
+    x, y = trace   # [bs, time, x_dim,...]
+    trace1 = robustness_trace(formula.subformula1, x; pscale, scale, keepdims, distributed)
+    trace2 = robustness_trace(formula.subformula2, y; pscale, scale, keepdims, distributed)
+    xx = cat(-trace1, trace2, dims=length(size(x))+1)
+    Maxish(xx; scale, dims=length(size(x))+1, keepdims, distributed)
+end
 
 
-# next_function(formula::Formula) = [formula.lhs, formula.val]
-# next_function(formula::Union{Negation, Integral1D}) = [formula.subformula]
-# next_function(formula::Union{Implies, And, Or, Until, Then}) = [formula.subformula1, formula.subformula2]
+function separate_and(formula, input; dims=4, pscale=1, scale=0, keepdims=true, distributed=false)
+    if typeof(formula) != And
+        return robustness_trace(formula, input; dims, pscale, scale, keepdims, distributed)
+    else
+        return cat(separate_and(formula.subformula1, input[1]; dims, pscale, scale, keepdims, distributed),
+                   separate_and(formula.subformula2, input[2]; dims, pscale, scale, keepdims, distributed); 
+                   dims
+                   )
+    end
+end
+
+function robustness_trace(formula::And, trace; dims=4, pscale=1, scale=0, keepdims=true, distributed=false)
+    xx = separate_and(formula, trace; dims, pscale, scale, keepdims, distributed)
+    Minish(xx; scale, dims, keepdims=false, distributed)
+end
 
 
+function separate_or(formula, input; dims=4, pscale=1, scale=0, keepdims=true, distributed=false)
+    if typeof(formula) != Or
+        return robustness_trace(formula, input; dims, pscale, scale, keepdims, distributed)
+    else
+        return cat(separate_or(formula.subformula1, input[1]; dims, pscale, scale, keepdims, distributed),
+                   separate_or(formula.subformula2, input[2]; dims, pscale, scale, keepdims, distributed); 
+                   dims
+                   )
+    end
+end
+
+function robustness_trace(formula::Or, trace; dims=4, pscale=1, scale=0, keepdims=true, distributed=false)
+    xx = separate_or(formula, trace; dims, pscale, scale, keepdims, distributed)
+    Maxish(xx; scale, dims, keepdims=false, distributed)
+end
+
+
+
+next_function(formula::TemporalFormula) = [formula.subformula]
+next_function(formula::Union{LessThan, GreaterThan, Equal}) = [formula.lhs, formula.rhs]
+next_function(formula::Negation) = [formula.subformula]
+next_function(formula::Union{Implies, And, Or, Until, Then}) = [formula.subformula1, formula.subformula2]
+
+Base.print(op::STLCG.LessThan) = print(string(op.lhs) * " < " * string(op.rhs)) 
+Base.print(op::STLCG.GreaterThan) = print(string(op.lhs) * " > " * string(op.rhs)) 
+Base.print(op::STLCG.Equal) = print(string(op.lhs) * " = " * string(op.rhs)) 
+Base.print(op::STLCG.Negation) = print("¬(" * string(op.subformula) *")") 
+Base.print(op::STLCG.Implies) = print(string(op.lhs) * " → " * string(op.rhs)) 
+Base.print(op::STLCG.And) = print(string(op.lhs) * " ∧ " * string(op.rhs)) 
+Base.print(op::STLCG.Or) = print(string(op.lhs) * " ∨ " * string(op.rhs)) 
+Base.print(op::STLCG.Until) = print(string(op.lhs) * " U " * string(op.rhs)) 
+Base.print(op::STLCG.Then) = print(string(op.lhs) * " T " * string(op.rhs)) 
 
 # ##################################################
 # # Old method of evaluating an STL formula below.
