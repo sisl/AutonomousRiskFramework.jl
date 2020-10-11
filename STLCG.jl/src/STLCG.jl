@@ -350,6 +350,11 @@ next_function(formula::Union{LessThan, GreaterThan, Equal}) = [formula.lhs, form
 next_function(formula::Negation) = [formula.subformula]
 next_function(formula::Union{Implies, And, Or, Until, Then}) = [formula.subformula1, formula.subformula2]
 
+
+□(subformula; interval=nothing) = Always(;subformula, interval)
+◊(subformula; interval=nothing) = Eventually(;subformula, interval)
+
+
 Base.print(op::STLCG.LessThan) = print(string(op.lhs) * " < " * string(op.rhs)) 
 Base.print(op::STLCG.GreaterThan) = print(string(op.lhs) * " > " * string(op.rhs)) 
 Base.print(op::STLCG.Equal) = print(string(op.lhs) * " = " * string(op.rhs)) 
