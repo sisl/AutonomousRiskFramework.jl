@@ -12,14 +12,15 @@ export Maxish,
        TemporalFormula,
        Formula,
        Always,
-       Eventually
-       # LessThan,
-       # Equal,
-       # Negation,
-       # Implies,
-       # And,
-       # Or,
-       # Until,
+       Eventually,
+       LessThan,
+       GreaterThan,
+       Equal,
+       Negation,
+       Implies,
+       And,
+       Or,
+       Until
        # Then,
        # Integral1D,
        # always,
@@ -155,7 +156,7 @@ end
     operation = Maxish
 end
 
-struct Until <: Formula
+struct Until <: TemporalFormula
     subformula1
     subformula2
 
@@ -285,6 +286,8 @@ function run_rnn_cell(op::TemporalFormula, x; pscale=1, scale=0, keepdims=true, 
 end
 
 
+
+
 # function robustness_trace(op::TemporalFormula, trace; scale=0, dims=1, keepdims=True, distributed=false)
 #     robustness_trace(op, x,)
 # end
@@ -338,11 +341,25 @@ function robustness_trace(formula::Or, trace; dims=4, pscale=1, scale=0, keepdim
     Maxish(xx; scale, dims, keepdims=false, distributed)
 end
 
-function robustness_trace(formula::TemporalFormula, trace; pscale=1, scale=0, keepdims=true, distributed=false, kwargs...)
+function robustness_trace(formula::Union{Always, Eventually}, trace; pscale=1, scale=0, keepdims=true, distributed=false, kwargs...)
     outputs, states = run_rnn_cell(formula, trace; pscale, scale, keepdims, distributed)
-    outputs[:,end:end,..]
+    outputs
 end
 
+function robustness_trace(formula::Until, trace; pscale=1, scale=0, keepdims=true, distributed=false, kwargs...)
+    # input traces must be 3D [batch, time, xdim]
+    # TODO interval for the until formula
+    LARGE_NUMBER = 1E6
+    trace1 = formula.subformula1(trace[1])
+    trace2 = formula.subformula2(trace[2])
+    Alw = Always(subformula=GreaterThan(:z, 0.0), interval=nothing)
+    LHS = permutedims(repeat(reshape(trace2, (size(trace2)..., 1)), 1,1,1,size(trace2)[2]), [1, 4, 3, 2])
+    RHS = ones(size(LHS)) * -LARGE_NUMBER
+    for i in 1:size(trace2)[2]
+        RHS[:,i:end,:,i] = Alw(trace1[:,i:end,:]; pscale, scale, keepdims, distributed)
+    end
+    return Maxish(Minish(cat(LHS, RHS, dims=5); dims=5, scale, keepdims=false, distributed); scale, keepdims=false, distributed, dims=4)
+end
 
 next_function(formula::TemporalFormula) = [formula.subformula]
 next_function(formula::Union{LessThan, GreaterThan, Equal}) = [formula.lhs, formula.rhs]
