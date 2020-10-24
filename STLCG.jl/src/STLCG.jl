@@ -20,13 +20,14 @@ export Maxish,
        Implies,
        And,
        Or,
-       Until
-       # Then,
-       # Integral1D,
-       # always,
-       # eventually,
-       # □,
-       # ◊
+       Until,
+       Then,
+       □,
+       ◊,
+       ρ,
+       ρt,
+       robustness,
+       robustness_trace
 
 
 ##################################################
@@ -85,16 +86,6 @@ abstract type TemporalFormula end
     rnn_dim = (interval == nothing) ? Int8(1) : (interval[end] == Inf ? Int8(interval[1]) : Int8(interval[2]))
     steps = (interval == nothing) ? Int8(1) : Int8(diff([1,5])[1] + 1)
     operation = Minish
-    M = begin
-            dv = zeros(Int8(rnn_dim))
-            ev = ones(Int8(rnn_dim-1))
-            Array(Bidiagonal(dv, ev, :U))
-        end
-    b = begin
-            bi = zeros(Int8(rnn_dim))
-            bi[end] = 1.0
-            bi
-        end
 end
 
 @with_kw struct Eventually <: TemporalFormula
@@ -104,34 +95,25 @@ end
     rnn_dim = (interval == nothing) ? Int8(1) : (interval[end] == Inf ? Int8(interval[1]) : Int8(interval[2]))
     steps = (interval == nothing) ? Int8(1) : Int8(diff([1,5])[1] + 1)
     operation = Maxish
-    M = begin
-            dv = zeros(Int8(rnn_dim))
-            ev = ones(Int8(rnn_dim-1))
-            Array(Bidiagonal(dv, ev, :U))
-        end
-    b = begin
-            bi = zeros(Int8(rnn_dim))
-            bi[end] = 1.0
-            bi
-        end
 end
 
-struct LessThan <: Formula
+@with_kw struct LessThan <: Formula
+    lhs
+    rhs
+
+end
+
+@with_kw struct GreaterThan <: Formula
     lhs
     rhs
 end
 
-struct GreaterThan <: Formula
+@with_kw struct Equal <: Formula
     lhs
     rhs
 end
 
-struct Equal <: Formula
-    lhs
-    rhs
-end
-
-struct Negation <: Formula
+@with_kw struct Negation <: Formula
     subformula
 end
 
@@ -156,21 +138,17 @@ end
     operation = Maxish
 end
 
-struct Until <: TemporalFormula
+@with_kw struct Until <: TemporalFormula
     subformula1
     subformula2
+    interval = nothing
 
-    # Until() = new(nothing, nothing) # example constructor
+    # Until(ϕ, ψ; interval=nothing) = new(ϕ, ψ, interval)
 end
 
 struct Then <: Formula
     subformula1
     subformula2
-
-    # function Then()
-    #     # example constructor (longer `function` format)
-    #     return new(nothing, nothing)
-    # end
 end
 
 
@@ -270,7 +248,7 @@ end
 
 function run_rnn_cell(op::TemporalFormula, x; pscale=1, scale=0, keepdims=true, distributed=false)
     states = ()
-    xx = robustness_trace(op.subformula, x; pscale, scale, keepdims, distributed)
+    xx = ρt(op.subformula, x; pscale, scale, keepdims, distributed)
     hc = init_rnn_cell!(op, xx)
     time_dim = size(xx)[2]
     for t in 1:time_dim
@@ -294,23 +272,42 @@ end
 
 
 
-robustness_trace(formula::LessThan, trace; pscale=1.0, kwargs...) = (formula.rhs .- trace)*pscale
-robustness_trace(formula::GreaterThan, trace; pscale=1.0, kwargs...) = (trace .- formula.rhs)*pscale
-robustness_trace(formula::Equal, trace; pscale=1.0, kwargs...) = -abs.(trace .- formula.rhs)*pscale
-robustness_trace(formula::Negation, trace; kwargs...) = -robustness_trace(formula.subformula, trace; kwargs...)
+# robustness_trace(formula::LessThan, trace; pscale=1.0, kwargs...) = (formula.rhs .- trace)*pscale
+# robustness_trace(formula::GreaterThan, trace; pscale=1.0, kwargs...) = (trace .- formula.rhs)*pscale
+# robustness_trace(formula::Equal, trace; pscale=1.0, kwargs...) = -abs.(trace .- formula.rhs)*pscale
+# robustness_trace(formula::Negation, trace; kwargs...) = -robustness_trace(formula.subformula, trace; kwargs...)
 
-function robustness_trace(formula::Implies, trace; pscale=1, scale=0, keepdims=true, distributed=false, kwargs...)
+ρt(formula::LessThan, trace; pscale=1.0, kwargs...) = (formula.rhs .- trace)*pscale
+ρt(formula::GreaterThan, trace; pscale=1.0, kwargs...) = (trace .- formula.rhs)*pscale
+ρt(formula::Equal, trace; pscale=1.0, kwargs...) = -abs.(trace .- formula.rhs)*pscale
+ρt(formula::Negation, trace; kwargs...) = -ρt(formula.subformula, trace; kwargs...)
+
+
+
+# robustness(formula::LessThan, trace; pscale=1.0, kwargs...) = formula(trace; pscale, kwargs...)[:,end:end,..]
+# robustness(formula::GreaterThan, trace; pscale=1.0, kwargs...) = formula(trace; pscale, kwargs...)[:,end:end,..]
+# robustness(formula::Equal, trace; pscale=1.0, kwargs...) = formula(trace; pscale, kwargs...)[:,end:end,..]
+# robustness(formula::Negation, trace; kwargs...) = formula(trace; kwargs...)[:,end:end,..]
+
+ρ(formula::LessThan, trace; pscale=1.0, kwargs...) = formula(trace; pscale, kwargs...)[:,end:end,..]
+ρ(formula::GreaterThan, trace; pscale=1.0, kwargs...) = formula(trace; pscale, kwargs...)[:,end:end,..]
+ρ(formula::Equal, trace; pscale=1.0, kwargs...) = formula(trace; pscale, kwargs...)[:,end:end,..]
+ρ(formula::Negation, trace; kwargs...) = formula(trace; kwargs...)[:,end:end,..]
+
+function ρt(formula::Implies, trace; pscale=1, scale=0, keepdims=true, distributed=false, kwargs...)
     x, y = trace   # [bs, time, x_dim,...]
-    trace1 = robustness_trace(formula.subformula1, x; pscale, scale, keepdims, distributed, kwargs...)
-    trace2 = robustness_trace(formula.subformula2, y; pscale, scale, keepdims, distributed, kwargs...)
+    trace1 = ρt(formula.subformula1, x; pscale, scale, keepdims, distributed, kwargs...)
+    trace2 = ρt(formula.subformula2, y; pscale, scale, keepdims, distributed, kwargs...)
     xx = cat(-trace1, trace2, dims=length(size(x))+1)
     Maxish(xx; scale, dims=length(size(x))+1, keepdims, distributed)
 end
 
+ρ(formula::Implies, trace; pscale=1, scale=0, keepdims=true, distributed=false, kwargs...) = ρt(formula, trace; pscale, scale, keepdims, distributed, kwargs...)[:,end:end,..]
+
 
 function separate_and(formula, input; dims=4, pscale=1, scale=0, keepdims=true, distributed=false)
     if typeof(formula) != And
-        return robustness_trace(formula, input; dims, pscale, scale, keepdims, distributed)
+        return ρt(formula, input; dims, pscale, scale, keepdims, distributed)
     else
         return cat(separate_and(formula.subformula1, input[1]; dims, pscale, scale, keepdims, distributed),
                    separate_and(formula.subformula2, input[2]; dims, pscale, scale, keepdims, distributed);
@@ -319,7 +316,7 @@ function separate_and(formula, input; dims=4, pscale=1, scale=0, keepdims=true, 
     end
 end
 
-function robustness_trace(formula::And, trace; dims=4, pscale=1, scale=0, keepdims=true, distributed=false, kwargs...)
+function ρt(formula::And, trace; dims=4, pscale=1, scale=0, keepdims=true, distributed=false, kwargs...)
     xx = separate_and(formula, trace; dims, pscale, scale, keepdims, distributed)
     Minish(xx; scale, dims, keepdims=false, distributed)
 end
@@ -327,7 +324,7 @@ end
 
 function separate_or(formula, input; dims=4, pscale=1, scale=0, keepdims=true, distributed=false)
     if typeof(formula) != Or
-        return robustness_trace(formula, input; dims, pscale, scale, keepdims, distributed)
+        return ρt(formula, input; dims, pscale, scale, keepdims, distributed)
     else
         return cat(separate_or(formula.subformula1, input[1]; dims, pscale, scale, keepdims, distributed),
                    separate_or(formula.subformula2, input[2]; dims, pscale, scale, keepdims, distributed);
@@ -336,17 +333,18 @@ function separate_or(formula, input; dims=4, pscale=1, scale=0, keepdims=true, d
     end
 end
 
-function robustness_trace(formula::Or, trace; dims=4, pscale=1, scale=0, keepdims=true, distributed=false, kwargs...)
+function ρt(formula::Or, trace; dims=4, pscale=1, scale=0, keepdims=true, distributed=false, kwargs...)
     xx = separate_or(formula, trace; dims, pscale, scale, keepdims, distributed)
     Maxish(xx; scale, dims, keepdims=false, distributed)
 end
 
-function robustness_trace(formula::Union{Always, Eventually}, trace; pscale=1, scale=0, keepdims=true, distributed=false, kwargs...)
+function ρt(formula::Union{Always, Eventually}, trace; pscale=1, scale=0, keepdims=true, distributed=false, kwargs...)
     outputs, states = run_rnn_cell(formula, trace; pscale, scale, keepdims, distributed)
     outputs
 end
 
-function robustness_trace(formula::Until, trace; pscale=1, scale=0, keepdims=true, distributed=false, kwargs...)
+
+function ρt(formula::Until, trace; pscale=1, scale=0, keepdims=true, distributed=false, kwargs...)
     # input traces must be 3D [batch, time, xdim]
     # TODO interval for the until formula
     LARGE_NUMBER = 1E6
@@ -355,8 +353,73 @@ function robustness_trace(formula::Until, trace; pscale=1, scale=0, keepdims=tru
     Alw = Always(subformula=GreaterThan(:z, 0.0), interval=nothing)
     LHS = permutedims(repeat(reshape(trace2, (size(trace2)..., 1)), 1,1,1,size(trace2)[2]), [1, 4, 3, 2])
     RHS = ones(size(LHS)) * -LARGE_NUMBER
-    for i in 1:size(trace2)[2]
-        RHS[:,i:end,:,i] = Alw(trace1[:,i:end,:]; pscale, scale, keepdims, distributed)
+    if formula.interval == nothing
+
+        for i in 1:size(trace2)[2]
+            RHS[:,i:end,:,i] = Alw(trace1[:,i:end,:]; pscale, scale, keepdims, distributed)
+        end
+    elseif formula.interval[2] < Inf
+        a = formula.interval[1]
+        b = formula.interval[2]
+        duration = b - a + 1
+        N = size(trace1)[2]
+        for i in 1:size(trace2)[2]
+            if (N-i+1-b) <= 0
+                break
+            end
+            relevant = trace1[:,N-i+1-b:N-i+1]
+            RHS[:,N-i+1,:,N-i+1-b:N-i+1-a] = Alw(relevant[:,end:-1:1,:]; pscale, scale, keepdims, distributed)[:,end:-1:end-duration+1,:]
+        end
+    else
+        a = Int(formula.interval[1])
+        N = size(trace1)[2]
+        for i in 1:size(trace2)[2]
+            if (N-i+1-a) <= 0
+                break
+            end
+            relevant = trace1[:,1:N-i+1]
+            RHS[:,N-i+1,:,1:N-i+1-a] = Alw(relevant[:,end:-1:1,:]; pscale, scale, keepdims, distributed)[:,end:-1:a+1,:]
+        end
+    end
+    return Maxish(Minish(cat(LHS, RHS, dims=5); dims=5, scale, keepdims=false, distributed); scale, keepdims=false, distributed, dims=4)
+end
+
+function ρt(formula::Then, trace; pscale=1, scale=0, keepdims=true, distributed=false, kwargs...)
+    # input traces must be 3D [batch, time, xdim]
+    # TODO interval for the until formula
+    LARGE_NUMBER = 1E6
+    trace1 = formula.subformula1(trace[1])
+    trace2 = formula.subformula2(trace[2])
+    Ev = Eventually(subformula=GreaterThan(:z, 0.0), interval=nothing)
+    LHS = permutedims(repeat(reshape(trace2, (size(trace2)..., 1)), 1,1,1,size(trace2)[2]), [1, 4, 3, 2])
+    RHS = ones(size(LHS)) * -LARGE_NUMBER
+    if formula.interval == nothing
+
+        for i in 1:size(trace2)[2]
+            RHS[:,i:end,:,i] = Ev(trace1[:,i:end,:]; pscale, scale, keepdims, distributed)
+        end
+    elseif formula.interval[2] < Inf
+        a = formula.interval[1]
+        b = formula.interval[2]
+        duration = b - a + 1
+        N = size(trace1)[2]
+        for i in 1:size(trace2)[2]
+            if (N-i+1-b) <= 0
+                break
+            end
+            relevant = trace1[:,N-i+1-b:N-i+1]
+            RHS[:,N-i+1,:,N-i+1-b:N-i+1-a] = Ev(relevant[:,end:-1:1,:]; pscale, scale, keepdims, distributed)[:,end:-1:end-duration+1,:]
+        end
+    else
+        a = Int(formula.interval[1])
+        N = size(trace1)[2]
+        for i in 1:size(trace2)[2]
+            if (N-i+1-a) <= 0
+                break
+            end
+            relevant = trace1[:,1:N-i+1]
+            RHS[:,N-i+1,:,1:N-i+1-a] = Ev(relevant[:,end:-1:1,:]; pscale, scale, keepdims, distributed)[:,end:-1:a+1,:]
+        end
     end
     return Maxish(Minish(cat(LHS, RHS, dims=5); dims=5, scale, keepdims=false, distributed); scale, keepdims=false, distributed, dims=4)
 end
@@ -369,9 +432,11 @@ next_function(formula::Union{Implies, And, Or, Until, Then}) = [formula.subformu
 
 □(subformula; interval=nothing) = Always(;subformula, interval)
 ◊(subformula; interval=nothing) = Eventually(;subformula, interval)
+U(subformula1, subformula2; interval=nothing) = Until(;subformula1, subformula2, interval)
+T(subformula1, subformula2; interval=nothing) = Tntil(;subformula1, subformula2, interval)
 
-(op::Formula)(x; kwargs...) = robustness_trace(op, x; kwargs...)
-(op::TemporalFormula)(x; kwargs...) = robustness_trace(op, x; kwargs...)
+(op::Formula)(x; kwargs...) = ρt(op, x; kwargs...)
+(op::TemporalFormula)(x; kwargs...) = ρt(op, x; kwargs...)
 
 Base.print(op::STLCG.LessThan) = print(string(op.lhs) * " < " * string(op.rhs))
 Base.print(op::STLCG.GreaterThan) = print(string(op.lhs) * " > " * string(op.rhs))
