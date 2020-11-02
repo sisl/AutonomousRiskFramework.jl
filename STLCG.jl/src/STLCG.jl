@@ -146,9 +146,10 @@ end
     # Until(ϕ, ψ; interval=nothing) = new(ϕ, ψ, interval)
 end
 
-struct Then <: Formula
+@with_kw struct Then <: TemporalFormula
     subformula1
     subformula2
+    interval = nothing
 end
 
 
