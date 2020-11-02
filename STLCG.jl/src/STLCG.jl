@@ -338,11 +338,16 @@ function ρt(formula::Or, trace; dims=4, pscale=1, scale=0, keepdims=true, distr
     Maxish(xx; scale, dims, keepdims=false, distributed)
 end
 
+
+ρ(formula::Union{And, Or}, trace; dims=4, pscale=1, scale=0, keepdims=true, distributed=false, kwargs...) = ρt(formula, trace; dims, pscale, scale, keepdims, distributed, kwargs...)[:,end:end,..]
+
+
 function ρt(formula::Union{Always, Eventually}, trace; pscale=1, scale=0, keepdims=true, distributed=false, kwargs...)
     outputs, states = run_rnn_cell(formula, trace; pscale, scale, keepdims, distributed)
     outputs
 end
 
+ρ(formula::Union{Always, Eventually}, trace; pscale=1, scale=0, keepdims=true, distributed=false, kwargs...) = ρt(formula, trace; pscale, scale, keepdims, distributed, kwargs...)[:,end:end,..]
 
 function ρt(formula::Until, trace; pscale=1, scale=0, keepdims=true, distributed=false, kwargs...)
     # input traces must be 3D [batch, time, xdim]
@@ -423,6 +428,8 @@ function ρt(formula::Then, trace; pscale=1, scale=0, keepdims=true, distributed
     end
     return Maxish(Minish(cat(LHS, RHS, dims=5); dims=5, scale, keepdims=false, distributed); scale, keepdims=false, distributed, dims=4)
 end
+
+ρ(formula::Union{Until, Then}, trace; pscale=1, scale=0, keepdims=true, distributed=false, kwargs...) = ρt(formula, trace; pscale, scale, keepdims, distributed, kwargs...)[:,end:end,..]
 
 next_function(formula::TemporalFormula) = [formula.subformula]
 next_function(formula::Union{LessThan, GreaterThan, Equal}) = [formula.lhs, formula.rhs]
