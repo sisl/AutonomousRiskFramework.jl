@@ -358,36 +358,39 @@ function ρt(formula::Until, trace; pscale=1, scale=0, keepdims=true, distribute
     trace2 = formula.subformula2(trace[2])
     Alw = Always(subformula=GreaterThan(:z, 0.0), interval=nothing)
     LHS = permutedims(repeat(reshape(trace2, (size(trace2)..., 1)), 1,1,1,size(trace2)[2]), [1, 4, 3, 2])
-    RHS = ones(size(LHS)) * -LARGE_NUMBER
     if formula.interval == nothing
 
-        for i in 1:size(trace2)[2]
-            RHS[:,i:end,:,i] = Alw(trace1[:,i:end,:]; pscale, scale, keepdims, distributed)
+        RHS = (Alw(trace1; pscale, scale, keepdims, distributed), )
+        for i in 2:size(trace2)[2]
+            RHS = (RHS..., hcat(-LARGE_NUMBER * ones(bs, i-1, x_dim), Alw(trace1[:,i:end,:]; pscale, scale, keepdims, distributed)))
         end
+        RHS = cat(RHS..., dims=4);
+        return Maxish(Minish(cat(LHS, RHS, dims=5); dims=5, scale, keepdims=false, distributed); scale, keepdims=false, distributed, dims=4)
     elseif formula.interval[2] < Inf
         a = formula.interval[1]
         b = formula.interval[2]
-        duration = b - a + 1
+        RHS = (ones(size(trace1))[:,1:b,..] * -LARGE_NUMBER, )
         N = size(trace1)[2]
-        for i in 1:size(trace2)[2]
-            if (N-i+1-b) <= 0
-                break
-            end
-            relevant = trace1[:,N-i+1-b:N-i+1]
-            RHS[:,N-i+1,:,N-i+1-b:N-i+1-a] = Alw(relevant[:,end:-1:1,:]; pscale, scale, keepdims, distributed)[:,end:-1:end-duration+1,:]
+        for i in b+1:size(trace2)[2]
+            A = trace2[:,i-b:i-a,:]
+            relevant = trace1[:,1:i,..]
+            B = Alw(relevant[:,end:-1:1,:]; pscale, scale, keepdims, distributed)[:,b+1:-1:a+1,:]
+            RHS = (RHS..., Maxish(Minish(cat(A, B, dims=4); dims=4, scale, keepdims=false, distributed); dims=2, scale, keepdims, distributed))
         end
+        return cat(RHS..., dims=2);
     else
         a = Int(formula.interval[1])
+        RHS = (ones(size(trace1))[:,1:a,..] * -LARGE_NUMBER, )
         N = size(trace1)[2]
-        for i in 1:size(trace2)[2]
-            if (N-i+1-a) <= 0
-                break
-            end
-            relevant = trace1[:,1:N-i+1]
-            RHS[:,N-i+1,:,1:N-i+1-a] = Alw(relevant[:,end:-1:1,:]; pscale, scale, keepdims, distributed)[:,end:-1:a+1,:]
+        for i in a+1:size(trace2)[2]
+            A = trace2[:,1:i-a,:]
+            relevant = trace1[:,1:i,..]
+            B = Alw(relevant[:,end:-1:1,:]; pscale, scale, keepdims, distributed)[:,end:-1:a+1,:]
+            Minish(cat(A, B, dims=4); dims=4, scale, keepdims=false, distributed)
+            RHS = (RHS..., Maxish(Minish(cat(A, B, dims=4); dims=4, scale, keepdims=false, distributed); dims=2, scale, keepdims, distributed))
         end
+        return cat(RHS..., dims=2);
     end
-    return Maxish(Minish(cat(LHS, RHS, dims=5); dims=5, scale, keepdims=false, distributed); scale, keepdims=false, distributed, dims=4)
 end
 
 function ρt(formula::Then, trace; pscale=1, scale=0, keepdims=true, distributed=false, kwargs...)
@@ -398,36 +401,39 @@ function ρt(formula::Then, trace; pscale=1, scale=0, keepdims=true, distributed
     trace2 = formula.subformula2(trace[2])
     Ev = Eventually(subformula=GreaterThan(:z, 0.0), interval=nothing)
     LHS = permutedims(repeat(reshape(trace2, (size(trace2)..., 1)), 1,1,1,size(trace2)[2]), [1, 4, 3, 2])
-    RHS = ones(size(LHS)) * -LARGE_NUMBER
     if formula.interval == nothing
 
-        for i in 1:size(trace2)[2]
-            RHS[:,i:end,:,i] = Ev(trace1[:,i:end,:]; pscale, scale, keepdims, distributed)
+        RHS = (Ev(trace1; pscale, scale, keepdims, distributed), )
+        for i in 2:size(trace2)[2]
+            RHS = (RHS..., hcat(-LARGE_NUMBER * ones(bs, i-1, x_dim), Ev(trace1[:,i:end,:]; pscale, scale, keepdims, distributed)))
         end
+        RHS = cat(RHS..., dims=4);
+        return Maxish(Minish(cat(LHS, RHS, dims=5); dims=5, scale, keepdims=false, distributed); scale, keepdims=false, distributed, dims=4)
     elseif formula.interval[2] < Inf
         a = formula.interval[1]
         b = formula.interval[2]
-        duration = b - a + 1
+        RHS = (ones(size(trace1))[:,1:b,..] * -LARGE_NUMBER, )
         N = size(trace1)[2]
-        for i in 1:size(trace2)[2]
-            if (N-i+1-b) <= 0
-                break
-            end
-            relevant = trace1[:,N-i+1-b:N-i+1]
-            RHS[:,N-i+1,:,N-i+1-b:N-i+1-a] = Ev(relevant[:,end:-1:1,:]; pscale, scale, keepdims, distributed)[:,end:-1:end-duration+1,:]
+        for i in b+1:size(trace2)[2]
+            A = trace2[:,i-b:i-a,:]
+            relevant = trace1[:,1:i,..]
+            B = Ev(relevant[:,end:-1:1,:]; pscale, scale, keepdims, distributed)[:,b+1:-1:a+1,:]
+            RHS = (RHS..., Maxish(Minish(cat(A, B, dims=4); dims=4, scale, keepdims=false, distributed); dims=2, scale, keepdims, distributed))
         end
+        return cat(RHS..., dims=2);
     else
         a = Int(formula.interval[1])
+        RHS = (ones(size(trace1))[:,1:a,..] * -LARGE_NUMBER, )
         N = size(trace1)[2]
-        for i in 1:size(trace2)[2]
-            if (N-i+1-a) <= 0
-                break
-            end
-            relevant = trace1[:,1:N-i+1]
-            RHS[:,N-i+1,:,1:N-i+1-a] = Ev(relevant[:,end:-1:1,:]; pscale, scale, keepdims, distributed)[:,end:-1:a+1,:]
+        for i in a+1:size(trace2)[2]
+            A = trace2[:,1:i-a,:]
+            relevant = trace1[:,1:i,..]
+            B = Ev(relevant[:,end:-1:1,:]; pscale, scale, keepdims, distributed)[:,end:-1:a+1,:]
+            Minish(cat(A, B, dims=4); dims=4, scale, keepdims=false, distributed)
+            RHS = (RHS..., Maxish(Minish(cat(A, B, dims=4); dims=4, scale, keepdims=false, distributed); dims=2, scale, keepdims, distributed))
         end
+        return cat(RHS..., dims=2);
     end
-    return Maxish(Minish(cat(LHS, RHS, dims=5); dims=5, scale, keepdims=false, distributed); scale, keepdims=false, distributed, dims=4)
 end
 
 ρ(formula::Union{Until, Then}, trace; pscale=1, scale=0, keepdims=true, distributed=false, kwargs...) = ρt(formula, trace; pscale, scale, keepdims, distributed, kwargs...)[:,end:end,..]
