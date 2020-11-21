@@ -428,8 +428,7 @@ function cem_rollout(mdp::ASTMDP, s::ASTState, d::Int64)
 	cem_mdp.params.top_k = 0
 	cem_planner = solve(cem_solver, cem_mdp)
 	q_value = 0
-	is_distrs = convert(Vector{GrayBox.Environment}, search!(cem_planner, s))	
-
+	is_distrs = convert(Vector{GrayBox.Environment}, search!(cem_planner, s), d)
 	USE_MEAN = true # use the mean of the importance sampling distr, instead of rand.
 
 	AST.go_to_state(mdp, s) # Records trace through this call
