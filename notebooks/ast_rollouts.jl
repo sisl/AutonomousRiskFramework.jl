@@ -51,6 +51,9 @@ end
 # ╔═╡ e66d5b60-2614-11eb-0dba-9f6829ce2fe2
 using Statistics
 
+# ╔═╡ 9061cd00-2b87-11eb-05e2-eb9b27484486
+using PyPlot
+
 # ╔═╡ 83e51830-f62a-11ea-215d-a9767d7b07a5
 md"""
 # Adaptive Stress Testing
@@ -417,23 +420,52 @@ md"""
 # ╔═╡ a0660a70-2616-11eb-384b-f7998bf64235
 html"<style>ul li p {margin: 0} ol li p {margin: 0}</style>"# bulleted list spacing
 
+# ╔═╡ ce9b7d70-2b8a-11eb-08d1-93a7132feafe
+global final_is_distrs = Any[nothing]
+
+# ╔═╡ f57a2ce0-2b8d-11eb-0abb-b71e527b3dad
+final_is_distrs[1]
+
+# ╔═╡ f943e670-2b8a-11eb-0419-8f1987e9b052
+# convert(Vector{GrayBox.Environment}, final_is_distrs, 29)
+
+# ╔═╡ 33dd9eb2-2b8c-11eb-3968-bf149aa4c850
+# is_dist_0 = convert(Dict{Symbol, Vector{Sampleable}}, GrayBox.environment(ast_mdp.sim), 10)
+
+# ╔═╡ 515394e0-2b8c-11eb-0365-7384df7c294c
+# samples = rand(Random.GLOBAL_RNG, is_dist_0, 10)
+
+# ╔═╡ 6668c490-2b8c-11eb-0e93-bf92bc74d37e
+# losses_fn = (d, samples) -> [POMDPStressTesting.cem_losses(d, samples; mdp=ast_mdp, initstate=initialstate(ast_mdp))]
+
+# ╔═╡ a07ec352-2b8c-11eb-2196-3b7ecb053b74
+# losses = losses_fn(is_dist_0, samples)
+
 # ╔═╡ 923e33e0-2491-11eb-1b9c-27f4842ad081
 function cem_rollout(mdp::ASTMDP, s::ASTState, d::Int64)
-	cem_solver = CEMSolver(n_iterations=10,
-						   num_samples=20,
-						   episode_length=d,
-						   show_progress=false)
+	USE_PRIOR = true
 	cem_mdp = mdp # deepcopy(mdp)
 	prev_top_k = cem_mdp.params.top_k
-	cem_mdp.params.top_k = 0
-	cem_planner = solve(cem_solver, cem_mdp)
 	q_value = 0
-	is_distrs = convert(Vector{GrayBox.Environment}, search!(cem_planner, s), d)
-	USE_MEAN = true # use the mean of the importance sampling distr, instead of rand.
 
+	if USE_PRIOR # already computed importance sampling distribution
+		is_distrs = final_is_distrs[1] # TODO: put this in `mdp`
+	else
+		cem_solver = CEMSolver(n_iterations=10,
+							   num_samples=20,
+							   episode_length=d,
+							   show_progress=false)
+		cem_mdp.params.top_k = 0
+		cem_planner = solve(cem_solver, cem_mdp)
+		is_distrs = convert(Vector{GrayBox.Environment}, search!(cem_planner, s), d)
+		global final_is_distrs[1] = is_distrs
+	end
+
+	USE_MEAN = true # use the mean of the importance sampling distr, instead of rand.
+	
 	AST.go_to_state(mdp, s) # Records trace through this call
 
-	for i in 1:length(is_distrs)
+	for i in 1:length(is_distrs) # TODO: handle min(d, length) to select is_dist associated with `d`
 		is_distr = is_distrs[1]
 		if USE_MEAN
 			sample = mean(is_distr)
@@ -526,6 +558,46 @@ function ϵ_rollout(mdp::ASTMDP, s::ASTState, d::Int64; ϵ=0.5)
 end
 
 
+# ╔═╡ fad2ab80-2b84-11eb-017a-6905ab6071b7
+global 𝒟 = Tuple{Tuple{Real,ASTAction}, Real}[]
+
+# ╔═╡ 3ffe0970-2b85-11eb-3fc2-cfd5d7ae02d7
+𝒟
+
+# ╔═╡ 9357b470-2b87-11eb-2477-cdc2d6db8846
+x = [d for ((d,a), q) in 𝒟]
+
+# ╔═╡ b2ecba10-2b87-11eb-0df1-bf1241c689fd
+y = [q for ((d,a), q) in 𝒟]
+
+# ╔═╡ bd6e16a0-2b87-11eb-0cba-b16b63f314ce
+begin
+	clf()
+	hist2D(x, y)
+	xlabel(L"d")
+	ylabel(L"Q")
+	gcf()
+end
+
+# ╔═╡ bdcba74e-2b84-11eb-07ac-c16716b887e9
+function prior_rollout(mdp::ASTMDP, s::ASTState, d::Int64)
+    if d == 0 || isterminal(mdp, s)
+        AST.go_to_state(mdp, s) # Records trace through this call
+        return 0.0
+    else
+		a::ASTAction = AST.random_action(mdp)
+		distance = BlackBox.distance(mdp.sim)
+
+        (sp, r) = @gen(:sp, :r)(mdp, s, a, Random.GLOBAL_RNG)
+        q_value = r + AST.discount(mdp)*prior_rollout(mdp, sp, d-1)
+
+		push!(𝒟, ((distance, a), q_value))
+
+        return q_value
+    end
+end
+
+
 # ╔═╡ 6784331e-249b-11eb-1c7c-85f91c2a0964
 function AST.search!(planner::CEMPlanner, s::ASTState)
     mdp::ASTMDP = planner.mdp
@@ -534,17 +606,17 @@ end
 
 
 # ╔═╡ 6dab3da0-2498-11eb-1446-2fbf5c3fbb17
-function Base.convert(::Type{Vector{GrayBox.Environment}}, distr::Dict{Symbol, Vector{Sampleable}}, max_steps::Integer=1)
-    env_vector = GrayBox.Environment[]
-	for t in 1:max_steps
-		env = GrayBox.Environment()
-		for k in keys(distr)
-			env[k] = distr[k][t]
-		end
-		push!(env_vector, env)
-	end
-	return env_vector::Vector{GrayBox.Environment}
-end
+# function Base.convert(::Type{Vector{GrayBox.Environment}}, distr::Dict{Symbol, Vector{Sampleable}}, max_steps::Integer=1)
+#     env_vector = GrayBox.Environment[]
+# 	for t in 1:max_steps
+# 		env = GrayBox.Environment()
+# 		for k in keys(distr)
+# 			env[k] = distr[k][t]
+# 		end
+# 		push!(env_vector, env)
+# 	end
+# 	return env_vector::Vector{GrayBox.Environment}
+# end
 
 # ╔═╡ 01da7aa0-f630-11ea-1262-f50453455766
 md"""
@@ -564,13 +636,14 @@ function setup_ast(seed=0)
     mdp.params.seed = seed  # set RNG seed for determinism
 
     # Hyperparameters for MCTS-PW as the solver
-    solver = MCTSPWSolver(n_iterations=10,        # number of algorithm iterations
+    solver = MCTSPWSolver(n_iterations=1000,        # number of algorithm iterations
                           exploration_constant=1.0, # UCT exploration
                           k_action=1.0,             # action widening
-                          alpha_action=0.5,         # action widening
+                          alpha_action=0.95,         # action widening
                           depth=sim.params.endtime, # tree depth
 						  # estimate_value=ϵ_rollout) # rollout function
 						  estimate_value=cem_rollout) # rollout function
+						  # estimate_value=prior_rollout) # rollout function
 
     # Get online planner (no work done, yet)
     planner = solve(solver, mdp)
@@ -670,6 +743,52 @@ episodic_figures(cem_planner.mdp); POMDPStressTesting.gcf()
 
 # ╔═╡ 7412e7b0-24a2-11eb-0523-9bb85e449a80
 distribution_figures(cem_planner.mdp); POMDPStressTesting.gcf()
+
+# ╔═╡ 38a4f220-2b89-11eb-14c6-c18aee509c28
+md"""
+## PPO solver
+"""
+
+# ╔═╡ 3b4ae4d0-2b89-11eb-0176-b3b84ddc6ec3
+ppo_solver = PPOSolver(num_episodes=100, episode_length=ast_mdp.sim.params.endtime)
+
+# ╔═╡ 6e7d2020-2b89-11eb-2153-236afd953dcd
+ast_mdp_ppo = deepcopy(planner.mdp); # re-used from MCTS run.
+
+# ╔═╡ 69815690-2b89-11eb-3fbf-4b94773309da
+ppo_planner = solve(ppo_solver, ast_mdp_ppo);
+
+# ╔═╡ e7a24060-2b8f-11eb-17ce-9751327ccc5a
+md"Run PPO? $(@bind run_ppo CheckBox())"
+
+# ╔═╡ 8134b0c0-2b89-11eb-09f3-e50f52093132
+with_terminal() do
+	if run_ppo
+		global ppo_action_trace = search!(ppo_planner)
+	end
+end
+
+# ╔═╡ a4fab5e2-2b89-11eb-1d20-b31c4761a77e
+ppo_failure_rate = print_metrics(ppo_planner)
+
+# ╔═╡ 30b19e00-2b8a-11eb-1d25-91d098b53ac7
+md"""
+## Random baseline
+"""
+
+# ╔═╡ fbff1c90-2b8f-11eb-1da5-91bb366a9f7e
+md"Run random baseline? $(@bind run_rand CheckBox())"
+
+# ╔═╡ 371953a2-2b8a-11eb-3f00-9b04999863b7
+if run_rand
+	rand_solver = RandomSearchSolver(n_iterations=100,
+		                             episode_length=ast_mdp.sim.params.endtime)
+	ast_mdp_rand = deepcopy(planner.mdp) # re-used from MCTS run.
+	# ast_mdp_rand.params.seed  = 0
+	rand_planner = solve(rand_solver, ast_mdp_rand)
+	rand_action_trace = search!(rand_planner)
+	rand_failure_rate = print_metrics(rand_planner)
+end
 
 # ╔═╡ 00dd9240-05c1-11eb-3d13-ff544dc94b5d
 md"""
@@ -816,6 +935,13 @@ end
 # ╠═f6213a50-f62f-11ea-07c7-2dcc383c8042
 # ╟─8f4abd70-2491-11eb-1044-0f3fdced32b9
 # ╠═a0660a70-2616-11eb-384b-f7998bf64235
+# ╠═ce9b7d70-2b8a-11eb-08d1-93a7132feafe
+# ╠═f57a2ce0-2b8d-11eb-0abb-b71e527b3dad
+# ╠═f943e670-2b8a-11eb-0419-8f1987e9b052
+# ╠═33dd9eb2-2b8c-11eb-3968-bf149aa4c850
+# ╠═515394e0-2b8c-11eb-0365-7384df7c294c
+# ╠═6668c490-2b8c-11eb-0e93-bf92bc74d37e
+# ╠═a07ec352-2b8c-11eb-2196-3b7ecb053b74
 # ╠═923e33e0-2491-11eb-1b9c-27f4842ad081
 # ╠═91d48ec0-2614-11eb-30a6-33c89c9c07ef
 # ╠═e66d5b60-2614-11eb-0dba-9f6829ce2fe2
@@ -829,6 +955,13 @@ end
 # ╠═61c885de-24a4-11eb-232e-5df113729f2d
 # ╠═dc2340f2-249f-11eb-0fab-b9545ba763f2
 # ╠═92e3e160-249f-11eb-0d10-c3c67a74428e
+# ╠═fad2ab80-2b84-11eb-017a-6905ab6071b7
+# ╠═3ffe0970-2b85-11eb-3fc2-cfd5d7ae02d7
+# ╠═9061cd00-2b87-11eb-05e2-eb9b27484486
+# ╠═9357b470-2b87-11eb-2477-cdc2d6db8846
+# ╠═b2ecba10-2b87-11eb-0df1-bf1241c689fd
+# ╠═bd6e16a0-2b87-11eb-0cba-b16b63f314ce
+# ╠═bdcba74e-2b84-11eb-07ac-c16716b887e9
 # ╠═6784331e-249b-11eb-1c7c-85f91c2a0964
 # ╠═6dab3da0-2498-11eb-1446-2fbf5c3fbb17
 # ╟─01da7aa0-f630-11ea-1262-f50453455766
@@ -855,6 +988,16 @@ end
 # ╠═de88b710-05c5-11eb-1795-a119590ad1c2
 # ╠═6b6fe810-24a2-11eb-2de0-5de07707e7c4
 # ╠═7412e7b0-24a2-11eb-0523-9bb85e449a80
+# ╟─38a4f220-2b89-11eb-14c6-c18aee509c28
+# ╠═3b4ae4d0-2b89-11eb-0176-b3b84ddc6ec3
+# ╠═6e7d2020-2b89-11eb-2153-236afd953dcd
+# ╠═69815690-2b89-11eb-3fbf-4b94773309da
+# ╟─e7a24060-2b8f-11eb-17ce-9751327ccc5a
+# ╠═8134b0c0-2b89-11eb-09f3-e50f52093132
+# ╠═a4fab5e2-2b89-11eb-1d20-b31c4761a77e
+# ╟─30b19e00-2b8a-11eb-1d25-91d098b53ac7
+# ╟─fbff1c90-2b8f-11eb-1da5-91bb366a9f7e
+# ╠═371953a2-2b8a-11eb-3f00-9b04999863b7
 # ╟─00dd9240-05c1-11eb-3d13-ff544dc94b5d
 # ╟─49bb9090-05c4-11eb-1aa9-8b4488a05654
 # ╠═066f2bd0-05c4-11eb-032f-ad141ecd8070
