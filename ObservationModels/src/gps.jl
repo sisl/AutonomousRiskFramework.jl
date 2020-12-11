@@ -40,7 +40,7 @@ function measure_gps(ent::Entity, noise::Array{Float64})
 end
 
 # Determine position fix using GPS measurements from multiple satellites 
-function GPS_fix(meas::Array{Union{Missing, GPSRangeMeasurement}})
+function GPS_fix(meas::Array{T}) where {T <: Union{Missing, GPSRangeMeasurement}}
     lam = 1.0  # stepsize
     x = [0.0, 0.0, 0.0, 0.0]
     
@@ -81,7 +81,7 @@ function GPS_fix(meas::Array{Union{Missing, GPSRangeMeasurement}})
     delta_x = [1000., 1000., 1000., 1000.]
     
 #     while sum(abs.(delta_x)) > 0.001
-    for i=1:5
+    for i=1:3
         delta_x = lam*(pinv(df(x, meas))*f(x, meas))
         x = x - delta_x
     end 

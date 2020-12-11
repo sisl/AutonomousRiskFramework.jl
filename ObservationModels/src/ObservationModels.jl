@@ -5,6 +5,7 @@ module ObservationModels
     using LinearAlgebra
     using Statistics
     using AdversarialDriving
+    using Distributed
     using AutomotiveSimulator
 
     export Landmark, SensorObservation
@@ -17,4 +18,7 @@ module ObservationModels
 
     include(joinpath("distributions", "inormal_uniform.jl"))
     include(joinpath("distributions", "inormal_gmm.jl"))
+
+    export DistParams, gps_distribution_estimate, traj_logprob
+    include("estimate.jl")
 end

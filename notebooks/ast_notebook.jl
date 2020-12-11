@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.11.14
+# v0.12.3
 
 using Markdown
 using InteractiveUtils
@@ -41,7 +41,7 @@ end
 try
 	using AdversarialDriving
 catch
-	pkg"dev https://github.com/sisl/AdversarialDriving.jl"
+	pkg"add https://github.com/sisl/AdversarialDriving.jl"
 	using AdversarialDriving
 end
 

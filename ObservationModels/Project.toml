@@ -6,6 +6,7 @@ version = "0.1.0"
 [deps]
 AdversarialDriving = "0f7eb3e9-d51f-47f4-b915-6157e1c8ce29"
 AutomotiveSimulator = "6aa42d20-6c96-11ea-1103-339224409280"
+Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Parameters = "d96e819e-fc66-5662-9728-84c9c7592b0a"
