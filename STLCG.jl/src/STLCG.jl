@@ -361,8 +361,9 @@ function ρt(formula::Until, trace; pscale=1, scale=0, keepdims=true, distribute
     if formula.interval == nothing
 
         RHS = (Alw(trace1; pscale, scale, keepdims, distributed), )
+        bs = size(trace2)[1]
         for i in 2:size(trace2)[2]
-            RHS = (RHS..., hcat(-LARGE_NUMBER * ones(bs, i-1, x_dim), Alw(trace1[:,i:end,:]; pscale, scale, keepdims, distributed)))
+            RHS = (RHS..., hcat(-LARGE_NUMBER * ones(bs, i-1, size(trace1)[3:end]...), Alw(trace1[:,i:end,:]; pscale, scale, keepdims, distributed)))
         end
         RHS = cat(RHS..., dims=4);
         return Maxish(Minish(cat(LHS, RHS, dims=5); dims=5, scale, keepdims=false, distributed); scale, keepdims=false, distributed, dims=4)
@@ -402,10 +403,10 @@ function ρt(formula::Then, trace; pscale=1, scale=0, keepdims=true, distributed
     Ev = Eventually(subformula=GreaterThan(:z, 0.0), interval=nothing)
     LHS = permutedims(repeat(reshape(trace2, (size(trace2)..., 1)), 1,1,1,size(trace2)[2]), [1, 4, 3, 2])
     if formula.interval == nothing
-
         RHS = (Ev(trace1; pscale, scale, keepdims, distributed), )
+        bs = size(trace2)[1]
         for i in 2:size(trace2)[2]
-            RHS = (RHS..., hcat(-LARGE_NUMBER * ones(bs, i-1, x_dim), Ev(trace1[:,i:end,:]; pscale, scale, keepdims, distributed)))
+            RHS = (RHS..., hcat(-LARGE_NUMBER * ones(bs, i-1, size(trace1)[3:end]...), Ev(trace1[:,i:end,:]; pscale, scale, keepdims, distributed)))
         end
         RHS = cat(RHS..., dims=4);
         return Maxish(Minish(cat(LHS, RHS, dims=5); dims=5, scale, keepdims=false, distributed); scale, keepdims=false, distributed, dims=4)
