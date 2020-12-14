@@ -1,0 +1,10 @@
+name = "IntelligentDriving"
+uuid = "7d69903b-b3bd-4fe8-821b-47e97f7f1652"
+authors = ["rdyro <rdyro@stanford.edu>"]
+version = "0.1.0"
+
+[deps]
+BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+Optim = "429524aa-4258-5aef-a3af-852621145aeb"
+PyCall = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"
+Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"

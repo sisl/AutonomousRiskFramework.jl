@@ -1,0 +1,4 @@
+f[1]=((u[1]*u_scale[1]*u[2]*u_scale[2]*dt+u[2]*u_scale[2]*x[3])*sin(u[2]*u_scale[2]*dt+x[4])+u[1]*u_scale[1]*cos(u[2]*u_scale[2]*dt+x[4]))/(u[2]^2*u_scale[2]^2)-(u[2]*u_scale[2]*x[3]*sin(x[4])+u[1]*u_scale[1]*cos(x[4]))/(u[2]^2*u_scale[2]^2)+x[1]
+f[2]=(u[1]*u_scale[1]*sin(u[2]*u_scale[2]*dt+x[4])+((-u[1]*u_scale[1]*u[2]*u_scale[2]*dt)-u[2]*u_scale[2]*x[3])*cos(u[2]*u_scale[2]*dt+x[4]))/(u[2]^2*u_scale[2]^2)-(u[1]*u_scale[1]*sin(x[4])-u[2]*u_scale[2]*x[3]*cos(x[4]))/(u[2]^2*u_scale[2]^2)+x[2]
+f[3]=u[1]*u_scale[1]*dt+x[3]
+f[4]=u[2]*u_scale[2]*dt+x[4]

@@ -1,0 +1,16 @@
+fx[1,1]=1
+fx[1,2]=0
+fx[1,3]=sin(u[2]*u_scale[2]*dt+x[4])/(u[2]*u_scale[2])-sin(x[4])/(u[2]*u_scale[2])
+fx[1,4]=((u[1]*u_scale[1]*u[2]*u_scale[2]*dt+u[2]*u_scale[2]*x[3])*cos(u[2]*u_scale[2]*dt+x[4])-u[1]*u_scale[1]*sin(u[2]*u_scale[2]*dt+x[4]))/(u[2]^2*u_scale[2]^2)-(u[2]*u_scale[2]*x[3]*cos(x[4])-u[1]*u_scale[1]*sin(x[4]))/(u[2]^2*u_scale[2]^2)
+fx[2,1]=0
+fx[2,2]=1
+fx[2,3]=cos(x[4])/(u[2]*u_scale[2])-cos(u[2]*u_scale[2]*dt+x[4])/(u[2]*u_scale[2])
+fx[2,4]=(u[1]*u_scale[1]*cos(u[2]*u_scale[2]*dt+x[4])-((-u[1]*u_scale[1]*u[2]*u_scale[2]*dt)-u[2]*u_scale[2]*x[3])*sin(u[2]*u_scale[2]*dt+x[4]))/(u[2]^2*u_scale[2]^2)-(u[2]*u_scale[2]*x[3]*sin(x[4])+u[1]*u_scale[1]*cos(x[4]))/(u[2]^2*u_scale[2]^2)
+fx[3,1]=0
+fx[3,2]=0
+fx[3,3]=1
+fx[3,4]=0
+fx[4,1]=0
+fx[4,2]=0
+fx[4,3]=0
+fx[4,4]=1

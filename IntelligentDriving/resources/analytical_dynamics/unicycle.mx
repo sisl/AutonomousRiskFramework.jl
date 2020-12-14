@@ -1,0 +1,15 @@
+load(eigen)$ load(linearalgebra)$ load(vect)$
+
+v: x[3] + dt * u_scale[1] * u[1]$
+th: x[4] + dt * u_scale[2] * u[2]$
+assume(dt > 0)$
+posx: x[1] + integrate(v * cos(th), dt, 0, dt);
+posy: x[2] + integrate(v * sin(th), dt, 0, dt);
+
+f: [posx, posy, v, th]$
+fx: jacobian(f, [x[1], x[2], x[3], x[4]])$
+fu: jacobian(f, [u[1], u[2]])$
+
+with_stdout("output/f_unicycle.txt", fortran(f));
+with_stdout("output/fx_unicycle.txt", fortran(fx));
+with_stdout("output/fu_unicycle.txt", fortran(fu));

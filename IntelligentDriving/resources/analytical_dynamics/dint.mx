@@ -1,0 +1,12 @@
+load(eigen)$ load(linearalgebra)$ load(vect)$
+
+f: [
+  x[2],
+  -m * g / I * sin(x[1]) - c * x[2] + u[1]
+  ];
+fx: jacobian(f, makelist(x[i], i, 1, 2));
+fu: jacobian(f, makelist(u[i], i, 1, 1));
+
+with_stdout("output/f_dint.txt", fortran(f))$
+with_stdout("output/fx_dint.txt", fortran(fx))$
+with_stdout("output/fu_dint.txt", fortran(fu))$
