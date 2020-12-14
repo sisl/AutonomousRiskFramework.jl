@@ -36,7 +36,7 @@ export Maxish,
 
 # Note, anything after the ; indicates a keyword argument
 # Remove this patch when https://github.com/FluxML/Zygote.jl/pull/793 is submitted
-Zygote.collapse_nothings(xs::AbstractArray{Nothing}) = nothing
+# Zygote.collapse_nothings(xs::AbstractArray{Nothing}) = nothing
 function Maxish(x; scale=0, dims=:, keepdims=true, distributed=false)
     if scale > 0
         maxish = logsumexp(x * scale; dims) / scale
