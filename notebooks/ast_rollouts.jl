@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.12.4
+# v0.12.16
 
 using Markdown
 using InteractiveUtils
@@ -48,11 +48,23 @@ end
 # ╔═╡ 3617eb60-0489-11eb-144a-232b222a0365
 @add using POMDPs, POMDPPolicies, POMDPSimulators
 
+# ╔═╡ ae68e2e2-3bde-11eb-2133-41c25803770a
+using STLCG
+
 # ╔═╡ e66d5b60-2614-11eb-0dba-9f6829ce2fe2
 using Statistics
 
 # ╔═╡ 9061cd00-2b87-11eb-05e2-eb9b27484486
 using PyPlot
+
+# ╔═╡ de0497b0-3be3-11eb-096c-99c1a584ca68
+using CrossEntropyVariants
+
+# ╔═╡ 99e92652-3be7-11eb-0fb2-316c55af79a7
+@add using DeepQLearning
+
+# ╔═╡ 7a71fe60-3be6-11eb-1fe7-7bd3ab22ffc9
+using Flux
 
 # ╔═╡ 83e51830-f62a-11ea-215d-a9767d7b07a5
 md"""
@@ -79,7 +91,7 @@ This section provides the crosswalk example and visualizations to understand the
 """
 
 # ╔═╡ 5f39b460-0489-11eb-2b4f-8168c3825150
-Base.rand(rng::AbstractRNG, s::Scene) = s
+# Base.rand(rng::AbstractRNG, s::Scene) = s
 
 # ╔═╡ a4a6b3e0-05b5-11eb-1a28-f528c5f88ee1
 md"Again, notice we are `dev`-ing the `AdversarialDriving` package, in case we want to make changes."
@@ -148,20 +160,49 @@ hist_noise = POMDPSimulators.simulate(HistoryRecorder(), ad_mdp,
 	                                  FunctionPolicy((s) -> noisy_action));
 
 # ╔═╡ d45ce322-0489-11eb-2b9d-71a00e65d8b0
-ad_scenes = state_hist(hist);
+# ad_scenes = state_hist(hist); # TODO: fix this bug???
+ad_scenes = [s.s for s in hist];
 
 # ╔═╡ fb4732b0-0489-11eb-3e24-3d6ed2221771
-ad_scenes_noise = state_hist(hist_noise);
+# ad_scenes_noise = state_hist(hist_noise);
+ad_scenes_noise = [s.s for s in hist_noise];
+
+# ╔═╡ 84985160-3be0-11eb-274f-9579e1337cc3
+hist_noise
 
 # ╔═╡ 61b258b0-048d-11eb-0e0c-9d3f8c23b0ed
 md"##### Distance Metrics"
+
+# ╔═╡ ab394dd0-3bde-11eb-266a-ade6c9ff5697
+md"""
+###### Distance using STL
+"""
+
+# ╔═╡ b67e4880-3bde-11eb-185e-313a83ee528e
+pkg"dev ../STLCG.jl/."
+
+# ╔═╡ b2869690-3be0-11eb-0199-8f72d717fe61
+md"""
+Notes:
+- Use STL to define collision (i.e. is robustness zero or negative?)
+- Use robustness as the distance metric.
+"""
+
+# ╔═╡ e1090570-3be0-11eb-285d-8303a3401d8a
+collisionₛₜₗ = Always(subformula=GreaterThan(:d, 0), interval=nothing)
 
 # ╔═╡ 2d5e59b0-048d-11eb-257d-076254d3488f
 function distance(ent1::Entity, ent2::Entity)
 	pos1 = posg(ent1)
 	pos2 = posg(ent2)
-	hypot(pos1.x - pos2.x, pos1.y - pos2.y)
+	d = hypot(pos1.x - pos2.x, pos1.y - pos2.y)
+	return first(ρt(collisionₛₜₗ, [d]')) # robustness (i.e. distance)
 end
+
+# ╔═╡ 0626f970-3be1-11eb-101d-09cadd79b879
+# function collision_stl(pos1, pos2)
+	ρt(collisionₛₜₗ, [10]')
+# end
 
 # ╔═╡ 900269c0-0489-11eb-0031-c5f78fc2963a
 @bind ad_t Slider(1:length(ad_scenes), default=12) # known failure at 12s
@@ -357,9 +398,7 @@ function BlackBox.distance(sim::AutoRiskSim)
 		return sim.prev_distance
 	else
 		pedestrian, vehicle = sim.state.entities
-		pos1 = posg(pedestrian)
-		pos2 = posg(vehicle)
-		return hypot(pos1.x - pos2.x, pos1.y - pos2.y)
+		return distance(pedestrian, vehicle)
 	end
 end
 
@@ -383,6 +422,7 @@ function BlackBox.isevent(sim::AutoRiskSim)
 	else
 		pedestrian, vehicle = sim.state.entities
 		return collision_checker(pedestrian, vehicle)
+		# return BlackBox.distance(sim) <= 0
 	end
 end
 
@@ -418,7 +458,7 @@ md"""
 """
 
 # ╔═╡ a0660a70-2616-11eb-384b-f7998bf64235
-html"<style>ul li p {margin: 0} ol li p {margin: 0}</style>"# bulleted list spacing
+# html"<style>ul li p {margin: 0} ol li p {margin: 0}</style>"# bulleted list spacing
 
 # ╔═╡ ce9b7d70-2b8a-11eb-08d1-93a7132feafe
 global final_is_distrs = Any[nothing]
@@ -443,7 +483,7 @@ final_is_distrs[1]
 
 # ╔═╡ 923e33e0-2491-11eb-1b9c-27f4842ad081
 function cem_rollout(mdp::ASTMDP, s::ASTState, d::Int64)
-	USE_PRIOR = true
+	USE_PRIOR = false
 	cem_mdp = mdp # deepcopy(mdp)
 	prev_top_k = cem_mdp.params.top_k
 	q_value = 0
@@ -565,13 +605,14 @@ global 𝒟 = Tuple{Tuple{Real,ASTAction}, Real}[]
 𝒟
 
 # ╔═╡ 9357b470-2b87-11eb-2477-cdc2d6db8846
-x = [d for ((d,a), q) in 𝒟]
-
-# ╔═╡ b2ecba10-2b87-11eb-0df1-bf1241c689fd
-y = [q for ((d,a), q) in 𝒟]
+begin
+	x = [d for ((d,a), q) in 𝒟]
+	y = [q for ((d,a), q) in 𝒟]
+end
 
 # ╔═╡ bd6e16a0-2b87-11eb-0cba-b16b63f314ce
 begin
+	PyPlot.svg(false)
 	clf()
 	hist2D(x, y)
 	xlabel(L"d")
@@ -606,17 +647,48 @@ end
 
 
 # ╔═╡ 6dab3da0-2498-11eb-1446-2fbf5c3fbb17
-# function Base.convert(::Type{Vector{GrayBox.Environment}}, distr::Dict{Symbol, Vector{Sampleable}}, max_steps::Integer=1)
-#     env_vector = GrayBox.Environment[]
-# 	for t in 1:max_steps
-# 		env = GrayBox.Environment()
-# 		for k in keys(distr)
-# 			env[k] = distr[k][t]
-# 		end
-# 		push!(env_vector, env)
-# 	end
-# 	return env_vector::Vector{GrayBox.Environment}
-# end
+function Base.convert(::Type{Vector{GrayBox.Environment}}, distr::Dict{Symbol, Vector{Sampleable}}, max_steps::Integer=1)
+    env_vector = GrayBox.Environment[]
+	for t in 1:max_steps
+		env = GrayBox.Environment()
+		for k in keys(distr)
+			env[k] = distr[k][t]
+		end
+		push!(env_vector, env)
+	end
+	return env_vector::Vector{GrayBox.Environment}
+end
+
+# ╔═╡ c1b76a12-3be3-11eb-24f9-87990bc4141b
+md"""
+## Cross-Entropy Surrogate Method
+"""
+
+# ╔═╡ c59df310-3be3-11eb-0e26-fb3a6fbb0c07
+pkg"add https://github.com/mossr/CrossEntropyVariants.jl"
+
+# ╔═╡ cff128d0-3be5-11eb-01a3-65e012391e48
+md"""
+## Neural Network Q-Approximator
+- Use distance $d$ as a _state proxy_
+- Approximate $Q(d,a)$ using a neural network (DQN?)
+- Collect data: $\mathcal{D} = (d, a) \to Q$
+- Train network: input $d$ output action $a$ (DQN) or input $(d,a)$ output $Q$
+"""
+
+# ╔═╡ 9579dac0-3be6-11eb-228d-c7a452e9914d
+@with_kw mutable struct Args
+	α::Float64 = 3e-4      # learning rate
+	epochs::Int = 20       # number of epochs
+	device::Function = cpu # gpu or cpu device
+	throttle::Int = 1      # throttle print every X seconds
+end
+
+# ╔═╡ 7beae2c0-3be6-11eb-0e3d-5ba4d0c3c354
+model = Chain(Dense(1+6, 32), Dense(32, 1)) # d + |A| -> Q
+
+# ╔═╡ dc769d50-3be6-11eb-3478-453ba24f4e7d
+𝒟[1][1][2].sample
 
 # ╔═╡ 01da7aa0-f630-11ea-1262-f50453455766
 md"""
@@ -636,7 +708,7 @@ function setup_ast(seed=0)
     mdp.params.seed = seed  # set RNG seed for determinism
 
     # Hyperparameters for MCTS-PW as the solver
-    solver = MCTSPWSolver(n_iterations=1000,        # number of algorithm iterations
+    solver = MCTSPWSolver(n_iterations=10,        # number of algorithm iterations
                           exploration_constant=1.0, # UCT exploration
                           k_action=1.0,             # action widening
                           alpha_action=0.95,         # action widening
@@ -700,6 +772,9 @@ We can easily take our `ASTMDP` object (`planner.mdp`) and re-solve the MDP usin
 
 # ╔═╡ c0cf83e0-05a5-11eb-32b5-6fb00cbc311b
 ast_mdp = deepcopy(planner.mdp); # re-used from MCTS run.
+
+# ╔═╡ 17cd6400-3be8-11eb-30f5-8d31eadaa535
+actions(ast_mdp) |> length
 
 # ╔═╡ 5043e8c0-284e-11eb-0c6d-7f3940b0a940
 begin
@@ -891,8 +966,15 @@ end
 # ╠═766dd700-048a-11eb-0faa-ed69d2203b0a
 # ╠═d45ce322-0489-11eb-2b9d-71a00e65d8b0
 # ╠═fb4732b0-0489-11eb-3e24-3d6ed2221771
+# ╠═84985160-3be0-11eb-274f-9579e1337cc3
 # ╟─61b258b0-048d-11eb-0e0c-9d3f8c23b0ed
 # ╠═2d5e59b0-048d-11eb-257d-076254d3488f
+# ╟─ab394dd0-3bde-11eb-266a-ade6c9ff5697
+# ╠═b67e4880-3bde-11eb-185e-313a83ee528e
+# ╠═ae68e2e2-3bde-11eb-2133-41c25803770a
+# ╟─b2869690-3be0-11eb-0199-8f72d717fe61
+# ╠═e1090570-3be0-11eb-285d-8303a3401d8a
+# ╠═0626f970-3be1-11eb-101d-09cadd79b879
 # ╠═4c4b70c0-05a4-11eb-1530-5174e460580b
 # ╠═7221b840-05a4-11eb-1982-2faa93fbd308
 # ╠═9dd57770-048b-11eb-0078-8b3a21b9bc4a
@@ -959,11 +1041,20 @@ end
 # ╠═3ffe0970-2b85-11eb-3fc2-cfd5d7ae02d7
 # ╠═9061cd00-2b87-11eb-05e2-eb9b27484486
 # ╠═9357b470-2b87-11eb-2477-cdc2d6db8846
-# ╠═b2ecba10-2b87-11eb-0df1-bf1241c689fd
 # ╠═bd6e16a0-2b87-11eb-0cba-b16b63f314ce
 # ╠═bdcba74e-2b84-11eb-07ac-c16716b887e9
 # ╠═6784331e-249b-11eb-1c7c-85f91c2a0964
 # ╠═6dab3da0-2498-11eb-1446-2fbf5c3fbb17
+# ╟─c1b76a12-3be3-11eb-24f9-87990bc4141b
+# ╠═c59df310-3be3-11eb-0e26-fb3a6fbb0c07
+# ╠═de0497b0-3be3-11eb-096c-99c1a584ca68
+# ╟─cff128d0-3be5-11eb-01a3-65e012391e48
+# ╠═99e92652-3be7-11eb-0fb2-316c55af79a7
+# ╠═7a71fe60-3be6-11eb-1fe7-7bd3ab22ffc9
+# ╠═9579dac0-3be6-11eb-228d-c7a452e9914d
+# ╠═7beae2c0-3be6-11eb-0e3d-5ba4d0c3c354
+# ╠═17cd6400-3be8-11eb-30f5-8d31eadaa535
+# ╠═dc769d50-3be6-11eb-3478-453ba24f4e7d
 # ╟─01da7aa0-f630-11ea-1262-f50453455766
 # ╠═fdf55130-f62f-11ea-33a4-a783b4d216dc
 # ╟─09c928f0-f631-11ea-3ef7-512a6bececcc
