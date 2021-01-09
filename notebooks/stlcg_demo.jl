@@ -21,15 +21,15 @@ end
 begin
 	# setting up the signals
 	# Using very easy signals so we can compare with the correct answer
-	bs = 2
 	t = 15
 	x_dim = 3
 	dim = 2
-	x = Float32.(repeat(reshape(collect(1:t), 1, t, 1), bs, 1, x_dim))
-	y = Float32.(repeat(reshape(collect(1:t), 1, t, 1), bs, 1, x_dim)) .+ 2
-
-	plot(x[1,:,1])
-	plot!(y[1,:,1])
+	# x = Float32.(repeat(reshape(collect(1:t), t, 1), 1, x_dim))
+	# y = Float32.(repeat(reshape(collect(1:t), t, 1), 1, x_dim)) .+ 2
+	x = Float32.(collect(1:t))
+	y = Float32.(collect(1:t)) .+ 2
+	plot(x[:,1])
+	plot!(y[:,1])
 end
 
 # ╔═╡ 88c3412a-1d3e-11eb-2e19-9b70720f9ee6
@@ -121,23 +121,26 @@ vcat(STLCG.gradient(x -> sum(ρ(ev, x)), x)...)
 
 # ╔═╡ 2db6a516-1d42-11eb-1378-bf061ecb4496
 # Until
-ut = Until(subformula1=lt, subformula2=gt)
+
+ut = Until(lt, gt, [2,4])
+
 
 # ╔═╡ 2d65fec2-1d42-11eb-051b-755f5cbc63eb
 ρt(ut, (x,y); pscale, scale, keepdims, distributed), ρ(ut, (x,y); pscale, scale, keepdims, distributed)
 
+# ╔═╡ 470f2f50-5213-11eb-3555-cb9e007552bf
+vcat(STLCG.gradient((x,y) -> sum( ρ(ut, (x,y))), x,y)...)
+
 # ╔═╡ 5bf3d476-1d42-11eb-25c9-c3ed3ab04a34
 # Then
-th = Then(subformula1=lt, subformula2=gt)
+th = Then(lt, gt, [2,4])
+
 
 # ╔═╡ 6323f37a-1d42-11eb-0f71-57dbb9a30e06
 ρt(th, (x,y); pscale, scale, keepdims, distributed), ρ(th, (x,y); pscale, scale, keepdims, distributed)
 
-# ╔═╡ 5bd69488-1d42-11eb-0771-0dcfc2655f9d
-p = [2,3,4]
-
-# ╔═╡ d754c47e-3c21-11eb-11e8-b349077a74ee
-ones(5, size(x)[2:end]...)
+# ╔═╡ 6420e43a-5213-11eb-2d4b-7d295d0aaec8
+vcat(STLCG.gradient((x,y) -> sum( ρ(th, (x,y))), x,y)...)
 
 # ╔═╡ Cell order:
 # ╠═d7f2c6b4-1d37-11eb-24aa-2b2499d39686
@@ -168,7 +171,7 @@ ones(5, size(x)[2:end]...)
 # ╠═df29e3ec-25fa-11eb-2da2-099ea142ac5e
 # ╠═2db6a516-1d42-11eb-1378-bf061ecb4496
 # ╠═2d65fec2-1d42-11eb-051b-755f5cbc63eb
+# ╠═470f2f50-5213-11eb-3555-cb9e007552bf
 # ╠═5bf3d476-1d42-11eb-25c9-c3ed3ab04a34
 # ╠═6323f37a-1d42-11eb-0f71-57dbb9a30e06
-# ╠═5bd69488-1d42-11eb-0771-0dcfc2655f9d
-# ╠═d754c47e-3c21-11eb-11e8-b349077a74ee
+# ╠═6420e43a-5213-11eb-2d4b-7d295d0aaec8
