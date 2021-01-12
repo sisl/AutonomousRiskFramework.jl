@@ -514,9 +514,9 @@ version = "1.0.3"
 
 [[ICU_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "0ec2e6e6a049eb8520c19cd8976085afcf2943fb"
+git-tree-sha1 = "6ce9cf3c5490b045710d60ac3fd2fe48188846b3"
 uuid = "a51ab1cf-af8e-5615-a023-bc2c838bba6b"
-version = "67.1.0+2"
+version = "67.1.0+3"
 
 [[IJulia]]
 deps = ["Base64", "Conda", "Dates", "InteractiveUtils", "JSON", "Markdown", "MbedTLS", "Pkg", "Printf", "REPL", "Random", "SoftGlobalScope", "Test", "UUIDs", "ZMQ"]
@@ -833,7 +833,7 @@ uuid = "510215fc-4207-5dde-b226-833fc4488ee2"
 version = "0.3.2"
 
 [[ObservationModels]]
-deps = ["AdversarialDriving", "AutomotiveSimulator", "Distributed", "Distributions", "LinearAlgebra", "Parameters", "Random", "Statistics", "Zygote"]
+deps = ["AdversarialDriving", "AutomotiveSimulator", "CUDA", "Distributed", "Distributions", "Flux", "LinearAlgebra", "Parameters", "Plots", "Random", "Statistics", "Zygote"]
 path = "C:\\Users\\shubh\\Documents\\AutonomousRiskFramework\\ObservationModels"
 uuid = "36e58220-4bbe-4dfe-b3a4-5a64030e6065"
 version = "0.1.0"

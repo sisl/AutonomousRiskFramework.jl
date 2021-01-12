@@ -1,8 +1,8 @@
-out_is = planner.is_dist[:xpos]
+# out_is = planner.is_dist[:xpos_sut]
 
-episodic_figures(planner.mdp, gui=false); POMDPStressTesting.gcf();
+episodic_figures(planner.mdp, gui=true); POMDPStressTesting.gcf();
 
-distribution_figures(planner.mdp, gui=false); POMDPStressTesting.gcf();
+distribution_figures(planner.mdp, gui=true); POMDPStressTesting.gcf();
 
 playback_trace = playback(planner, action_trace, BlackBox.distance, return_trace=true);
 
@@ -23,7 +23,7 @@ playback_trace = playback(planner, action_trace, sim->sim.state, return_trace=tr
 
 win = Blink.Window()
 
-man = @manipulate for t=slider(1:30, value=1., label="t")
+man = @manipulate for t=slider(1:length(playback_trace), value=1., label="t")
     AutomotiveVisualization.render([planner.mdp.sim.problem.roadway, crosswalk, playback_trace[min(t, length(playback_trace))]])
 end;
 

@@ -39,6 +39,56 @@ function measure_gps(ent::Entity, noise::Array{Float64})
     ranges
 end
 
+# Function to compute GPS measurements for x,y coordinate pos from satellite positions and noise
+function measure_gps(pos::Array{Float32}, noise::Array{Float32})
+    # TODO: move satellite positions outside
+
+    # Visibility based on position
+    if (pos[1] > 7.)&&(pos[1] < 20.) 
+        fixed_sat = [
+            Satellite(pos=VecE3(-1000.0,-1000.0,1000.0), clk_bias=0.0),
+            Satellite(pos=VecE3(1000.0,-1000.0,1000.0), clk_bias=0.0),
+            Satellite(pos=VecE3(-1000.0,1000.0,1000.0), clk_bias=3.0),
+            Satellite(pos=VecE3(1000.0,1000.0,1000.0), clk_bias=0.0, visible=false),
+            Satellite(pos=VecE3(0.0,0.0,1000.0), clk_bias=0.0)
+        ]
+    else
+        fixed_sat = [
+            Satellite(pos=VecE3(-1000.0,-1000.0,1000.0), clk_bias=0.0),
+            Satellite(pos=VecE3(1000.0,-1000.0,1000.0), clk_bias=0.0),
+            Satellite(pos=VecE3(-1000.0,1000.0,1000.0), clk_bias=0.0),
+            Satellite(pos=VecE3(1000.0,1000.0,1000.0), clk_bias=0.0),
+            Satellite(pos=VecE3(0.0,0.0,1000.0), clk_bias=0.0)
+        ]
+    end
+
+    # # Full visibility
+    # fixed_sat = [
+    #         Satellite(pos=VecE3(-1000.0,-1000.0,1000.0), clk_bias=0.0),
+    #         Satellite(pos=VecE3(1000.0,-1000.0,1000.0), clk_bias=0.0),
+    #         Satellite(pos=VecE3(-1000.0,1000.0,1000.0), clk_bias=0.0),
+    #         Satellite(pos=VecE3(1000.0,1000.0,1000.0), clk_bias=0.0),
+    #         Satellite(pos=VecE3(0.0,0.0,1000.0), clk_bias=0.0)
+    #     ]
+
+    # # Biased position
+    # if (pos[1] > 5.)&&(pos[1] < 10.)
+    #     pos[2] -= 5
+    # end 
+
+    ranges = Union{Missing, GPSRangeMeasurement}[]
+    for i in 1:length(fixed_sat)
+        satpos = fixed_sat[i].pos
+        if fixed_sat[i].visible==true
+            range = hypot(pos[1] - satpos.x, pos[2] - satpos.y, satpos.z)
+            push!(ranges, GPSRangeMeasurement(sat=fixed_sat[i], range=range, noise=noise[i]))
+        else
+            push!(ranges, missing)
+        end
+    end
+    ranges
+end
+
 # Determine position fix using GPS measurements from multiple satellites 
 function GPS_fix(meas::Array{T}) where {T <: Union{Missing, GPSRangeMeasurement}}
     lam = 1.0  # stepsize
@@ -81,7 +131,7 @@ function GPS_fix(meas::Array{T}) where {T <: Union{Missing, GPSRangeMeasurement}
     delta_x = [1000., 1000., 1000., 1000.]
     
 #     while sum(abs.(delta_x)) > 0.001
-    for i=1:3
+    for i=1:5
         delta_x = lam*(pinv(df(x, meas))*f(x, meas))
         x = x - delta_x
     end 

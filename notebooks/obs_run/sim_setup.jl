@@ -21,11 +21,15 @@ end;
     prev_distance::Real = -Inf # Used when agent goes out of frame
 
     # Noise distributions and disturbances
-#     xposition_noise::Distribution = INormal_Uniform(0, 1) # Gaussian noise (notice larger σ)
-#     yposition_noise::Distribution = INormal_Uniform(0, 1) # Gaussian noise
-    xposition_noise::Distribution = Normal(0, 5) # Gaussian noise (notice larger σ)
-    yposition_noise::Distribution = Normal(0, 5) # Gaussian noise
-    velocity_noise::Distribution = Normal(0, 1) # Gaussian noise
+    # xposition_noise_ped::Distribution = INormal_Uniform(0, 6) # Gaussian noise (notice larger σ)
+    # yposition_noise_ped::Distribution = INormal_Uniform(0, 6) # Gaussian noise
+    xposition_noise_ped::Distribution = Normal(0, 10) # Gaussian noise (notice larger σ)
+    yposition_noise_ped::Distribution = Normal(0, 10) # Gaussian noise
+    velocity_noise_ped::Distribution = Normal(0, 1) # Gaussian noise
+
+    xposition_noise_sut::Distribution = Normal(0, 10) # Gaussian noise (notice larger σ)
+    yposition_noise_sut::Distribution = Normal(0, 1) # Gaussian noise
+    velocity_noise_sut::Distribution = Normal(0, 1) # Gaussian noise
     
     # GPS range noise
     range_sigma = 5.0
@@ -37,8 +41,31 @@ end;
                     Normal(0, range_sigma)]
         ) # Array of Gaussian
     
-    disturbances = Disturbance[PedestrianControl()] # Initial 0-noise disturbance
+    disturbances = Disturbance[BlinkerVehicleControl(), PedestrianControl()] # Initial 0-noise disturbance
 end;
+
+# Step the scene forward by one timestep and return the next state
+function AdversarialDriving.step_scene(mdp::AdversarialDriving.AdversarialDrivingMDP, s::Scene, actions::Vector{Disturbance}, rng::AbstractRNG = Random.GLOBAL_RNG)
+    entities = []
+
+    # Add noise in SUT
+    update_adversary!(sut(mdp), actions[1], s)
+
+    # Loop through the adversaries and apply the instantaneous aspects of their disturbance
+    for (adversary, action) in zip(adversaries(mdp), actions[2:end])
+        update_adversary!(adversary, action, s)
+    end
+
+    # Loop through the vehicles in the scene, apply action and add to next scene
+    for (i, veh) in enumerate(s)
+        m = model(mdp, veh.id)
+        observe!(m, s, mdp.roadway, veh.id)
+        a = rand(rng, m)
+        bv = Entity(propagate(veh, a, mdp.roadway, mdp.dt), veh.def, veh.id)
+        !end_of_road(bv, mdp.roadway, mdp.end_of_road) && push!(entities, bv)
+    end
+    isempty(entities) ? Scene(typeof(sut(mdp).get_initial_entity())) : Scene([entities...])
+end
 
 function GrayBox.environment(sim::AutoRiskSim)
     
@@ -62,14 +89,12 @@ function GrayBox.environment(sim::AutoRiskSim)
     # prev_noise = noise(sim.state[AdversarialDriving.id(sim.adversary)])
 
     return GrayBox.Environment(
-                            :vel => sim.velocity_noise,
-                            # :range_1 => sim.range_noise[1],
-                            # :range_2 => sim.range_noise[2],
-                            # :range_3 => sim.range_noise[3],
-                            # :range_4 => sim.range_noise[4],
-                            # :range_5 => sim.range_noise[5]
-                            :xpos => sim.xposition_noise,
-                            :ypos => sim.yposition_noise
+                            # :vel_ped => sim.velocity_noise_ped,
+                            :xpos_ped => sim.xposition_noise_ped,
+                            :ypos_ped => sim.yposition_noise_ped,
+                            # :vel_sut => sim.velocity_noise_sut,
+                            :xpos_sut => sim.xposition_noise_sut,
+                            :ypos_sut => sim.yposition_noise_sut
                         )
 end
 
@@ -83,10 +108,14 @@ function GrayBox.transition!(sim::AutoRiskSim, sample::GrayBox.EnvironmentSample
 #     range_noise = [sample[:range_1].value, 0.0, sample[:range_3].value, 0.0, 0.0]
 #     noise = Noise(pos = (0.0, 0.0), vel = sample[:vel].value, gps_range = [0.0, 0.0, 0.0, 0.0, 0.0])
 #     noise = Noise(pos = (0.0, 0.0), vel = 0.0, gps_range = range_noise)
-    noise = Noise(pos = (sample[:xpos].value, sample[:ypos].value), vel = 0.0)
+    # noise_ped = Noise(pos = (sample[:xpos_ped].value, sample[:ypos_ped].value), vel = sample[:vel_ped].value)
+    # noise_sut = Noise(pos = (sample[:xpos_sut].value, sample[:ypos_sut].value), vel = sample[:vel_sut].value)
+    noise_ped = Noise(pos = (sample[:xpos_ped].value, sample[:ypos_ped].value), vel = 0.0)
+    noise_sut = Noise(pos = (sample[:xpos_sut].value, sample[:ypos_sut].value), vel = 0.0)
 #     noise = Noise(pos = (sample[:xpos].value, sample[:ypos].value), vel = sample[:vel].value, gps_range = [0.0, 0.0, 0.0, 0.0, 0.0])
 #     noise = Noise(pos = (sample[:xpos].value, sample[:ypos].value), vel = 0.0, gps_range = [0.0, 0.0, 0.0, 0.0, 0.0])
-    sim.disturbances[1] = PedestrianControl(noise=noise)
+    sim.disturbances[1] = BlinkerVehicleControl(noise=noise_sut)
+    sim.disturbances[2] = PedestrianControl(noise=noise_ped)
 
     # step agents: given MDP, current state, and current action (i.e. disturbances)
     (sim.state, r) = @gen(:sp, :r)(sim.problem, sim.state, sim.disturbances)
@@ -99,7 +128,7 @@ function BlackBox.initialize!(sim::AutoRiskSim)
     sim.t = 0
     sim.problem = AdversarialDrivingMDP(sim.sut, [sim.adversary], ped_roadway, 0.1)
     sim.state = rand(initialstate(sim.problem))
-    sim.disturbances = Disturbance[PedestrianControl()] # noise-less
+    sim.disturbances = Disturbance[BlinkerVehicleControl(), PedestrianControl()] # noise-less
     sim.prev_distance = -Inf
 end
 

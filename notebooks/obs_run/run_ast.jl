@@ -1,4 +1,4 @@
-function obs_cem_losses(d, sample; mdp::ASTMDP, initstate::ASTState)
+function obs_cem_losses(d, sample, r_dist_net; mdp::ASTMDP, initstate::ASTState)
     sim = mdp.sim
     env = GrayBox.environment(sim)
 
@@ -10,13 +10,13 @@ function obs_cem_losses(d, sample; mdp::ASTMDP, initstate::ASTState)
 
     sample_length = length(last(first(sample))) # get length of sample vector ("second" element in pair using "first" key)
     temp = 0.0
-    logpdfs = []
+
+    # Collect true state sequence for given sequence of noisy states
     for i in 1:sample_length
         push!(true_s, mdp.sim.state)
         env_sample = GrayBox.EnvironmentSample()
         for k in keys(sample)
             value = sample[k][i]
-            # logprob = logpdf(env[k], value) # log-probability from true distribution
             logprob = 0.0
             env_sample[k] = GrayBox.Sample(value, logprob)
         end
@@ -28,7 +28,7 @@ function obs_cem_losses(d, sample; mdp::ASTMDP, initstate::ASTState)
         end
     end
 
-    logprobs = traj_logprob(sample, true_s, sim)
+    logprobs = set_logprob(sim, r_dist_net, true_s, sample)
 
     BlackBox.initialize!(sim)
     s = initstate
@@ -39,6 +39,7 @@ function obs_cem_losses(d, sample; mdp::ASTMDP, initstate::ASTState)
         env_sample = GrayBox.EnvironmentSample()
         for k in keys(sample)
             value = sample[k][i]
+            # logprob = logpdf(env[k], value) # log-probability from true distribution
             logprob = logprobs[i][k]
             env_sample[k] = GrayBox.Sample(value, logprob)
         end
@@ -54,6 +55,7 @@ function obs_cem_losses(d, sample; mdp::ASTMDP, initstate::ASTState)
     # R += temp
     # R += traj_logprob(sample, true_s, sim)
 
+    # @show -R
     return -R # negative (loss)
 end
 
@@ -68,8 +70,11 @@ function POMDPs.action(planner::CEMPlanner, s; rng=Random.GLOBAL_RNG)
     # Importance sampling distributions, fill one per time step.
     is_dist_0 = convert(Dict{Symbol, Vector{Sampleable}}, env, planner.solver.episode_length)
 
+    # Calculate reward distributions
+    r_dist_net = ObservationModels.simple_distribution_fit(mdp.sim, mdp.sim.obs_noise[:ranges])
+
     # Run cross-entropy method using importance sampling
-    loss = (d, sample)->obs_cem_losses(d, sample; mdp=mdp, initstate=s)
+    loss = (d, sample)->obs_cem_losses(d, sample, r_dist_net; mdp=mdp, initstate=s)
     is_dist_opt = cross_entropy_method(loss,
                                        is_dist_0;
                                        max_iter=planner.solver.n_iterations,
@@ -143,11 +148,11 @@ function setup_ast(seed=0)
 #                           next_action=null_priority
 # #                           estimate_value=cem_rollout
 #                          )
-    solver = POMDPStressTesting.CEMSolver(n_iterations=50,
-                       num_samples=100,
-                       elite_thresh=20.,
+    solver = POMDPStressTesting.CEMSolver(n_iterations=100,
+                       num_samples=300,
+                       elite_thresh=100.,
                        min_elite_samples=20,
-                       max_elite_samples=50,
+                       max_elite_samples=200,
                        episode_length=sim.params.endtime)
     
 # return actions(mdp, initialstate(mdp))
