@@ -1,62 +1,134 @@
-function obs_cem_losses(d, sample, r_dist_net; mdp::ASTMDP, initstate::ASTState)
+function obs_cem_losses(d, samples, r_dist_net; mdp::ASTMDP, initstate::ASTState)
     sim = mdp.sim
     env = GrayBox.environment(sim)
 
-    true_s = []
-    s = initstate
+    N = length(samples)
+    sample_length = length(last(first(samples[1]))) # get length of sample vector ("second" element in pair using "first" key)
 
-    BlackBox.initialize!(sim)
-    AST.go_to_state(mdp, s)
+    true_sequences = SharedArray{VecSE2{Float64}}(N, 2, sample_length)
+    
+    # Collect true state sequence using sequences of noisy states as actions
+    if nprocs() > 1
+        @sync @distributed for i_samp in 1:N
+            sample = samples[i_samp]
+            
+            # reset
+            BlackBox.initialize!(sim)
+            s = initstate
+            AST.go_to_state(mdp, s)
 
-    sample_length = length(last(first(sample))) # get length of sample vector ("second" element in pair using "first" key)
-    temp = 0.0
+            for i in 1:sample_length
+                scene = mdp.sim.state
+                true_sequences[i_samp, 1, i] = posg(scene[AdversarialDriving.id(mdp.sim.sut)])
+                true_sequences[i_samp, 2, i] = posg(scene[AdversarialDriving.id(mdp.sim.adversary)])
+                env_sample = GrayBox.EnvironmentSample()
+                for k in keys(sample)
+                    value = sample[k][i]
+                    env_sample[k] = GrayBox.Sample(value, 0.0)
+                end
+                a = ASTSampleAction(env_sample)
+                s = @gen(:sp)(mdp, s, a)
 
-    # Collect true state sequence for given sequence of noisy states
-    for i in 1:sample_length
-        push!(true_s, mdp.sim.state)
-        env_sample = GrayBox.EnvironmentSample()
-        for k in keys(sample)
-            value = sample[k][i]
-            logprob = 0.0
-            env_sample[k] = GrayBox.Sample(value, logprob)
+                if BlackBox.isterminal(mdp.sim)
+                    break
+                end
+            end
         end
-        a = ASTSampleAction(env_sample)
-        s = @gen(:sp)(mdp, s, a)
-        
-        if BlackBox.isterminal(sim)
-            break
+    else
+        for i_samp in 1:N
+            sample = samples[i_samp]
+            
+            # reset
+            BlackBox.initialize!(sim)
+            s = initstate
+            AST.go_to_state(mdp, s)
+
+            for i in 1:sample_length
+                scene = mdp.sim.state
+                true_sequences[i_samp, 1, i] = posg(scene[AdversarialDriving.id(mdp.sim.sut)])
+                true_sequences[i_samp, 2, i] = posg(scene[AdversarialDriving.id(mdp.sim.adversary)])
+                env_sample = GrayBox.EnvironmentSample()
+                for k in keys(sample)
+                    value = sample[k][i]
+                    env_sample[k] = GrayBox.Sample(value, 0.0)
+                end
+                a = ASTSampleAction(env_sample)
+                s = @gen(:sp)(mdp, s, a)
+
+                if BlackBox.isterminal(mdp.sim)
+                    break
+                end
+            end
         end
     end
 
-    logprobs = set_logprob(sim, r_dist_net, true_s, sample)
+    true_sequences = convert(Array, true_sequences)
 
-    BlackBox.initialize!(sim)
-    s = initstate
-    AST.go_to_state(mdp, s)
-    R = 0 # accumulated reward
+    logprobs_all = ObservationModels.calc_logprobs(sim, r_dist_net, true_sequences, samples)
+    
+    # Compute the costs for all samples
+    costs = SharedArray{Float64}(N)
 
-    for i in 1:sample_length
-        env_sample = GrayBox.EnvironmentSample()
-        for k in keys(sample)
-            value = sample[k][i]
-            # logprob = logpdf(env[k], value) # log-probability from true distribution
-            logprob = logprobs[i][k]
-            env_sample[k] = GrayBox.Sample(value, logprob)
+    if nprocs() > 1
+        @sync @distributed for i_samp in 1:N
+            sample = samples[i_samp]
+            logprobs = logprobs_all[i_samp]
+            BlackBox.initialize!(sim)
+            s = initstate
+            AST.go_to_state(mdp, s)
+            R = 0 # accumulated reward
+
+            for i in 1:sample_length
+                env_sample = GrayBox.EnvironmentSample()
+                for k in keys(sample)
+                    value = sample[k][i]
+                    # logprob = logpdf(env[k], value) # log-probability from true distribution
+                    logprob = logprobs[k][i]
+                    env_sample[k] = GrayBox.Sample(value, logprob)
+                end
+                a = ASTSampleAction(env_sample)
+                (s, r) = @gen(:sp, :r)(mdp, s, a)
+                R += r
+                
+                if BlackBox.isterminal(mdp.sim)
+                    break
+                end
+            end
+            costs[i_samp] = -R # negative (loss)
         end
-        a = ASTSampleAction(env_sample)
-        (s, r) = @gen(:sp, :r)(mdp, s, a)
-        R += r
-        
-        if BlackBox.isterminal(sim)
-            break
+    else
+        for i_samp in 1:N
+            sample = samples[i_samp]
+            logprobs = logprobs_all[i_samp]
+            BlackBox.initialize!(sim)
+            s = initstate
+            AST.go_to_state(mdp, s)
+            R = 0 # accumulated reward
+
+            for i in 1:sample_length
+                env_sample = GrayBox.EnvironmentSample()
+                for k in keys(sample)
+                    value = sample[k][i]
+                    # logprob = logpdf(env[k], value) # log-probability from true distribution
+                    logprob = logprobs[k][i]
+                    env_sample[k] = GrayBox.Sample(value, logprob)
+                end
+                a = ASTSampleAction(env_sample)
+                (s, r) = @gen(:sp, :r)(mdp, s, a)
+                R += r
+                
+                if BlackBox.isterminal(mdp.sim)
+                    break
+                end
+            end
+            costs[i_samp] = -R # negative (loss)
         end
     end
+
+    costs = convert(Array, costs)
+    # @show costs
     # throw("Hi")
-    # R += temp
-    # R += traj_logprob(sample, true_s, sim)
-
-    # @show -R
-    return -R # negative (loss)
+    return costs 
 end
 
 function POMDPs.action(planner::CEMPlanner, s; rng=Random.GLOBAL_RNG)
@@ -70,11 +142,11 @@ function POMDPs.action(planner::CEMPlanner, s; rng=Random.GLOBAL_RNG)
     # Importance sampling distributions, fill one per time step.
     is_dist_0 = convert(Dict{Symbol, Vector{Sampleable}}, env, planner.solver.episode_length)
 
-    # Calculate reward distributions
-    r_dist_net = ObservationModels.simple_distribution_fit(mdp.sim, mdp.sim.obs_noise[:ranges])
+    # # Calculate reward distributions
+    # r_dist_net = ObservationModels.simple_distribution_fit(mdp.sim, mdp.sim.obs_noise[:ranges])
 
     # Run cross-entropy method using importance sampling
-    loss = (d, sample)->obs_cem_losses(d, sample, r_dist_net; mdp=mdp, initstate=s)
+    loss = (d, samples)->obs_cem_losses(d, samples, r_dist_net; mdp=mdp, initstate=s)
     is_dist_opt = cross_entropy_method(loss,
                                        is_dist_0;
                                        max_iter=planner.solver.n_iterations,
@@ -86,6 +158,7 @@ function POMDPs.action(planner::CEMPlanner, s; rng=Random.GLOBAL_RNG)
                                        add_entropy=planner.solver.add_entropy,
                                        verbose=planner.solver.verbose,
                                        show_progress=planner.solver.show_progress,
+                                       batched=true,
                                        rng=rng)
 
     # Save the importance sampling distributions
@@ -93,10 +166,47 @@ function POMDPs.action(planner::CEMPlanner, s; rng=Random.GLOBAL_RNG)
 
     # Pass back action trace if recording is on (i.e. top_k)
     if mdp.params.top_k > 0
-        return get_top_path(mdp)
+        # return get_top_path(mdp)
+        return get_dist_top_path(mdp, planner.is_dist, s)
+        # return rand(planner.is_dist)
     else
         return planner.is_dist # pass back the importance sampling distributions
     end
+end
+
+# Find the most likely failure sequence from the sampling distribution
+function get_dist_top_path(mdp, dist, initstate)
+    sim = mdp.sim
+    env = GrayBox.environment(sim)
+
+    sample = rand(dist) #just a placeholder for a sample
+
+    sample_length = length(last(first(sample))) # get length of sample vector ("second" element in pair using "first" key)
+
+     # reset
+     BlackBox.initialize!(sim)
+     s = initstate
+     AST.go_to_state(mdp, s)
+
+    path = ASTAction[]
+    for i in 1:sample_length
+        env_sample = GrayBox.EnvironmentSample()
+        for k in keys(sample)
+            value = mode(dist[k][i])    # Distribution mode 
+            # Replace with recalculation of the logprob
+            logprob = logpdf(env[k], value) # log-probability from starting distribution
+            # logprob = logprobs[k][i]
+            env_sample[k] = GrayBox.Sample(value, logprob)
+        end
+        a = ASTSampleAction(env_sample)
+        s = @gen(:sp)(mdp, s, a)
+
+        push!(path, a)
+        if BlackBox.isterminal(mdp.sim)
+            break
+        end
+    end
+    path
 end
 
 function setup_ast(seed=0)
@@ -148,9 +258,9 @@ function setup_ast(seed=0)
 #                           next_action=null_priority
 # #                           estimate_value=cem_rollout
 #                          )
-    solver = POMDPStressTesting.CEMSolver(n_iterations=100,
-                       num_samples=300,
-                       elite_thresh=100.,
+    solver = POMDPStressTesting.CEMSolver(n_iterations=50,
+                       num_samples=500,
+                       elite_thresh=3000.,
                        min_elite_samples=20,
                        max_elite_samples=200,
                        episode_length=sim.params.endtime)

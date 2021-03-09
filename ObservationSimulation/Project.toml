@@ -1,0 +1,8 @@
+name = "ObservationSimulation"
+uuid = "d85b659e-87b2-49c2-a128-d04269a84998"
+authors = ["Shubh Gupta <shubhg1996@gmail.com>"]
+version = "0.1.0"
+
+[deps]
+AutomotiveSimulator = "6aa42d20-6c96-11ea-1103-339224409280"
+AutomotiveVisualization = "0faf7fd0-6c98-11ea-1740-03605baa3b07"

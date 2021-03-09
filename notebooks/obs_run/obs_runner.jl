@@ -1,21 +1,28 @@
 using Pkg
 Pkg.activate("ast_obs")
+using Distributed
 using Markdown
 using InteractiveUtils
 using Interact
+using SharedArrays
 using LinearAlgebra
 using Plots
 using Statistics
 using Distributions, Parameters, Random, Latexify
 using AutomotiveSimulator, AutomotiveVisualization
 using POMDPs, POMDPPolicies, POMDPSimulators
-using AdversarialDriving
-using CrossEntropyMethod
 using WebIO
 using Blink
-using Revise
+using AdversarialDriving
 using POMDPStressTesting
+using CrossEntropyMethod
+using Revise
 using ObservationModels
+# addprocs(4, topology=:master_worker)
+# @everywhere using Pkg
+# @everywhere Pkg.activate("ast_obs")
+# @everywhere using AutomotiveSimulator
+# @everywhere using POMDPStressTesting
 
 Base.rand(rng::AbstractRNG, s::Scene) = s
 

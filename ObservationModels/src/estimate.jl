@@ -2,9 +2,12 @@
     num_samples::Real = 50 # Estimation samples
 end;
 
+stop_gradient(f) = f()
+Zygote.@nograd stop_gradient
+
 function gps_distribution_estimate(ent, noise_dist, params)
     
-    base_meas = ObservationModels.measure_gps(ent, [0., 0., 0., 0., 0.])
+    base_meas = measure_gps(ent, [0., 0., 0., 0., 0.])
     true_pos = posg(ent)
     velocity_noise = last(noise_dist)
 
@@ -77,8 +80,7 @@ function Distributions.logpdf(d::Dict{Symbol, Vector{Sampleable}}, x)
     sum([logpdf(d, x, i) for i=1:length(first(x)[2])])
 end
 
-# function gen_gps_meas(noise::Array{Float64}, )
-
+# Loss for AST controlling range error disturbances
 function obs_ce_loss(ent, noisy_pose, samp)
     base_meas = measure_gps(ent, [0., 0., 0., 0., 0.])
     
@@ -111,8 +113,6 @@ function traj_logprob(noisy_states, true_states, sim)
             :ranges => [INormal_GMM(d.μ, d.σ) for d in sim.obs_noise[:ranges]]
         )
 
-        # @show new_is_dist, sim.obs_noise
-        # throw("Hi")
         push!(is_dist, new_is_dist)
         ent = true_states[t][AdversarialDriving.id(sim.adversary)]
 
@@ -148,99 +148,146 @@ function traj_logprob(noisy_states, true_states, sim)
     return logprobs
 end
 
-function preprocess_data!(data_x, data_y)
-    data_y[:] = data_y /40 .+ 0.5
-    data_x[:] = data_x /40
+# Function to create neural network features from environment state
+function create_features(data_x)
+    n_dim, n_samp = size(data_x)
+    @assert n_dim==2
+    features = zeros(4, n_samp)
+    for i in 1:n_samp
+        features[1, i] = data_x[1, i]   # x-coord
+        features[2, i] = data_x[2, i]   # y-coord
+        features[3, i] = sqrt(data_x[1, i]^2 + data_x[2, i]^2) # Polar mag
+        features[4, i] = atan(data_x[2, i], data_x[1, i]) # Polar ang
+        # features[5, i] = 0.707 * data_x[1, i] + 0.707 * data_x[2, i] # 45° rotation
+        # features[6, i] = 0.866 * data_x[1, i] + 0.5 * data_x[2, i] # 30° x rotation
+        # features[7, i] = 0.5 * data_x[1, i] + 0.866 * data_x[2, i] # 30° y rotation
+        # features[8, i] = data_x[1, i]^2   # x-coord degree 2
+        # features[9, i] = data_x[2, i]^2   # y-coord degree 2
+        # features[10, i] = data_x[1, i]^3   # x-coord degree 3
+        # features[11, i] = data_x[2, i]^3   # y-coord degree 3
+        # features[12, i] = data_x[1, i]^4   # x-coord degree 3
+        # features[13, i] = data_x[2, i]^4   # y-coord degree 3
+    end
+    return features
 end
 
-function preprocess_data!(data_x)
-    data_x[:] = data_x /40
+# Preprocess inputs and labels for training
+function preprocess_data!(feat_x, data_y)
+    data_y[:] = data_y
+    preprocess_data!(feat_x)
 end
 
-function postprocess_data!(outs)
-    sig_offset = Int(size(outs)[1]/2)
-    outs[1:sig_offset, :] = (outs[1:sig_offset, :] .- 0.5)*40
-    outs[sig_offset+1:end, :] = (exp.(outs[sig_offset+1:end, :]/2))*40
-    outs
+# Preprocess inputs for testing
+function preprocess_data!(feat_x)
+    feat_x[:] = feat_x
+    # if size(feat_x)[1]>4
+    #     feat_x[4, :] = feat_x[4, :]*40/pi
+    # end
+    # if size(feat_x)[1]>=8
+    #     feat_x[8:9, :] = feat_x[8:9, :]/40
+    # end
+    # if size(feat_x)[1]>=10
+    #     feat_x[10:11, :] = feat_x[10:11, :]/(40*40)
+    # end
+    # if size(feat_x)[1]>=12
+    #     feat_x[12:13, :] = feat_x[12:13, :]/(40*40*40)
+    # end
 end
 
+# postprocess neural network outputs 
+function postprocess_data!(pi, mu, sigma; n_comp=2)
+    for i in 1:2
+        pi[1 + (i-1)*n_comp:i*n_comp, :] = softmax(pi[1 + (i-1)*n_comp:i*n_comp, :])
+    end 
+    # outs[1:sig_offset, :] = (outs[1:sig_offset, :] .- 0.5)*40
+    # outs[sig_offset+1:end, :] = (exp.(outs[sig_offset+1:end, :]/2))
+end
+
+# Train neural network using mean squared error
 function train_nnet_mse!(data_x, data_y, net; batch_size=1, lr=1f-2, n_epoch=10)
     randIdx = collect(1:1:size(data_y)[2])
     numBatches = round(Int, floor(size(data_y)[2] / batch_size))
 
-    opt = ADAM()
+    opt = RMSProp(lr, 0.99)
 
     sqnorm(x) = sum(abs2, x)
     penalty() = sum(sqnorm, Flux.params(net))
 
-    function nll_loss(x, y) 
+    function mse_loss(x, y) 
         outs = net(x)
+        # wts = σ.(outs[5:6, :])
         @assert size(y)[1]*2==size(outs)[1]
 
-        return Flux.mse(outs[1:2, :], y)
+        return Flux.mse(outs[1:2, :], y) # + Float32(1e-3)*penalty()
     end
 
-    evalcb() = @show(nll_loss(data_x, data_y))
+    evalcb() = @show(mse_loss(data_x, data_y))
 
     for epoch in 1:n_epoch
         Random.shuffle!(randIdx);
         data = [(data_x[:, randIdx[(i-1)*batch_size+1:i*batch_size]], data_y[:, randIdx[(i-1)*batch_size+1:i*batch_size]]) for i in 1:numBatches];
-        Flux.train!(nll_loss, Flux.params(net), data, opt, cb=Flux.throttle(evalcb, 5))
+        Flux.train!(mse_loss, Flux.params(net), data, opt, cb=Flux.throttle(evalcb, 5))
     end
 end
 
-function train_nnet!(data_x, data_y, net; batch_size=1, lr=1f-2, n_epoch=10)
+# Probability of gaussian distribution
+function gaussian_distribution(y, μ, σ)
+    result = 1 ./ ((sqrt(2π).*σ)).*exp.(-0.5((y .- μ)./σ).^2)
+end;
+
+# Train neural network using mixture density log likelihood
+function train_nnet!(data_x, data_y, pi_net, mu, sigma; batch_size=1, lr=1f-2, n_epoch=10)
     randIdx = collect(1:1:size(data_y)[2])
     numBatches = round(Int, floor(size(data_y)[2] / batch_size))
 
-    opt = ADAM()
+    opt = RMSProp(lr, 0.99)
 
-    sqnorm(x) = sum(abs2, x)
-    penalty() = sum(sqnorm, Flux.params(net))
+    # sqnorm(x) = sum(abs2, x)
+    # penalty() = sum(sqnorm, Flux.params(net))
 
-    function nll_loss(x, y) 
-        outs = net(x)
-        @assert size(y)[1]*2==size(outs)[1]
+    function mdn_loss(x, y; n_comp=2)
+        π_full = pi_net(x)
+        σ_full = sigma(x)
+        μ_full = mu(x)
+        result = []
+        for i in 1:2
+            i_π = softmax(π_full[1 + (i-1)*n_comp:i*n_comp, :])
+            i_σ = σ_full[1 + (i-1)*n_comp:i*n_comp, :]
+            i_μ = μ_full[1 + (i-1)*n_comp:i*n_comp, :]
+            i_result = i_π.*gaussian_distribution(y, i_μ, i_σ)
+            i_result = sum(i_result, dims=1)
+            result = push!(result, -log.(i_result))
+        end
+        return mean(result)
+    end;
 
-        sig_offset = Int(size(outs)[1]/2)
-        μ = outs[1:sig_offset, :]
-        logσ_2 = outs[sig_offset+1:end, :]
-        prec = exp.(-logσ_2)
-        Δ = μ .- y
-        coef = (Δ.^2).*prec*Float32(-0.5)
-        ret = (logσ_2 .- coef) .+ Float32((log(2*π)/2))
-        return mean(ret)
+    evalcb() = @show(mdn_loss(data_x, data_y))
 
-        # function single_nll(outs, idx)
-        #     sig_offset = Int(size(outs)[1]/2)
-        #     μ = outs[idx, :]
-        #     logσ_2 = outs[sig_offset + idx, :]
-        #     prec = exp.(-logσ_2)
-        #     Δ = μ .- y[idx]
-        #     coef = ((Δ.^2).*prec)*Float32(-0.5) 
-        #     ret = (logσ_2 - coef).+ Float32((log(2*π)/2))
-        #     ret
-        # end
-        
-        # return sum(single_nll(outs, 1) + single_nll(outs, 2))
-    end
-
-    # function nll_loss(x, y) 
-    #     outs = net(x)
-    #     @assert size(y)[1]*2==size(outs)[1]
-
-    #     return Flux.mse(outs[1:2, :], y)
-    # end
-
-    evalcb() = @show(nll_loss(data_x, data_y))
-
+    local training_loss
+    ps = Flux.params(pi_net, mu, sigma);
     for epoch in 1:n_epoch
         Random.shuffle!(randIdx);
         data = [(data_x[:, randIdx[(i-1)*batch_size+1:i*batch_size]], data_y[:, randIdx[(i-1)*batch_size+1:i*batch_size]]) for i in 1:numBatches];
-        Flux.train!(nll_loss, Flux.params(net), data, opt, cb=Flux.throttle(evalcb, 5))
+        # epoch_loss = 0.0;
+        # for batch in data
+        #     gs = gradient(ps) do
+        #         # forward
+        #         pi_out = pi_net(batch[1])
+        #         sigma_out = sigma(batch[1])
+        #         mu_out = mu(batch[1])
+        #         training_loss = mdn_loss(pi_out, sigma_out, mu_out, batch[2])
+        #         return training_loss
+        #       end
+        #     epoch_loss += training_loss
+        #     # backward
+        #     Flux.update!(opt, ps, gs)
+        # end
+        # @show(epoch_loss/size(data)[1])
+        Flux.train!(mdn_loss, ps, data, opt, cb=Flux.throttle(evalcb, 5))
     end
 end
 
+# helper function to generate training dataset by simulating measurements
 function gen_data(sim, noise_dist; n_data = 100, n_samp = 100)
     rng = MersenneTwister()
 
@@ -295,38 +342,65 @@ function gen_data(sim, noise_dist; n_data = 100, n_samp = 100)
     data_x, data_y
 end
 
+# Function to generate data, construct and train a neural network
 function simple_distribution_fit(sim, noise_dist)
     data_x, data_y = gen_data(sim, noise_dist)
+    feat_x = create_features(data_x)
+    n_feat = size(feat_x)[1]
+    n_hidden = 20;
+    z_h = Dense(n_feat, n_hidden, tanh)
+    z_π = Dense(n_hidden, 2*2)
+    z_σ = Dense(n_hidden, 2*2, exp)
+    z_μ = Dense(n_hidden, 2*2)    
+
+    pi_net = Chain(z_h, z_π) |> gpu
+    sigma = Chain(z_h, z_σ) |> gpu
+    mu = Chain(z_h, z_μ) |> gpu
     
-    net = Chain(Dense(2, 100, relu), Dense(100, 500, relu), Dense(500, 4)) |> gpu    
-    
-    preprocess_data!(data_x, data_y)
-    data_x = data_x |> gpu
+    preprocess_data!(feat_x, data_y)
+    feat_x = feat_x |> gpu
     data_y = data_y |> gpu
     # Pretrain
-    train_nnet_mse!(data_x, data_y, net; batch_size=100, lr=1f-2, n_epoch=100)
-    train_nnet!(data_x, data_y, net; batch_size=100, lr=1f-2, n_epoch=100)
-
-    return net
+    # train_nnet_mse!(feat_x, data_y, net; batch_size=500, lr=1f-2, n_epoch=100)
+    train_nnet!(feat_x, data_y, pi_net, mu, sigma; batch_size=100, lr=1f-2, n_epoch=10)
+    return Dict("pi" => pi_net, "sigma" => sigma, "mu" => mu)
 end
 
-function set_logprob(sim, net, true_states, noisy_states)
-    max_t = length(true_states)
-    in_traj = zeros(Float32, 2, max_t)
-    for t in 1:max_t
-        # ent = true_states[t][AdversarialDriving.id(sim.adversary)]  # Pedestrian
-        ent = true_states[t][AdversarialDriving.id(sim.sut)]  # Vehicle
-        ent_pos = posg(ent)
-        in_traj[1, t] = ent_pos.x
-        in_traj[2, t] = ent_pos.y
+# Function to evaluate log probability during testing
+function calc_logprobs(sim, r_dist_net, true_states, noisy_states)
+    N, N_ent, max_t = size(true_states)    
+    
+    in_traj = zeros(Float32, 2, max_t, N)
+    for i_samp in 1:N
+        for t in 1:max_t
+            # TODO: Some weird bug creating wrong ordering
+            ent_pos = true_states[i_samp, 2, t]  # Vehicle
+            # ent_pos = true_states[i_samp, 1, t]  # Pedestrian
+            # ent_pos = posg(ent)
+            in_traj[1, t, i_samp] = ent_pos.x
+            in_traj[2, t, i_samp] = ent_pos.y
+        end
     end
+    # @show in_traj[:, 1:5, 1:5]
+    in_traj = reshape(in_traj, (2, max_t*N))
+    in_traj = create_features(in_traj)
     preprocess_data!(in_traj)
     in_traj = in_traj |> gpu
-    traj_dist = net(in_traj)
-    traj_dist = traj_dist |> cpu
-    postprocess_data!(traj_dist)
-
-    logprobs = []
+    
+    outs_π = r_dist_net["pi"](in_traj)
+    outs_μ = r_dist_net["mu"](in_traj)
+    outs_σ = r_dist_net["sigma"](in_traj)
+    
+    outs_π = outs_π |> cpu
+    outs_μ = outs_μ |> cpu
+    outs_σ = outs_σ |> cpu
+    postprocess_data!(outs_π, outs_μ, outs_σ)
+    outs_π = reshape(outs_π, (4, max_t, N))
+    outs_μ = reshape(outs_μ, (4, max_t, N))
+    outs_σ = reshape(outs_σ, (4, max_t, N))
+    # @assert all(dist_traj[3:4, :, :] .>= 0)
+    
+    logprobs_all = []
 
     ## Pedestrian
     # for t in 1:max_t
@@ -340,14 +414,41 @@ function set_logprob(sim, net, true_states, noisy_states)
     # end
 
     # Vehicle
-    for t in 1:max_t
-        temp = Dict(
-                :xpos_sut => logpdf(Normal(traj_dist[1, t], traj_dist[3, t]), noisy_states[:xpos_sut][t]),
-                :ypos_sut => logpdf(Normal(traj_dist[2, t], traj_dist[4, t]), noisy_states[:ypos_sut][t]),
-                :xpos_ped => logpdf(Normal(noisy_states[:xpos_sut][t], 1.), noisy_states[:xpos_ped][t]),
-                :ypos_ped => logpdf(Normal(noisy_states[:ypos_sut][t], 1.), noisy_states[:ypos_ped][t])
-            )
-        push!(logprobs, temp)
+    for i_samp in 1:N
+        logprobs = Dict(
+                    :xpos_sut => Array{Float64}(undef, max_t),
+                    :ypos_sut => Array{Float64}(undef, max_t),
+                    :xpos_ped => Array{Float64}(undef, max_t),
+                    :ypos_ped => Array{Float64}(undef, max_t)
+                )
+        for t in 1:max_t
+            # if any(isnan, dist_traj[:, t, i_samp])
+            #     dist_traj[:, t, i_samp] .= 0    
+            # end
+            
+            logprobs[:xpos_sut][t] = sum(outs_π[1:2, t, i_samp].*gaussian_distribution(noisy_states[i_samp][:xpos_sut][t], outs_μ[1:2, t, i_samp], outs_σ[1:2, t, i_samp]))
+            # logprobs[:xpos_sut][t] = logpdf(Normal(0.0, 1.0), noisy_states[i_samp][:xpos_sut][t])
+            logprobs[:ypos_sut][t] = sum(outs_π[3:4, t, i_samp].*gaussian_distribution(noisy_states[i_samp][:ypos_sut][t], outs_μ[3:4, t, i_samp], outs_σ[3:4, t, i_samp]))
+            # logprobs[:xpos_ped][t] = logpdf(Normal(noisy_states[i_samp][:xpos_sut][t], 1.), noisy_states[i_samp][:xpos_ped][t])
+            # logprobs[:ypos_ped][t] = logpdf(Normal(noisy_states[i_samp][:ypos_sut][t], 1.), noisy_states[i_samp][:ypos_ped][t])
+            logprobs[:xpos_ped][t] = logpdf(Normal(noisy_states[i_samp][:xpos_sut][t], 1.0), noisy_states[i_samp][:xpos_ped][t])
+            logprobs[:ypos_ped][t] = logpdf(Normal(noisy_states[i_samp][:ypos_sut][t], 0.5*abs(true_states[i_samp, 2, t].y - true_states[i_samp, 1, t].y)), noisy_states[i_samp][:ypos_ped][t])
+
+            # CONSTRAINTS
+            # Car not exceed lane
+            if abs(noisy_states[i_samp][:ypos_sut][t]) > 1.0
+                logprobs[:ypos_sut][t] = -1000
+            end
+            # No large positive noise (replace with not crossing crosswalk constraint)
+            if noisy_states[i_samp][:xpos_sut][t] > 3.0
+                logprobs[:xpos_sut][t] = -1000
+            end
+            # Pedestrian on crosswalk if car too far
+            if abs(noisy_states[i_samp][:xpos_sut][t]) > 2.0
+                logprobs[:xpos_ped][t] = logpdf(Normal(0, 1.), noisy_states[i_samp][:xpos_ped][t])
+            end
+        end
+        push!(logprobs_all, logprobs)
     end
-    return logprobs
+    return logprobs_all
 end

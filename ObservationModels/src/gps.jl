@@ -1,4 +1,4 @@
-## Definitions of sensor models and state estimation functions
+## Definitions of GPS sensor models and state estimation functions
 
 # Struct that contains satellite positions (in NED w/ height relative to ground) and clock offsets
 @with_kw struct Satellite <: Landmark
@@ -14,24 +14,13 @@ end
     noise::Float64 = 0.0
 end
 
-# Function to compute GPS measurements for an entity from satellite positions and noise
-function measure_gps(ent::Entity, noise::Array{Float64})
-    # TODO: move this somewhere outside
-    fixed_sat = [
-        Satellite(pos=VecE3(-1000.0,-1000.0,1000.0), clk_bias=0.0),
-        Satellite(pos=VecE3(1000.0,-1000.0,1000.0), clk_bias=0.0),
-        Satellite(pos=VecE3(-1000.0,1000.0,1000.0), clk_bias=0.0),
-        Satellite(pos=VecE3(1000.0,1000.0,1000.0), clk_bias=0.0),
-        Satellite(pos=VecE3(0.0,0.0,1000.0), clk_bias=0.0)
-    ]
-    
-    ent_pos = posg(ent)
+# Function to compute GPS measurements for x,y coordinate pos from satellite positions and noise
+function measure_gps(pos_vec::VecE3{T}, noise::Array{T}, satpos::Vector{Satellite}) where T
     ranges = Union{Missing, GPSRangeMeasurement}[]
-    for i in 1:length(fixed_sat)
-        satpos = fixed_sat[i].pos
-        if fixed_sat[i].visible==true
-            range = hypot(ent_pos.x - satpos.x, ent_pos.y - satpos.y, satpos.z)
-            push!(ranges, GPSRangeMeasurement(sat=fixed_sat[i], range=range, noise=noise[i]))
+    n_sats = length(satpos)
+    for i in 1:n_sats
+        if satpos[i].visible==true
+            push!(ranges, GPSRangeMeasurement(sat=satpos[i], range=dist(pos_vec, satpos[i].pos), noise=noise[i]))
         else
             push!(ranges, missing)
         end
@@ -40,53 +29,64 @@ function measure_gps(ent::Entity, noise::Array{Float64})
 end
 
 # Function to compute GPS measurements for x,y coordinate pos from satellite positions and noise
-function measure_gps(pos::Array{Float32}, noise::Array{Float32})
-    # TODO: move satellite positions outside
-
-    # Visibility based on position
-    if (pos[1] > 7.)&&(pos[1] < 20.) 
-        fixed_sat = [
-            Satellite(pos=VecE3(-1000.0,-1000.0,1000.0), clk_bias=0.0),
-            Satellite(pos=VecE3(1000.0,-1000.0,1000.0), clk_bias=0.0),
-            Satellite(pos=VecE3(-1000.0,1000.0,1000.0), clk_bias=3.0),
-            Satellite(pos=VecE3(1000.0,1000.0,1000.0), clk_bias=0.0, visible=false),
-            Satellite(pos=VecE3(0.0,0.0,1000.0), clk_bias=0.0)
-        ]
-    else
-        fixed_sat = [
-            Satellite(pos=VecE3(-1000.0,-1000.0,1000.0), clk_bias=0.0),
-            Satellite(pos=VecE3(1000.0,-1000.0,1000.0), clk_bias=0.0),
-            Satellite(pos=VecE3(-1000.0,1000.0,1000.0), clk_bias=0.0),
-            Satellite(pos=VecE3(1000.0,1000.0,1000.0), clk_bias=0.0),
-            Satellite(pos=VecE3(0.0,0.0,1000.0), clk_bias=0.0)
-        ]
+function measure_gps(pos_vec::VecE3{T}, noise::Array{T}, buildingmap::Any, satpos::Vector{Satellite}) where T
+    # Visibility based on building model
+    
+    # Sat LOS vector
+    n_sats = length(satpos)
+    los_angs = Array{T}(undef, n_sats)
+    for i in 1:n_sats
+        los_angs[i] = atan(satpos[i].pos.y - pos_vec.y, satpos[i].pos.x - pos_vec.x)
     end
 
-    # # Full visibility
-    # fixed_sat = [
-    #         Satellite(pos=VecE3(-1000.0,-1000.0,1000.0), clk_bias=0.0),
-    #         Satellite(pos=VecE3(1000.0,-1000.0,1000.0), clk_bias=0.0),
-    #         Satellite(pos=VecE3(-1000.0,1000.0,1000.0), clk_bias=0.0),
-    #         Satellite(pos=VecE3(1000.0,1000.0,1000.0), clk_bias=0.0),
-    #         Satellite(pos=VecE3(0.0,0.0,1000.0), clk_bias=0.0)
-    #     ]
+    # Building vectors
+    n_build = length(buildingmap.buildings)
+    build_thresh = Array{T}(undef, 3, n_build)
+    for i in 1:n_build
+        b = buildingmap.buildings[i]
+        build_bound1::VecE3{T} = VecE3(b.pos.x + b.width1/2.0*cos(b.pos.θ), b.pos.y + b.width1/2.0*sin(b.pos.θ), 0.0)
+        build_bound2::VecE3{T} = VecE3(b.pos.x - b.width1/2.0*cos(b.pos.θ), b.pos.y - b.width1/2.0*sin(b.pos.θ), 0.0)
+        build_cent::VecE3{T} = VecE3(b.pos.x, b.pos.y, 0.0)
+        build_thresh[1, i] = atan(build_bound1.y - pos_vec.y, build_bound1.x - pos_vec.x)
+        build_thresh[2, i] = atan(build_bound2.y - pos_vec.y, build_bound2.x - pos_vec.x)
+        build_thresh[3, i] = dist(build_cent, pos_vec)
+    end
 
-    # # Biased position
-    # if (pos[1] > 5.)&&(pos[1] < 10.)
-    #     pos[2] -= 5
-    # end 
-
-    ranges = Union{Missing, GPSRangeMeasurement}[]
-    for i in 1:length(fixed_sat)
-        satpos = fixed_sat[i].pos
-        if fixed_sat[i].visible==true
-            range = hypot(pos[1] - satpos.x, pos[2] - satpos.y, satpos.z)
-            push!(ranges, GPSRangeMeasurement(sat=fixed_sat[i], range=range, noise=noise[i]))
-        else
-            push!(ranges, missing)
+    # Detect Visibility
+    visibility = trues(n_sats)
+    for i in 1:n_sats
+        for j in 1:n_build
+            h_in = (build_thresh[1, j] - los_angs[i])*(build_thresh[2, j] - los_angs[i]) < 0.0
+            too_far = build_thresh[3, j] > 30.0
+            if h_in && !too_far
+                visibility[i] = false
+                noise[i] += 3.0    # bias error from signal reflections
+                break
+            end
         end
     end
-    ranges
+
+    # Generate measurements
+    measure_gps(pos_vec, noise, satpos)
+end
+
+# Compatibility functions for passing entities instead of position
+function measure_gps(ent::Entity, noise::Array{T}, satpos::Vector{Satellite}) where T
+    pos = posg(ent)
+    pos_vec::VecE3{T} = VecE3(pos.x, pos.y, 0.0)
+    measure_gps(pos_vec, noise, satpos)
+end
+
+# Compatibility functions for passing entity positions instead of position vector
+function measure_gps(pos::VecSE2{T}, noise::Array{T}, buildingmap::Any, satpos::Vector{Satellite}) where T
+    pos_vec::VecE3{T} = VecE3(pos.x, pos.y, 0.0)
+    measure_gps(pos_vec, noise, buildingmap, satpos)
+end
+
+# Compatibility functions for passing entities instead of position
+function measure_gps(ent::Entity, noise::Array{T}, buildingmap::Any, satpos::Vector{Satellite}) where T
+    pos = posg(ent)
+    measure_gps(pos, noise, buildingmap, satpos)
 end
 
 # Determine position fix using GPS measurements from multiple satellites 
@@ -136,4 +136,19 @@ function GPS_fix(meas::Array{T}) where {T <: Union{Missing, GPSRangeMeasurement}
         x = x - delta_x
     end 
     x
+end
+
+# Update entity with id 1 (SUT) in scene with GPS noise
+function update_gps_noise!(scene::Scene, buildingmap::Any, satpos::Vector{Satellite})
+    # Predetermined constants
+    range_noise = 0.2
+
+    ent = scene[1]
+    ent_pos = posg(ent)
+    ranges = measure_gps(ent_pos, randn(length(satpos))*range_noise, buildingmap, satpos)
+    gps_ent_pos = GPS_fix(ranges)
+    Δs = gps_ent_pos[1] - ent_pos[1]
+    Δt = gps_ent_pos[2] - ent_pos[2]
+    noise = Noise(pos=VecE2(Δs, Δt))
+    scene[1] = Entity(BlinkerState(veh_state=ent.state.veh_state, blinker=ent.state.blinker, goals=ent.state.goals, noise=noise), ent.def, ent.id)
 end

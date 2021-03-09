@@ -1,8 +1,8 @@
 # out_is = planner.is_dist[:xpos_sut]
 
-episodic_figures(planner.mdp, gui=true); POMDPStressTesting.gcf();
+# episodic_figures(planner.mdp, gui=true); POMDPStressTesting.gcf();
 
-distribution_figures(planner.mdp, gui=true); POMDPStressTesting.gcf();
+# distribution_figures(planner.mdp, gui=true); POMDPStressTesting.gcf();
 
 playback_trace = playback(planner, action_trace, BlackBox.distance, return_trace=true);
 
@@ -16,7 +16,8 @@ begin
     failure_likelihood =
         round(exp(maximum(planner.mdp.metrics.logprob[planner.mdp.metrics.event])), digits=8)
 
-    Markdown.parse(string("\$\$p = ", failure_likelihood, "\$\$"))
+    # Markdown.parse(string("\$\$p = ", failure_likelihood, "\$\$"))
+    print(string("p = ", failure_likelihood, "\n"))
 end
 
 playback_trace = playback(planner, action_trace, sim->sim.state, return_trace=true)
