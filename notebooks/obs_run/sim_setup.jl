@@ -23,12 +23,12 @@ end;
     # Noise distributions and disturbances
     # xposition_noise_ped::Distribution = INormal_Uniform(0, 6) # Gaussian noise (notice larger σ)
     # yposition_noise_ped::Distribution = INormal_Uniform(0, 6) # Gaussian noise
-    xposition_noise_ped::Distribution = Normal(0, 10) # Gaussian noise (notice larger σ)
-    yposition_noise_ped::Distribution = Normal(0, 10) # Gaussian noise
+    xposition_noise_ped::Distribution = Normal(0, 5) # Gaussian noise (notice larger σ)
+    yposition_noise_ped::Distribution = Normal(0, 5) # Gaussian noise
     velocity_noise_ped::Distribution = Normal(0, 1) # Gaussian noise
 
-    xposition_noise_sut::Distribution = Normal(0, 10) # Gaussian noise (notice larger σ)
-    yposition_noise_sut::Distribution = Normal(0, 1) # Gaussian noise
+    xposition_noise_sut::Distribution = Normal(0, 5) # Gaussian noise (notice larger σ)
+    yposition_noise_sut::Distribution = Normal(0, 5) # Gaussian noise
     velocity_noise_sut::Distribution = Normal(0, 1) # Gaussian noise
     
     # GPS range noise
@@ -37,7 +37,7 @@ end;
         :ranges => [Normal(0, range_sigma), 
                     Normal(0, range_sigma), 
                     Normal(0, range_sigma), 
-                    Normal(0, range_sigma), 
+                    Normal(0, range_sigma),
                     Normal(0, range_sigma)]
         ) # Array of Gaussian
     
@@ -61,9 +61,11 @@ function AdversarialDriving.step_scene(mdp::AdversarialDriving.AdversarialDrivin
         m = model(mdp, veh.id)
         observe!(m, s, mdp.roadway, veh.id)
         a = rand(rng, m)
+        # @show a.noise.pos
         bv = Entity(propagate(veh, a, mdp.roadway, mdp.dt), veh.def, veh.id)
         !end_of_road(bv, mdp.roadway, mdp.end_of_road) && push!(entities, bv)
     end
+    # throw("Hi")
     isempty(entities) ? Scene(typeof(sut(mdp).get_initial_entity())) : Scene([entities...])
 end
 
@@ -110,7 +112,7 @@ function GrayBox.transition!(sim::AutoRiskSim, sample::GrayBox.EnvironmentSample
 #     noise = Noise(pos = (0.0, 0.0), vel = 0.0, gps_range = range_noise)
     # noise_ped = Noise(pos = (sample[:xpos_ped].value, sample[:ypos_ped].value), vel = sample[:vel_ped].value)
     # noise_sut = Noise(pos = (sample[:xpos_sut].value, sample[:ypos_sut].value), vel = sample[:vel_sut].value)
-    noise_ped = Noise(pos = (sample[:xpos_ped].value, sample[:ypos_ped].value), vel = 0.0)
+    noise_ped = Noise(pos = (sample[:ypos_ped].value, -sample[:xpos_ped].value), vel = 0.0) # reversed to match local pedestrain frame
     noise_sut = Noise(pos = (sample[:xpos_sut].value, sample[:ypos_sut].value), vel = 0.0)
 #     noise = Noise(pos = (sample[:xpos].value, sample[:ypos].value), vel = sample[:vel].value, gps_range = [0.0, 0.0, 0.0, 0.0, 0.0])
 #     noise = Noise(pos = (sample[:xpos].value, sample[:ypos].value), vel = 0.0, gps_range = [0.0, 0.0, 0.0, 0.0, 0.0])
@@ -134,6 +136,9 @@ end
 
 simx = AutoRiskSim()
 BlackBox.initialize!(simx);
+
+# Determine disturbance probability distribution
+r_dist_net = ObservationModels.simple_distribution_fit(simx, simx.obs_noise[:ranges])
 
 out_of_frame(sim) = length(sim.state.entities) < 2 # either agent went out of frame
 
