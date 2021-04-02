@@ -1,3 +1,4 @@
 ast_obs/
-*.vscode
+.vscode/
 BIODS253/
+.ipynb_checkpoints/
