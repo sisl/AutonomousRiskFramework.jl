@@ -1,37 +1,20 @@
 ##^# imports ###################################################################
-using LinearAlgebra
-using Zygote
-
-using Plots
-(Sys.isapple()) && (plotlyjs())
-using BenchmarkTools
-
-try
-  using STLCG
-catch
-  using Pkg
-  Pkg.develop(;
-    path = joinpath(@__DIR__, "../AutonomousRiskFramework/STLCG.jl"),
-  )
-  using STLCG
-end
-
-include(joinpath(@__DIR__, "../src/utils.jl"))
-torch = pyimport("torch")
-stl = pyimport("stlcg.stl")
+include(joinpath(@__DIR__, "header.jl"))
+using STLCG
 
 PSCALE, SCALE = 1e1, 0
 ##$#############################################################################
 ##^# utility functions #########################################################
-@constdef robustness = STLCG.ρ
-@constdef robustness_trace = STLCG.ρt
+ID.@constdef robustness = STLCG.ρ
+ID.@constdef robustness_trace = STLCG.ρt
 
 function eval_robustness_trace(formula, input; settings...)
   #(ndims(input) == 1) && (input = reshape(input, 1, :, 1))
-  return reverse(
-    robustness_trace(formula, reverse(input; dims = 2); settings...);
-    dims = 2,
-  )
+  #return reverse(
+  #  robustness_trace(formula, reverse(input; dims = 2); settings...);
+  #  dims = 2,
+  #)
+  return robustness_trace(formula, input; settings...)
 end
 
 #function eval_robustness_trace_(formula, input; settings...)
@@ -62,16 +45,11 @@ rho = eval_robustness_trace(
   #1.0 * ones(n);
   opts...,
 )
-return rho
+
+phi = Always(; subformula = LessThan(:r, 0.0), interval = nothing)
 
 g = Zygote.gradient(
-  s -> eval_robustness_trace(
-    Always(; subformula = LessThan(:r, 0.0), interval = nothing),
-    #LessThan(:r, 0.0),
-    reshape(s * ones(n), 1, :, 1);
-    #s * ones(n);
-    opts...,
-  )[:][end],
+  s -> sum(robustness_trace(phi, reshape(s * ones(n), 1, :, 1);)),
   1.0,
 )[1]
 

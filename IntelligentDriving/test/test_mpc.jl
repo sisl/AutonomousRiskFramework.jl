@@ -1,74 +1,52 @@
-using LinearAlgebra, Printf
-using Debugger, BenchmarkTools
+using PyPlot
 
-include(joinpath(@__DIR__, "../src/IntelligentDriving.jl"))
-#using Pkg
-#Pkg.develop(; path=joinpath(@__DIR__, "../src/IntelligentDriving.jl"))
+@time include(joinpath(@__DIR__, "header.jl"))
 
-ID = IntelligentDriving
-
-function quad_prod(x, Q)
-  ret = ID.reduce_sum(
-    x .* ID.reduce_sum(Q .* reshape(x, 1, size(x)...); dims = 2);
-    dims = 1,
-  )
-  return size(ret) == () ? ret[] : ret
-end
+quad_prod(x, Q_diag) = dot(reshape(Q_diag, :), reshape(x, :) .^ 2)
 
 function obj_fn(X, U, params...)
-  Q, R, X_ref, U_ref = params
+  Q_diag, R_diag, X_ref, U_ref = params
   xdim, N = size(X_ref)
   X = X[:, (end - N + 1):end]
-  Jx = sum(quad_prod(X - X_ref, Q))
-  Ju = sum(quad_prod(U - U_ref, R))
-  J = Jx + Ju
-  return J
+  Jx = quad_prod(X - X_ref, Q_diag)
+  Ju = quad_prod(U - U_ref, R_diag)
+  #J_stl =
+  #  SAD.until(U[1, :] .- 5.0, U[2, :] .- 1.0, 2; scale = 1e0, outer_max = true)
+  #J_stl = SAD.always(-U[1, :]; scale = 1e0)
+  return Jx + Ju
 end
 
 function test()
+  max_it = 10000
+
   xdim, udim, N = 4, 2, 20
-  x0 = 0.0 * ones(4)
+  x0 = [0.0, 0.0, 0.0, pi / 2]
   X_prev, U_prev = repeat(x0, 1, N), zeros(udim, N)
   U = 1e-3 * randn(udim, N)
-  P = repeat(reshape([0.1, 1.0, 1.0], :, 1), 1, N)
+  P_dyn = repeat(reshape([0.1, 1.0, 1.0], :, 1), 1, N)
 
-  Q = repeat(diagm(0 => [1e0, 1e0, 1e-3, 1e-3]), 1, 1, N)
-  R = repeat(diagm(0 => 1e-2 * ones(udim)), 1, 1, N)
-  X_ref, U_ref = 2 * ones(xdim, N), zeros(udim, N)
-  params = Q, R, X_ref, U_ref
+  Q_diag = repeat([1e0, 1e0, 1e-3, 1e-3], 1, N)
+  R_diag = repeat(1e-1 * ones(udim), 1, N)
+  X_ref, U_ref = repeat([2, 2, 0.0, 0.0], 1, N), zeros(udim, N)
+  params = Q_diag, R_diag, X_ref, U_ref
 
-  f_fn, g_fn!, h_fn!, args_ref = ID.scp_fns_gen(obj_fn)
+  f_fn, g_fn!, h_fn!, args_ref = ID.scp_fns_gen(obj_fn; check = false, use_SAD = true)
 
-  function test_optimization(X_prev, U_prev)
-    for i = 1:10
-      X, U = X_prev, U_prev
-      reg = [1e-1, 1e-1]
-      f = ID.stack(
-        map(i -> ID.unicycle_f(X[:, i], U[:, i], P[:, i]), 1:N);
-        dims = 2,
-      )
-      fx = ID.stack(
-        map(i -> ID.unicycle_fx(X[:, i], U[:, i], P[:, i]), 1:N);
-        dims = 3,
-      )
-      fu = ID.stack(
-        map(i -> ID.unicycle_fu(X[:, i], U[:, i], P[:, i]), 1:N);
-        dims = 3,
-      )
-      Ft, ft = ID.linearized_dynamics(x0, f, fx, fu, X_prev, U_prev)
-      args_ref[] = (X_prev, U_prev, reg, Ft, ft, Q, R, X_ref, U_ref)
-      results =
-        ID.Optim.optimize(f_fn, g_fn!, h_fn!, reshape(U, :), ID.Optim.Newton())
-      @assert results.ls_success
-      U = reshape(results.minimizer, udim, N)
-      X = ID.rollout(U, x0, f, fx, fu, X_prev, U_prev)
+  X, U = [X_prev x0], U_prev + 1e-2 * randn(size(U_prev))
+  reg = [1e0, 1e0]
 
-      X_prev, U_prev = X[:, 1:(end - 1)], U
-    end
-  end
-
-  @btime $test_optimization($X_prev, $U_prev)
-
+  X, U, _ = ID.solve_mpc(
+    "unicycle",
+    obj_fn,
+    x0,
+    P_dyn,
+    params...;
+    max_it = max_it,
+    reg = reg,
+    debug=true,
+    use_rollout=true,
+    debug_plot=true,
+  )
   return
 end
 

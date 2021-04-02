@@ -5,7 +5,7 @@ function rollout1(U, x0, f, fx, fu, X_prev, U_prev)
   x = x0
   X = zeros(xdim, N + 1)
   X[:, 1] = x
-  for i = 1:N
+  for i in 1:N
     x =
       f[:, i] +
       fx[:, :, i] * (x - X_prev[:, i]) +
@@ -20,7 +20,7 @@ function rollout2(U, x0, f, fx, fu, X_prev, U_prev)
   xdim, N = size(X_prev)
   x = x0
   xs = (x,)
-  for i = 1:N
+  for i in 1:N
     x =
       f[:, i] +
       fx[:, :, i] * (x - X_prev[:, i]) +
@@ -35,7 +35,7 @@ function rollout3(U, x0, f, fx, fu, X_prev, U_prev)
   xdim, N = size(X_prev)
   x = x0
   X = x
-  for i = 1:N
+  for i in 1:N
     x =
       f[:, i] +
       fx[:, :, i] * (x - X_prev[:, i]) +
@@ -51,7 +51,7 @@ function rollout4(U, x0, f, fx, fu, X_prev, U_prev)
   x = x0
   x_list = Zygote.Buffer(typeof(x0)[], N + 1)
   x_list[1] = x
-  for i = 1:N
+  for i in 1:N
     x =
       f[:, i] +
       fx[:, :, i] * (x - X_prev[:, i]) +
@@ -65,17 +65,47 @@ end
 rollout = rollout4
 ##$#############################################################################
 ##^# unicycle dynamics #########################################################
-function unicycle_f(x, u, p)
-  #=
-  unicycle car dynamics, 4 states, 2 actions
-  x1: position x
-  x2: position y
-  x3: speed (local frame)
-  x4: orientation angle
+function batch_dynamics(
+  fn::Function,
+  X::AbstractArray{T,2},
+  U::AbstractArray{T,2},
+  P::AbstractArray{T,2},
+) where {T<:Real}
+  @assert size(X, 2) == size(U, 2) == size(P, 2)
+  return stack(map(i -> fn(X[:, i], U[:, i], P[:, i]), 1:size(X, 2)); dims = -1)
+end
 
-  u1: acceleration
-  u2: turning speed (independent of velocity)
-  =#
+@doc raw"""
+    unicycle_f(x, u, p) -> f
+
+```math
+\begin{aligned}
+\dot{x} &= v cos(\theta)
+\dot{y} &= v sin(\theta)
+\dot{v} &= u_{\text{scale}, 1} u_1
+\dot{th} &= u_{\text{scale},1} u_2
+\end{aligned}
+```
+
+unicycle car dynamics, 4 states:
+- `x1`: position x
+- `x2`: position y
+- `x3`: speed (local frame)
+- `x4`: orientation angle
+2 actions:
+- `u1`: acceleration
+- `u2`: turning speed (independent of velocity)
+3 parameters:
+- `p1`: dt
+- `p2`: u1 scaling
+- `p3`: u2 scaling
+
+"""
+function unicycle_f(
+  x::Vector{T},
+  u::Vector{T},
+  p::Vector{T},
+)::Vector{T} where {T<:Real}
 
   @assert length(x) == 4 && length(u) == 2 && length(p) == 3
   dt, u_scale = p[1], p[2:3]
@@ -83,7 +113,8 @@ function unicycle_f(x, u, p)
   eps = 1e-6
   u = u .+ eps * (u .>= 0.0)
 
-  f = Zygote.Buffer(Float64[], 4)
+  #f = Zygote.Buffer(Float64[], 4)
+  f = zeros(T, 4)
   f[1] =
     (
       (u[1] * u_scale[1] * u[2] * u_scale[2] * dt + u[2] * u_scale[2] * x[3]) *
@@ -107,14 +138,18 @@ function unicycle_f(x, u, p)
   return copy(f)
 end
 
-function unicycle_fx(x, u, p)
+function unicycle_fx(
+  x::Vector{T},
+  u::Vector{T},
+  p::Vector{T},
+)::Matrix{T} where {T<:Real}
   @assert length(x) == 4 && length(u) == 2 && length(p) == 3
   dt, u_scale = p[1], p[2:3]
   u = copy(u)
   eps = 1e-6
   u = u .+ eps * (u .>= 0.0)
 
-  fx = zeros(4, 4)
+  fx = zeros(T, 4, 4)
   fx[1, 1] = 1
   fx[1, 2] = 0
   fx[1, 3] =
@@ -154,14 +189,18 @@ function unicycle_fx(x, u, p)
   return fx
 end
 
-function unicycle_fu(x, u, p)
+function unicycle_fu(
+  x::Vector{T},
+  u::Vector{T},
+  p::Vector{T},
+)::Matrix{T} where {T<:Real}
   @assert length(x) == 4 && length(u) == 2 && length(p) == 3
   dt, u_scale = p[1], p[2:3]
   u = copy(u)
   eps = 1e-6
   u = u .+ eps * (u .>= 0.0)
 
-  fu = zeros(4, 2)
+  fu = zeros(T, 4, 2)
   fu[1, 1] =
     (
       u_scale[1] * u[2] * u_scale[2] * dt * sin(u[2] * u_scale[2] * dt + x[4]) +
@@ -235,12 +274,25 @@ function unicycle_fu(x, u, p)
   return fu
 end
 ##$#############################################################################
+##^# dynamics map ##############################################################
+DYNAMICS_FN_MAP = Dict{String,Tuple{Function,Function,Function}}(
+  "unicycle" => (unicycle_f, unicycle_fx, unicycle_fu),
+)
+DYNAMICS_DIM_MAP = Dict{String,Tuple{Int,Int}}("unicycle" => (4, 2))
+##$#############################################################################
 ##^# create the SCP dynamics matrix ############################################
-function linearized_dynamics(x0, f, fx, fu, X_prev, U_prev)
+function linearized_dynamics(
+  x0::AbstractArray{T,1},
+  f::AbstractArray{T,2},
+  fx::AbstractArray{T,3},
+  fu::AbstractArray{T,3},
+  X_prev::AbstractArray{T,2},
+  U_prev::AbstractArray{T,2},
+)::Tuple{Matrix{T},Vector{T}} where {T<:Real}
   xdim, udim, N = size(fu)
   F = zeros(N * xdim, N * udim)
-  for i = 1:N
-    for j = 1:(i - 1)
+  for i in 1:N
+    for j in 1:(i - 1)
       Fm1 = F[
         ((i - 2) * xdim + 1):((i - 1) * xdim),
         ((j - 1) * udim + 1):(j * udim),
@@ -253,7 +305,7 @@ function linearized_dynamics(x0, f, fx, fu, X_prev, U_prev)
   end
   f_ = zeros(xdim, N)
   f_[:, 1] = f[:, 1] - fu[:, :, 1] * U_prev[:, 1]
-  for i = 2:N
+  for i in 2:N
     f_[:, i] =
       f[:, i] + fx[:, :, i] * (f_[:, i - 1] - X_prev[:, i]) -
       fu[:, :, i] * U_prev[:, i]

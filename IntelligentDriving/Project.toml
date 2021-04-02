@@ -5,6 +5,13 @@ version = "0.1.0"
 
 [deps]
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+Debugger = "31a5f54b-26ea-5ae9-a837-f05ce5417438"
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Optim = "429524aa-4258-5aef-a3af-852621145aeb"
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 PyCall = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"
+STLCG = "6ababdf7-4701-4f28-b3b2-5630f64e3c98"
+SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
+Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"

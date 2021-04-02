@@ -1,7 +1,4 @@
-using LinearAlgebra, Printf
-using Zygote, BenchmarkTools
-
-include(joinpath(@__DIR__, "../src/dyn.jl"))
+include(joinpath(@__DIR__, "header.jl"))
 
 xdim, udim, N = 4, 2, 200
 
@@ -10,11 +7,11 @@ U = randn(udim, N)
 x0 = randn(xdim)
 X_prev, U_prev = randn(xdim, N), randn(udim, N)
 
-X1 = rollout1(U, x0, f, fx, fu, X_prev, U_prev)
-X2 = rollout2(U, x0, f, fx, fu, X_prev, U_prev)
-X3 = rollout3(U, x0, f, fx, fu, X_prev, U_prev)
-X4 = rollout4(U, x0, f, fx, fu, X_prev, U_prev)
-rollouts = [rollout1, rollout2, rollout3, rollout4]
+X1 = ID.rollout1(U, x0, f, fx, fu, X_prev, U_prev)
+X2 = ID.rollout2(U, x0, f, fx, fu, X_prev, U_prev)
+X3 = ID.rollout3(U, x0, f, fx, fu, X_prev, U_prev)
+X4 = ID.rollout4(U, x0, f, fx, fu, X_prev, U_prev)
+rollouts = [ID.rollout1, ID.rollout2, ID.rollout3, ID.rollout4]
 for (i, rollout_) in enumerate(rollouts)
   @printf("rollout%d ---------------------------------\n", i)
   try
