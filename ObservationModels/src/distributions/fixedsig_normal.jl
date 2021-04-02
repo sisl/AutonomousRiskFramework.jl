@@ -1,3 +1,6 @@
+"""
+Normal distribution object with fixed standard deviation
+"""
 struct Fsig_Normal{T<:Real} <: ContinuousUnivariateDistribution
     mu::Float64
     Fsig_Normal(mu::T) where {T<:Real} = new{T}(Float64(mu))

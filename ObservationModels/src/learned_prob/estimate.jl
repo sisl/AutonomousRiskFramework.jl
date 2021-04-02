@@ -1,85 +1,3 @@
-@with_kw struct DistParams
-    num_samples::Real = 50 # Estimation samples
-end;
-
-stop_gradient(f) = f()
-Zygote.@nograd stop_gradient
-
-function gps_distribution_estimate(ent, noise_dist, params)
-    
-    base_meas = measure_gps(ent, [0., 0., 0., 0., 0.])
-    true_pos = posg(ent)
-    velocity_noise = last(noise_dist)
-
-    function one_sample(idx)
-        function one_measurement(j)
-            meas = base_meas[j]
-            if typeof(meas)==Missing
-                missing
-            else
-                GPSRangeMeasurement(sat=meas.sat, 
-                                    range=meas.range, 
-                                    noise=rand(noise_dist[j]))
-            end
-        end
-        
-        temp_meas = map(one_measurement, 1:length(base_meas))
-        # temp_meas = Array{Union{Missing, GPSRangeMeasurement}}(undef, length(base_meas))
-
-        # @distributed for j = 1:length(base_meas)
-        #     temp_meas[j] = one_measurement(j)
-        # end
-
-        gps_fix = GPS_fix(temp_meas)
-        noise = [gps_fix[1]-true_pos.x, gps_fix[2]-true_pos.y]
-        noise
-    end
-
-    samples = map(one_sample, 1:params.num_samples)
-    
-    # samples = Array{Float64}(undef, 2, params.num_samples)
-    # @distributed for i=1:params.num_samples
-    #     samples[:, i] = one_sample(i)
-    # end
-
-    samples = hcat(samples...)
-
-    xpos_samp = samples[1, :]
-    ypos_samp = samples[2, :]
-
-    # @show xpos_samp, ypos_samp
-    # throw("Hi")
-
-    
-    xposition_noise = Distributions.fit(Normal{typeof(xpos_samp[1])}, xpos_samp, ones(length(xpos_samp)))
-    yposition_noise = Distributions.fit(Normal{typeof(ypos_samp[1])}, ypos_samp, ones(length(ypos_samp)))
-
-    return xposition_noise, yposition_noise, velocity_noise
-end
-
-function Base.rand(rng::AbstractRNG, d::Dict{Symbol, Vector{Sampleable}})
-    Dict(k => rand.(Ref(rng), d[k]) for k in keys(d))
-end
-
-function Distributions.fit(d::Dict{Symbol, Vector{Sampleable}}, samples, weights; add_entropy = (x) -> x)
-    N = length(samples)
-    new_d = Dict{Symbol, Vector{Sampleable}}()
-    for s in keys(d)
-        dtype = typeof(d[s][1])
-        m = length(d[s])
-        new_d[s] = [add_entropy(fit(dtype, [samples[j][s][i] for j=1:N], weights)) for i=1:m]
-    end
-    new_d
-end
-
-function Distributions.logpdf(d::Dict{Symbol, Vector{Sampleable}}, x, i)
-    sum([logpdf(d[k][i], x[k][i]) for k in keys(d)])
-end
-
-function Distributions.logpdf(d::Dict{Symbol, Vector{Sampleable}}, x)
-    sum([logpdf(d, x, i) for i=1:length(first(x)[2])])
-end
-
 # Loss for AST controlling range error disturbances
 function obs_ce_loss(ent, noisy_pose, samp)
     base_meas = measure_gps(ent, [0., 0., 0., 0., 0.])
@@ -148,60 +66,6 @@ function traj_logprob(noisy_states, true_states, sim)
     return logprobs
 end
 
-# Function to create neural network features from environment state
-function create_features(data_x)
-    n_dim, n_samp = size(data_x)
-    @assert n_dim==2
-    features = zeros(4, n_samp)
-    for i in 1:n_samp
-        features[1, i] = data_x[1, i]   # x-coord
-        features[2, i] = data_x[2, i]   # y-coord
-        features[3, i] = sqrt(data_x[1, i]^2 + data_x[2, i]^2) # Polar mag
-        features[4, i] = atan(data_x[2, i], data_x[1, i]) # Polar ang
-        # features[5, i] = 0.707 * data_x[1, i] + 0.707 * data_x[2, i] # 45° rotation
-        # features[6, i] = 0.866 * data_x[1, i] + 0.5 * data_x[2, i] # 30° x rotation
-        # features[7, i] = 0.5 * data_x[1, i] + 0.866 * data_x[2, i] # 30° y rotation
-        # features[8, i] = data_x[1, i]^2   # x-coord degree 2
-        # features[9, i] = data_x[2, i]^2   # y-coord degree 2
-        # features[10, i] = data_x[1, i]^3   # x-coord degree 3
-        # features[11, i] = data_x[2, i]^3   # y-coord degree 3
-        # features[12, i] = data_x[1, i]^4   # x-coord degree 3
-        # features[13, i] = data_x[2, i]^4   # y-coord degree 3
-    end
-    return features
-end
-
-# Preprocess inputs and labels for training
-function preprocess_data!(feat_x, data_y)
-    data_y[:] = data_y
-    preprocess_data!(feat_x)
-end
-
-# Preprocess inputs for testing
-function preprocess_data!(feat_x)
-    feat_x[:] = feat_x
-    # if size(feat_x)[1]>4
-    #     feat_x[4, :] = feat_x[4, :]*40/pi
-    # end
-    # if size(feat_x)[1]>=8
-    #     feat_x[8:9, :] = feat_x[8:9, :]/40
-    # end
-    # if size(feat_x)[1]>=10
-    #     feat_x[10:11, :] = feat_x[10:11, :]/(40*40)
-    # end
-    # if size(feat_x)[1]>=12
-    #     feat_x[12:13, :] = feat_x[12:13, :]/(40*40*40)
-    # end
-end
-
-# postprocess neural network outputs 
-function postprocess_data!(pi, mu, sigma; n_comp=2)
-    for i in 1:2
-        pi[1 + (i-1)*n_comp:i*n_comp, :] = softmax(pi[1 + (i-1)*n_comp:i*n_comp, :])
-    end 
-    # outs[1:sig_offset, :] = (outs[1:sig_offset, :] .- 0.5)*40
-    # outs[sig_offset+1:end, :] = (exp.(outs[sig_offset+1:end, :]/2))
-end
 
 # Train neural network using mean squared error
 function train_nnet_mse!(data_x, data_y, net; batch_size=1, lr=1f-2, n_epoch=10)
@@ -229,11 +93,6 @@ function train_nnet_mse!(data_x, data_y, net; batch_size=1, lr=1f-2, n_epoch=10)
         Flux.train!(mse_loss, Flux.params(net), data, opt, cb=Flux.throttle(evalcb, 5))
     end
 end
-
-# Probability of gaussian distribution
-function gaussian_distribution(y, μ, σ)
-    result = 1 ./ ((sqrt(2π).*σ)).*exp.(-0.5((y .- μ)./σ).^2)
-end;
 
 # Train neural network using mixture density log likelihood
 function train_nnet!(data_x, data_y, pi_net, mu, sigma; batch_size=1, lr=1f-2, n_epoch=10)

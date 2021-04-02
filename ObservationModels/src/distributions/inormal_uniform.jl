@@ -1,3 +1,6 @@
+"""
+Distribution that uses uniform distribution for sampling and Normal distribution for probability evaluation 
+"""
 struct INormal_Uniform{T<:Real} <: ContinuousUnivariateDistribution
     mu::Float64
     sigma::Float64
@@ -23,6 +26,6 @@ Distributions.var(d::INormal_Uniform) = Distributions.var(Normal(d.mu, d.sigma))
 
 function Distributions.fit(::Type{<:INormal_Uniform}, x::AbstractArray{T}, w::AbstractArray{Float64}) where T<:Real
     norm_fit = Distributions.fit(Normal{T}, x, w)
-    # INormal_Uniform(norm_fit.μ, norm_fit.σ)
+    INormal_Uniform(norm_fit.μ, norm_fit.σ)
     norm_fit
 end

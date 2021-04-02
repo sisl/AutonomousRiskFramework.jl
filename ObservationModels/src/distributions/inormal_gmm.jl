@@ -1,3 +1,6 @@
+"""
+Distribution that uses Gaussian Mixture Model distribution for sampling and Normal distribution for probability evaluation 
+"""
 struct INormal_GMM{T<:Real, C<:Categorical} <: ContinuousUnivariateDistribution
     mu::T
     sigma::T
