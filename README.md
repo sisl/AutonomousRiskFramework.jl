@@ -71,6 +71,20 @@ Open Julia, install Pluto via `] add Pluto` (where `]` gets to the package manag
 - **Surveys**:
     - [A. Corso, R. J. Moss, M. Koren, R. Lee, M. J. Kochenderfer, "A Survey of Algorithms for Black-Box Safety Validation", Submitted to JAIR, Arxiv, 2020](https://arxiv.org/abs/2005.02979)
 
+
+## CARLA Installation
+
+- Download CARLA binaries here: https://github.com/carla-simulator/carla/releases
+- On Windows, install the `carla` Python 3.7 API using: `python -m easy_install PythonAPI\carla\dist\carla-0.9.11-py3.7-win-amd64.egg`
+- `cd` to `PythonAPI/carla` and run: `pip install -r requirements.txt`
+- `cd` to `PythonAPI/util` and run: `pip install -r requirements.txt`
+
+#### CARLA Example
+> See the CARLA documentation for more examples: https://carla.readthedocs.io/
+
+- Open the `CarlaUE4.exe` client 
+- From a terminal, `cd` to `PythonAPI/examples` and run: `python spawn_npc.py`
+
 ## Contacts
 - Stanford Intelligent Systems Laboratory (SISL)
     - Robert Moss: [mossr](https://github.com/mossr)
