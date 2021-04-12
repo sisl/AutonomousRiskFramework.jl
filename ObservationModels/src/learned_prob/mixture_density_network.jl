@@ -24,15 +24,7 @@ function train_nnet!(feat::Array{T, 2}, data_y::Array{T, 2}, pi, mu, sigma, para
     opt = RMSProp(params.lr, params.momentum)
     
     function mdn_loss(x, y)
-        π_full = pi(x)
-        σ_full = sigma(x)
-        μ_full = mu(x)
-        μ_comps = [μ_full[((i-1)*params.out_dims + 1):(i*params.out_dims)] for i in 1:params.N_modes]
-        σ_comps = [σ_full[((i-1)*params.out_dims + 1):(i*params.out_dims)] for i in 1:params.N_modes]
-
-        logprobs = [log.(π_full)[i, :] .+ sum(log.(gaussian_distribution.(y, μ_comps[i], σ_comps[i])), dims=1)[1, :] for i in 1:params.N_modes]
-        tot_logprob = logsumexp(hcat(logprobs...), dims=2) 
-
+        tot_logprob = evaluate_logprob(x, y, pi, mu, sigma, params)
         return -mean(tot_logprob)
     end;
 
@@ -45,4 +37,20 @@ function train_nnet!(feat::Array{T, 2}, data_y::Array{T, 2}, pi, mu, sigma, para
         data = [(feat[:, randIdx[(i-1)*params.batch_size+1:i*params.batch_size]], data_y[:, randIdx[(i-1)*params.batch_size+1:i*params.batch_size]]) for i in 1:numBatches];
         Flux.train!(mdn_loss, ps, data, opt, cb=Flux.throttle(evalcb, 5))
     end
+end
+
+"""
+Evaluate log probability from MDN for P(y | feat)
+"""
+function evaluate_logprob(feat::Array{T, 2}, y::Array{T, 2}, pi, mu, sigma, params::MDNParams) where T
+    π_full = pi(feat)
+    σ_full = sigma(feat)
+    μ_full = mu(feat)
+    μ_comps = [μ_full[((i-1)*params.out_dims + 1):(i*params.out_dims)] for i in 1:params.N_modes]
+    σ_comps = [σ_full[((i-1)*params.out_dims + 1):(i*params.out_dims)] for i in 1:params.N_modes]
+
+    logprobs = [log.(π_full)[i, :] .+ sum(log.(gaussian_distribution.(y, μ_comps[i], σ_comps[i])), dims=1)[1, :] for i in 1:params.N_modes]
+    tot_logprob = logsumexp(hcat(logprobs...), dims=2)
+
+    return tot_logprob
 end

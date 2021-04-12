@@ -45,7 +45,7 @@ module ObservationModels
     include(joinpath("distributions", "fixedsig_normal.jl"))
     include(joinpath("distributions", "noise_distribution.jl"))
 
-    export DistParams, sample_and_fit, extract_feature, preprocess_data, postprocess_data, construct_mdn, MDNParams, train_nnet!
+    export DistParams, sample_and_fit, extract_feature, preprocess_data, postprocess_data, construct_mdn, MDNParams, train_nnet!, evaluate_logprob
     include(joinpath("learned_prob", "structs.jl"))
     include(joinpath("learned_prob", "distribution_fit.jl"))
     include(joinpath("learned_prob", "feature_extraction.jl"))
