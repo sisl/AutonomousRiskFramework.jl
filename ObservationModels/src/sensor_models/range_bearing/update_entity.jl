@@ -12,7 +12,7 @@ function update_rb_noise!(ent::Entity, scene::Scene)
 
     ent1_pos = posg(ent)
 
-    for ent2 in scene
+    for (i, ent2) in enumerate(scene)
         if ent2.id==ent.id
             continue
         end
@@ -30,7 +30,7 @@ function update_rb_noise!(ent::Entity, scene::Scene)
         Δt = abs_y - (ent2_pos[2] - ent.state.noise.pos[2] - ent1_pos[2])
         noise = Noise(pos=VecE2(Δs, Δt))
 
-        scene[ent2.id] = Entity(update_veh_noise(ent2.state, noise), ent2.def, ent2.id) 
+        scene[i] = Entity(update_veh_noise(ent2.state, noise), ent2.def, ent2.id)
     end    
 end
 

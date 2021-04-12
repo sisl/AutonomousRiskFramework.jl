@@ -7,7 +7,12 @@ function update_gps_noise!(ent::Entity, scene::Scene, buildingmap::BuildingMap{T
 
     noise = estimate_gps_noise(ent, scene, buildingmap, satpos, randn(length(satpos))*range_noise)
 
-    scene[ent.id] = Entity(update_veh_noise(ent.state, noise), ent.def, ent.id)
+    for (i, veh) in enumerate(scene)
+        if veh.id==ent.id
+            scene[i] = Entity(update_veh_noise(ent.state, noise), ent.def, ent.id)
+            break
+        end
+    end
 end
 
 """
