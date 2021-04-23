@@ -34,5 +34,11 @@ end
 Probability of gaussian distribution
 """
 function gaussian_distribution(y, μ, σ)
-    result = 1 ./ ((sqrt(2π).*σ)).*exp.(-0.5((y .- μ)./σ).^2)
+    return 1 ./ ((sqrt(2π).*σ)).*exp.(-0.5((y .- μ)./σ).^2)
+end;
+
+function log_gaussian_distribution(y, μ, σ)
+    term1 = 0.5((y .- μ)./σ).^2
+    term1 = clamp(term1, 1e-3, 1e10)
+    return -0.5*log(2π).-log(σ).-term1
 end;

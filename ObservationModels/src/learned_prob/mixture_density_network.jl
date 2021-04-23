@@ -49,7 +49,7 @@ function evaluate_logprob(feat::Array{T, 2}, y::Array{T, 2}, pi, mu, sigma, para
     μ_comps = [μ_full[((i-1)*params.out_dims + 1):(i*params.out_dims)] for i in 1:params.N_modes]
     σ_comps = [σ_full[((i-1)*params.out_dims + 1):(i*params.out_dims)] for i in 1:params.N_modes]
 
-    logprobs = [log.(π_full)[i, :] .+ sum(log.(gaussian_distribution.(y, μ_comps[i], σ_comps[i])), dims=1)[1, :] for i in 1:params.N_modes]
+    logprobs = [log.(π_full)[i, :] .+ sum(log_gaussian_distribution.(y, μ_comps[i], σ_comps[i]), dims=1)[1, :] for i in 1:params.N_modes]
     tot_logprob = logsumexp(hcat(logprobs...), dims=2)
 
     return tot_logprob
