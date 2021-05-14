@@ -45,6 +45,7 @@ CVaR(𝒫,Z,α) = mean(conditional_distr(𝒫,Z,α))
 CVaR(𝒞) = mean(𝒞)
 
 
+# TODO: Rename to `risk_metrics`?
 function risk_assessment(𝒟, α=0.2)
     metrics = RiskMetrics(cost_data(𝒟), α)
     return metrics

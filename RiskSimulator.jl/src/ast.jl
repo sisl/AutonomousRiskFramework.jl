@@ -231,4 +231,4 @@ function setup_ast(net, net_params; sut=IntelligentDriverModel(v_des=12.0), seed
     planner = solve(solver, mdp)
 
     return planner
-end;
+end

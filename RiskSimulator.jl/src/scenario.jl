@@ -56,6 +56,7 @@ Generate Roadway, environment and define Agent functions
 ## Geometry parameters
 roadway_length = 50.
 
+# TODO: MOVE!
 roadway = gen_straight_roadway(3, roadway_length) # lanes and length (meters)
 
 fixed_sats = [
@@ -66,14 +67,15 @@ fixed_sats = [
     ObservationModels.Satellite(pos=VecE3(1e7, 0.0, 1e7), clk_bias=0.0)
         ]
 
+# TODO: MOVE!
 buildingmap = BuildingMap()
 
-get_urban_vehicle_1(;id::Int64, s::Float64, v::Float64, noise::Noise) = (rng::AbstractRNG = Random.GLOBAL_RNG) -> BlinkerVehicle(roadway = roadway,
+get_urban_vehicle_1(;id::Int64, s::Float64, v::Float64, noise::Noise) = (rng::AbstractRNG = Random.GLOBAL_RNG) -> BlinkerVehicle(roadway=roadway,
                                     lane=1, s=s, v = v,
                                     id = id, noise=noise, goals = Int64[],
                                     blinker = false)
 
-get_urban_vehicle_2(;id::Int64, s::Float64, v::Float64, noise::Noise) = (rng::AbstractRNG = Random.GLOBAL_RNG) -> BlinkerVehicle(roadway = roadway,
+get_urban_vehicle_2(;id::Int64, s::Float64, v::Float64, noise::Noise) = (rng::AbstractRNG = Random.GLOBAL_RNG) -> BlinkerVehicle(roadway=roadway,
                                     lane=1, s=s, v = v,
                                     id = id, noise=noise, goals = Int64[],
                                     blinker = false)
