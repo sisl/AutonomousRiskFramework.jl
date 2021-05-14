@@ -42,7 +42,7 @@ zero_ylims(adjust=0.001) = ylims!(0, ylims()[2]+adjust)
 
 
 # TODO: Calculate mean_y, etc from Z (or metrics.𝒫)
-function risk_plot(metrics; mean_y=0.036, var_y=0.02, cvar_y=0.01, α_y=0.017)
+function plot_risk(metrics; mean_y=0.036, var_y=0.02, cvar_y=0.01, α_y=0.017)
     gr() # TODO: Remove.
 
     Z = metrics.Z

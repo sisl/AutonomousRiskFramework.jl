@@ -177,7 +177,7 @@ metrics = ast.RiskMetrics(Z, α);
 ast.latex_metrics(metrics)
 
 # ╔═╡ 347023a3-4f9a-4f1d-8def-1c88d955301e
-plotting.risk_plot(metrics; mean_y=0.33, var_y=0.25, cvar_y=0.1, α_y=0.2)
+plotting.plot_risk(metrics; mean_y=0.33, var_y=0.25, cvar_y=0.1, α_y=0.2)
 
 # ╔═╡ cc812055-735b-4fb6-9300-d5c14a3531a0
 md"Vizualize failure? $(@bind viz CheckBox())"
@@ -251,7 +251,7 @@ metrics2 = ast.RiskMetrics(Z2, α);
 ast.latex_metrics(metrics2)
 
 # ╔═╡ 5046d560-2deb-4702-8272-bc9b27ef8462
-plotting.risk_plot(metrics2; mean_y=0.18, var_y=0.15, cvar_y=0.1, α_y=0.13)
+plotting.plot_risk(metrics2; mean_y=0.18, var_y=0.15, cvar_y=0.1, α_y=0.13)
 
 # ╔═╡ c1ded51d-dacd-4908-90a7-99a20283ea19
 md"Vizualize failure? $(@bind viz2 CheckBox())"

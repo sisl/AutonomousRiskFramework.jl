@@ -208,6 +208,7 @@ function setup_ast(net, net_params; sut=IntelligentDriverModel(v_des=12.0), seed
     mdp.params.top_k = 10   # record top k best trajectories
     mdp.params.seed = seed  # set RNG seed for determinism
     mdp.params.collect_data = true # collect supervised dataset (𝐱=disturbances, y=isevent)
+    mdp.params.use_potential_based_shaping = true
 
     USE_CEM = false
 

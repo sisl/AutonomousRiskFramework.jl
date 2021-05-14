@@ -30,14 +30,22 @@ fail_metrics = failure_metrics(planner)
 
 α = 0.2 # Risk tolerance.
 𝒟 = planner.mdp.dataset
-plot_closure_rate_distribution(𝒟; reuse=false)
+p_closure = plot_closure_rate_distribution(𝒟; reuse=false)
 
 # Plot cost distribution.
 metrics = risk_assessment(𝒟, α)
 @show metrics
-risk_plot(metrics; mean_y=0.33, var_y=0.25, cvar_y=0.1, α_y=0.2)
+p_risk = plot_risk(metrics; mean_y=0.33, var_y=0.25, cvar_y=0.1, α_y=0.2)
+
+
+# Polar plot of risk and failure metrics
+𝐰 = ones(7)
+p_metrics = plot_overall_metrics([planner], ["IDM"]; weights=𝐰, α=α)
 
 
 # Playback most likely failure.
 # ————————————————————————————————————————————————
-false && visualize_most_likely_failure(planner, buildingmap)
+show_animation = false
+if show_animation
+    visualize_most_likely_failure(planner, buildingmap)
+end
