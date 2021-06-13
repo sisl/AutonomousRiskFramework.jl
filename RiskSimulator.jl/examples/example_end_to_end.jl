@@ -45,7 +45,9 @@ p_metrics = plot_overall_metrics([planner], ["IDM"]; weights=𝐰, α=α)
 
 # Playback most likely failure.
 # ————————————————————————————————————————————————
-show_animation = false
+show_animation = true
 if show_animation
     visualize_most_likely_failure(planner, buildingmap)
 end
+
+include("export_carla_script.jl")

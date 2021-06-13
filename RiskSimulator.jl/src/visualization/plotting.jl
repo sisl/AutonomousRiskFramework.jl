@@ -11,7 +11,6 @@ using Statistics
 using LinearAlgebra
 using Parameters
 
-include("../risk_assessment.jl")
 
 global FCOLOR = "#d62728"
 global NFCOLOR = "#2ca02c"
@@ -26,6 +25,15 @@ function use_latex_fonts(using_plots_jl=true)
 end
 
 
+function disable_latex_fonts(using_plots_jl=true)
+    # Use LaTeX fonts for rendering PyPlots
+    mpl = using_plots_jl ? Plots.PyPlot.matplotlib : matplotlib
+    mpl.rc("font", family=["serif"])
+    mpl.rc("font", serif=["Helvetica"])
+    mpl.rc("text", usetex=false)
+end
+
+
 function plot_cost_distribution(Z)
     viridis_green = "#238a8dff"
     return histogram(Z,
@@ -34,8 +42,8 @@ function plot_cost_distribution(Z)
         alpha=0.5,
         reuse=false,
         xlabel=L"\operatorname{cost}",
-        ylabel=L"\operatorname{probability}",
-        normalize=:probability, size=(600, 300))
+        ylabel=L"\operatorname{density}",
+        normalize=:pdf, size=(600, 300))
 end
 
 zero_ylims(adjust=0.001) = ylims!(0, ylims()[2]+adjust)
@@ -44,6 +52,7 @@ zero_ylims(adjust=0.001) = ylims!(0, ylims()[2]+adjust)
 # TODO: Calculate mean_y, etc from Z (or metrics.𝒫)
 function plot_risk(metrics; mean_y=0.036, var_y=0.02, cvar_y=0.01, α_y=0.017)
     gr() # TODO: Remove.
+    # pgfplotsx() # TODO: Remove.
 
     Z = metrics.Z
     # P = normalize(fit(Histogram, metrics.Z)) # pdf
@@ -138,7 +147,7 @@ end
 
 
 # Severity of failure
-function plot_closure_rate_distribution(𝒟, show_nonfailures=true; reuse=true)
+function plot_closure_rate_distribution(𝒟, show_nonfailures=true; reuse=true, gamma=false)
     # Full distribution of closure rates (i.e., failure or not)
     # histogram([d[1][end] for d in 𝒟], normalize=:probability)
     gr()
@@ -151,11 +160,15 @@ function plot_closure_rate_distribution(𝒟, show_nonfailures=true; reuse=true)
     end
     histogram!(failure_cr, alpha=0.5, label="failure", normalize=:pdf, reuse=reuse, color=FCOLOR)
 
-    # Fit gamma distributions (only on failures, b/c rate will be non-negative)
-    G_fail = fit(Gamma, failure_cr)
+    if gamma
+        # Fit gamma distributions (only on failures, b/c rate will be non-negative)
+        G_fail = fit(Gamma, failure_cr)
+    else
+        G_fail = fit(Normal, failure_cr)
+    end
     p = plot!(x->pdf(G_fail,x), xlim=xlims(), label="fit (failure)", color="crimson", linewidth=2)
 
-    ylabel!("frequency")
+    ylabel!("pdf")
     xlabel!("closure rate (severity)")
     zero_ylims()
     return p
@@ -199,14 +212,16 @@ function collect_risk_metrics(metricsvec::Vector; weights=ones(4), label_spacing
     return (M, metricnames)
 end
 
-function collect_overall_metrics(plannervec::Vector; weights=ones(4+3), α=α)
+function collect_overall_metrics(plannervec::Vector; weights=ones(4+3), α=α, log_likelihood=false)
     planner_metrics, risk_metric_names = collect_risk_metrics([RiskMetrics(cost_data(planner.mdp.dataset), α) for planner in plannervec]; weights=weights[1:4])
     for i in 1:length(plannervec)
         planner = plannervec[i]
         local_fm = failure_metrics(planner)
         # How easily were failures found? Higher percentage of episodes, worse (using 1st failure)
         ease_of_failure = (local_fm.num_terminals - local_fm.first_failure) / local_fm.num_terminals
-        push!(planner_metrics[i], local_fm.failure_rate/100 * weights[5], ease_of_failure * weights[6], local_fm.highest_loglikelihood * weights[7])
+        ll = log_likelihood ? local_fm.highest_loglikelihood : exp(local_fm.highest_loglikelihood)
+        ll *= weights[7]
+        push!(planner_metrics[i], local_fm.failure_rate/100 * weights[5], ease_of_failure * weights[6], ll)
     end
     M = planner_metrics
     metricnames = vcat(risk_metric_names, "fail-rate", "ease(fail)", "max(log p)")
@@ -228,18 +243,21 @@ end
 """
 Polar area plot for combined RiskMetrics and FailureMetrics.
 """
-function plot_overall_metrics(plannervec::Vector, labels::Vector; weights=ones(4+3), α)
-    M, metricnames = collect_overall_metrics(plannervec; weights=weights, α=α)
+function plot_overall_metrics(plannervec::Vector, labels::Vector; weights=ones(4+3), α, log_likelihood=false, title="Risk and failure metrics", area=false)
+    M, metricnames = collect_overall_metrics(plannervec; weights=weights, α=α, log_likelihood=log_likelihood)
     p = plot_metrics(M, metricnames, labels)
     # Note, `PyPlot.title` necessary when passed back Plots.backend_object
-    Plots.PyPlot.title("Risk and failure metrics", fontdict=Dict("fontsize"=>18), pad=15)
+    if area
+        title = string(title, ": ", overall_area(plannervec; weights=weights, α=α, log_likelihood=log_likelihood))
+    end
+    Plots.PyPlot.title(title, fontdict=Dict("fontsize"=>18), pad=15)
     return p
 end
 
 
 function plot_metrics(metricvec::Vector, metricnames::Vector, labels::Vector)
     pyplot() # polar plots only work well with PyPlot
-    use_latex_fonts() # publication worthy.
+    disable_latex_fonts() # publication worthy.
     n = length(metricvec)
     local p
     for i in 1:n
@@ -261,12 +279,12 @@ function metric_area_plot(Y, i, n, metricnames, label; first=false)
     _plot = first ? plot : plot!
     return _plot(X, Y, projection=:polar, c=color, m=color,
         fillrange=[0], fillalpha=0.5, label=label,
-        xticks=(X, vcat(metricnames, "")), legend=:outertopright)
+        xticks=(X, vcat(metricnames, "")), legend=:outerbottom)
 end
 
 
-risk_area(M::Vector; weights=ones(4)) = [localarea(m) for m in collect_risk_metrics(M; weights=weights)[1]]
-overall_area(M::Vector; weights=ones(4+3), α=α) = [localarea(m) for m in collect_overall_metrics(M; weights=weights, α=α)[1]]
+risk_area(plannervec::Vector; weights=ones(4)) = [localarea(m) for m in collect_risk_metrics(plannervec; weights=weights)[1]]
+overall_area(plannervec::Vector; weights=ones(4+3), α=α, log_likelihood=false) = [localarea(m) for m in collect_overall_metrics(plannervec; weights=weights, α=α, log_likelihood=log_likelihood)[1]]
 
 function localarea(m::Vector)
     A = 0
@@ -281,16 +299,16 @@ Plot rate vs. distance with fitted multivariate Gaussians, and separete univaria
 - `gdatype`: :lda or :qda
 - `boundary`: :binary or :gradient
 """
-function plot_multivariate_distance_and_rate(𝒟; gda=false, gdatype=:qda, share_cov=false, k=1, svm=true, return_predict=false, boundary=:binary, subplots=true)
+function plot_multivariate_distance_and_rate(𝒟; gda=false, gdatype=:qda, share_cov=false, k=1, svm=true, return_predict=false, boundary=:binary, subplots=true, figsize=[6.4, 4.8], show_legend=false)
     pp = Plots.PyPlot
 
     # Use LaTeX fonts for rendering PyPlots
     use_latex_fonts()
 
     if subplots
-        pp.figure(figsize=[6.4, 4.8].*1.75)
+        pp.figure(figsize=figsize.*1.75)
     else
-        pp.figure(figsize=[6.4, 4.8])
+        pp.figure(figsize=figsize)
     end
     Z_fail = cost_data(𝒟)
     Z_nonfail = cost_data(𝒟; nonfailures=true)
@@ -304,55 +322,12 @@ function plot_multivariate_distance_and_rate(𝒟; gda=false, gdatype=:qda, shar
     # fit multivariate Gaussians
     pos_data = [Z_fail d_fail]'
     neg_data = [Z_nonfail d_nonfail]'
-    mv_fail = fit_mle(MvNormal, pos_data)
-    mv_nonfail = fit_mle(MvNormal, neg_data)
 
+    dbX = range(min(minimum(Z_fail), minimum(Z_nonfail)), stop=max(maximum(Z_fail), maximum(Z_nonfail)), length=1000)
+    dbY = range(min(minimum(d_fail), minimum(d_nonfail)), stop=max(maximum(d_fail), maximum(d_nonfail)), length=1000)
     if gda
-        if gdatype == :lda
-            # LDA with shared covariances
-            if k == 1 # which class k shared their covariance?
-                mv_fail = MvNormal(mv_fail.μ, mv_nonfail.Σ) # shared covariance
-            else
-                mv_nonfail = MvNormal(mv_nonfail.μ, mv_fail.Σ) # shared covariance
-            end
-        end
-         # TODO. Calculate these.
-        dbX = range(-0.1, stop=0.8, length=1000)
-        dbY = range(3, stop=8, length=1000)
-        π₁ = π₂ = 0.5 # priors
-        μ₁ = mv_fail.μ
-        μ₂ = mv_nonfail.μ
-        Σ₁ = mv_fail.Σ
-        Σ₂ = mv_nonfail.Σ
-        if gdatype == :qda
-            if boundary == :binary
-                # QDA: in the form for class k=1
-                predictₖ = (x, μₖ, Σₖ, πₖ) -> -1/2*log(det(Σₖ)) - 1/2*(x - μₖ)'inv(Σₖ)*(x - μₖ) + log(πₖ)
-                predict1 = x -> predictₖ(x, μ₁, Σ₁, π₁)
-                predict2 = x -> predictₖ(x, μ₂, Σ₂, π₂)
-                predict = x -> predict1(x) > predict2(x) ? 0 : 1
-            elseif boundary == :gradient
-                # QDA: zero-decision bounday
-                predict = x -> (x - μ₁)'inv(Σ₁)*(x - μ₁) + log(det(Σ₁)) - (x - μ₂)'inv(Σ₂)*(x - μ₂) - log(det(Σ₂))
-            else
-                error("No `boundary` of $boundary")
-            end
-        elseif gdatype == :lda
-            # LDA (with shared Σs)
-            Σ = Σ₁ # doesn't matter which k we choose, covariance is copied/duplicated above.
-            if boundary == :binary
-                predictₖ = (x, μₖ, πₖ) -> x'inv(Σ)*μₖ - 1/2*μₖ'inv(Σ)*μₖ + log(πₖ)
-                predict1 = x -> predictₖ(x, μ₁, π₁)
-                predict2 = x -> predictₖ(x, μ₂, π₂)
-                predict = x -> predict1(x) > predict2(x) ? 0 : 1
-            elseif boundary == :gradient
-                predict = x -> (x - μ₁)'inv(Σ)*(x - μ₁) - (x - μ₂)'inv(Σ)*(x - μ₂)
-            else
-                error("No `boundary` of $boundary")
-            end
-        else
-            error("No `gdatype` of $gdatype")
-        end
+        predict, mv_nonfail, mv_fail = gaussian_discriminant_analysis(neg_data, pos_data, gdatype=gdatype, k=k, boundary=boundary)
+
         dbZ = [predict([x,y]) for y in dbY, x in dbX] # Note x-y "for" ordering
         vmin = minimum(dbZ)
         vmax = maximum(dbZ)
@@ -367,7 +342,7 @@ function plot_multivariate_distance_and_rate(𝒟; gda=false, gdatype=:qda, shar
         # Colormap so that:
         #   red   = class 1 = failure
         #   green = class 2 = non-failure
-        pp.contourf(dbX, dbY, dbZ, 100, cmap="RdYlGn", vmin=vmin, vmax=vmax, norm=norm)
+        pp.contourf(dbX, dbY, dbZ, 100, cmap="RdYlGn_r", vmin=vmin, vmax=vmax, norm=norm)
     end
 
     pp.scatter(Z_nonfail, d_nonfail, label="non-failure", alpha=0.5,color=NFCOLOR, s=10, edgecolor="black")
@@ -381,15 +356,17 @@ function plot_multivariate_distance_and_rate(𝒟; gda=false, gdatype=:qda, shar
 
     fX = range(-2, stop=maximum(Z_fail)*1.1, length=1000)
     fY = range(-2, stop=(gdatype==:lda) ? maximum(d_nonfail)*1.1 : maximum(d_fail)*1.1 , length=1000)
-    fZ = [pdf(mv_fail, [x,y]) for y in fY, x in fX] # Note x-y "for" ordering
-
-    pp.contour(fX, fY, fZ, alpha=0.75, cmap="plasma")
-
     nfX = range(-2, stop=maximum(Z_nonfail)*1.1, length=1000)
     nfY = range(-2, stop=maximum(d_nonfail)*1.1, length=1000)
-    nfZ = [pdf(mv_nonfail, [x,y]) for y in nfY, x in nfX] # Note x-y "for" ordering
+    if gda
+        fZ = [pdf(mv_fail, [x,y]) for y in fY, x in fX] # Note x-y "for" ordering
 
-    pp.contour(nfX, nfY, nfZ, alpha=0.75, cmap="viridis")
+        pp.contour(fX, fY, fZ, alpha=0.75, cmap="plasma")
+
+        nfZ = [pdf(mv_nonfail, [x,y]) for y in nfY, x in nfX] # Note x-y "for" ordering
+
+        pp.contour(nfX, nfY, nfZ, alpha=0.75, cmap="viridis")
+    end
 
     pp.xlim(current_xlim)
     pp.ylim(current_ylim)
@@ -428,50 +405,108 @@ function plot_multivariate_distance_and_rate(𝒟; gda=false, gdatype=:qda, shar
     # Boundary line calculated using support vector machines (SVMs)
     if svm
         @info "Running SVM..."
-        svm_x = range(-0.1, stop=0.8, length=1000) # TODO. Calculate.
+        svm_x = dbX
 
         w, b = compute_svm(pos_data, neg_data)
+        @show w, b
         svm_boundary = (x,w,b) -> (-w[1] * x .+ b)/w[2] # line of the decision boundary
         svm_y = svm_boundary(svm_x, w, b)
-        svm_classify = x -> sign((-w'*x + b)/w[2]) > 0 ? 1 : 0
+        svm_classify = x -> sign((-w'*x + b)/w[2]) > 0 ? 1 : -1 # was : 0
 
         if subplots
             pp.subplot(2,2,3)
         end
-        pp.plot(svm_x, svm_y, label="SVM boundary", color="black")
+        @info svm_x
+        @info svm_y
+        pp.plot(svm_x, svm_y, label="SVM", color="black")
     end
 
-    analyze_fit(predict, svm_classify, pos_data, neg_data)
+    # analyze_fit(predict, svm_classify, pos_data, neg_data)
 
-    pp.legend()
+    if show_legend
+        pp.legend()
+    end
     pp.subplots_adjust(wspace=0.08, hspace=0.1)
 
     pp.savefig("d-Z-distribution-subplots.png")
     fig = pp.gcf()
 
-    return return_predict ? (fig, predict) : fig
+    return return_predict ? (fig, predict, mv_fail, svm_classify) : fig
 end
 
 
+function gaussian_discriminant_analysis(neg_data, pos_data; gdatype=:qda, k=1, boundary=:binary)
+    mv_fail = fit_mle(MvNormal, pos_data)
+    mv_nonfail = fit_mle(MvNormal, neg_data)
 
-function analyze_fit(predict, svm_classify, pos_data, neg_data; boundary=:linear)
-    svm_true_positives = sum([svm_classify(x) for x in eachcol(pos_data)]) / size(pos_data)[2]
-    svm_true_negatives = sum([1-svm_classify(x) for x in eachcol(neg_data)]) / size(neg_data)[2]
-    @show round(svm_true_positives, digits=4)
-    @show round(svm_true_negatives, digits=4)
+    if gdatype == :lda
+        # LDA with shared covariances
+        if k == 1 # which class k shared their covariance?
+            mv_fail = MvNormal(mv_fail.μ, mv_nonfail.Σ) # shared covariance
+        else
+            mv_nonfail = MvNormal(mv_nonfail.μ, mv_fail.Σ) # shared covariance
+        end
+    end
 
-    qda_true_positives = sum([predict(x) > 0 ? 0 : 1 for x in eachcol(pos_data)]) / size(pos_data)[2]
-    qda_true_negatives = sum([predict(x) <= 0 ? 0 : 1 for x in eachcol(neg_data)]) / size(neg_data)[2]
-    @show round(qda_true_positives, digits=4)
-    @show round(qda_true_negatives, digits=4)
+    # NOTE: Class 0 = non-failure, Class 1 = failure.
+    π₀ = π₁ = 0.5 # priors
+    μ₀ = mv_nonfail.μ
+    μ₁ = mv_fail.μ
+    Σ₀ = mv_nonfail.Σ
+    Σ₁ = mv_fail.Σ
+    if gdatype == :qda
+        if boundary == :binary
+            # QDA: in the form for class k=1
+            predictₖ = (x, μₖ, Σₖ, πₖ) -> -1/2*log(det(Σₖ)) - 1/2*(x - μₖ)'inv(Σₖ)*(x - μₖ) + log(πₖ)
+            predict0 = x -> predictₖ(x, μ₀, Σ₀, π₀)
+            predict1 = x -> predictₖ(x, μ₁, Σ₁, π₁)
+            predict = x -> predict0(x) > predict1(x) ? -1 : 1
+        elseif boundary == :gradient
+            # QDA: zero-decision bounday
+            predict = x -> (x - μ₀)'inv(Σ₀)*(x - μ₀) + log(det(Σ₀)) - (x - μ₁)'inv(Σ₁)*(x - μ₁) - log(det(Σ₁))
+            # predict = x -> - (x - μ₁)'inv(Σ₁)*(x - μ₁) - log(det(Σ₁)) + (x - μ₀)'inv(Σ₀)*(x - μ₀) + log(det(Σ₀)) # SAME.
+        else
+            error("No `boundary` of $boundary")
+        end
+    elseif gdatype == :lda
+        # LDA (with shared Σs)
+        Σ = Σ₀ # doesn't matter which k we choose, covariance is copied/duplicated above.
+        if boundary == :binary
+            predictₖ = (x, μₖ, πₖ) -> x'inv(Σ)*μₖ - 1/2*μₖ'inv(Σ)*μₖ + log(πₖ)
+            predict0 = x -> predictₖ(x, μ₀, π₀)
+            predict1 = x -> predictₖ(x, μ₁, π₁)
+            predict = x -> predict0(x) > predict1(x) ? -1 : 1
+        elseif boundary == :gradient
+            predict = x -> (x - μ₀)'inv(Σ)*(x - μ₀) - (x - μ₁)'inv(Σ)*(x - μ₁)
+        else
+            error("No `boundary` of $boundary")
+        end
+    else
+        error("No `gdatype` of $gdatype")
+    end
+
+    return predict, mv_nonfail, mv_fail
 end
+
+
+# function analyze_fit(predict, svm_classify, pos_data, neg_data; boundary=:linear)
+#     svm_true_positives = sum([svm_classify(x) for x in eachcol(pos_data)]) / size(pos_data)[2]
+#     svm_true_negatives = sum([1-svm_classify(x) for x in eachcol(neg_data)]) / size(neg_data)[2]
+#     @show round(svm_true_positives, digits=4)
+#     @show round(svm_true_negatives, digits=4)
+
+#     qda_true_positives = sum([predict(x) > 0 ? 0 : 1 for x in eachcol(pos_data)]) / size(pos_data)[2]
+#     qda_true_negatives = sum([predict(x) <= 0 ? 0 : 1 for x in eachcol(neg_data)]) / size(neg_data)[2]
+#     @show round(qda_true_positives, digits=4)
+#     @show round(qda_true_negatives, digits=4)
+# end
 
 
 # https://jump.dev/Convex.jl/v0.13.2/examples/general_examples/svm/
 function compute_svm(pos_data, neg_data, solver=() -> SCS.Optimizer(verbose=0))
     # Create variables for the separating hyperplane w'*x = b.
     n = 2 # dimensionality of data
-    C = 10 # inverse regularization parameter in the objective  w = Variable(n)
+    C = 10 # inverse regularization parameter in the objective
     w = Variable(n)
     b = Variable()
     # Form the objective.

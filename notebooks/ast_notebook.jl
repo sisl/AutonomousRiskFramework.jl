@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.12.3
+# v0.14.2
 
 using Markdown
 using InteractiveUtils
@@ -22,9 +22,6 @@ catch
 	using AddPackage
 end
 
-# ╔═╡ 92ce9460-f62b-11ea-1a8c-179776b5a0b4
-@add using Distributions, Parameters, Random, Latexify, PlutoUI
-
 # ╔═╡ e7783510-047d-11eb-26b0-373b14638ff0
 try
 	using POMDPStressTesting
@@ -34,9 +31,6 @@ catch
 	using POMDPStressTesting
 end
 
-# ╔═╡ 687a90c0-0480-11eb-1ef4-03e93ffa400c
-@add using AutomotiveSimulator, AutomotiveVisualization
-
 # ╔═╡ cda24800-0488-11eb-1d7f-8d52b5f6b33e
 try
 	using AdversarialDriving
@@ -44,6 +38,12 @@ catch
 	pkg"add https://github.com/sisl/AdversarialDriving.jl"
 	using AdversarialDriving
 end
+
+# ╔═╡ 92ce9460-f62b-11ea-1a8c-179776b5a0b4
+@add using Distributions, Parameters, Random, Latexify, PlutoUI
+
+# ╔═╡ 687a90c0-0480-11eb-1ef4-03e93ffa400c
+@add using AutomotiveSimulator, AutomotiveVisualization
 
 # ╔═╡ 3617eb60-0489-11eb-144a-232b222a0365
 @add using POMDPs, POMDPPolicies, POMDPSimulators

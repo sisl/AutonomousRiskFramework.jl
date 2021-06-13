@@ -14,21 +14,33 @@ end;
     params::AutoRiskParams = AutoRiskParams() # Parameters
 
     # Initial Noise
-    init_noise_1 = Noise(pos = (0, 0), vel = 0)
-    init_noise_2 = Noise(pos = (0, 0), vel = 0)
+    init_noise_1 = Noise(pos=(0,0), vel=0)
+    init_noise_2 = Noise(pos=(0,0), vel=0)
+
+    # Driving scenario
+    scenario::Scenario = scenario_t_head_on_turn(init_noise_1=init_noise_1, init_noise_2=init_noise_2)
+
+    # Roadway from scenario
+    # roadway::Roadway = multi_lane_roadway() # Default roadway
+    roadway::Roadway = scenario.roadway # Default roadway
 
     # System under test, ego vehicle
-    sut = BlinkerVehicleAgent(get_urban_vehicle_1(id=1, s=5.0, v=15.0, noise=init_noise_1),
-    UrbanIDM(idm=IntelligentDriverModel(v_des=15.0), noisy_observations=true, ignore_idm=!params.ignore_sensors));
+    # sut = BlinkerVehicleAgent(get_urban_vehicle_1(id=1, s=5.0, v=15.0, noise=init_noise_1, roadway=roadway),
+    # sut = BlinkerVehicleAgent(t_left_to_right(id=1, noise=init_noise_1, roadway=roadway),
+    # UrbanIDM(idm=IntelligentDriverModel(v_des=15.0), noisy_observations=true, ignore_idm=!params.ignore_sensors));
+    sut = scenario.sut
 
     # Noisy adversary, vehicle
-    adversary = BlinkerVehicleAgent(get_urban_vehicle_2(id=2, s=25.0, v=0.0, noise=init_noise_2),
-    UrbanIDM(idm=IntelligentDriverModel(v_des=0.0), noisy_observations=false));
+    # adversary = BlinkerVehicleAgent(get_urban_vehicle_2(id=2, s=25.0, v=0.0, noise=init_noise_2, roadway=roadway),
+    # UrbanIDM(idm=IntelligentDriverModel(v_des=0.0), noisy_observations=false));
+    # adversary = BlinkerVehicleAgent(t_right_to_turn(id=2, noise=init_noise_2, roadway=roadway),
+    # UrbanIDM(idm=IntelligentDriverModel(v_des=15.0), noisy_observations=false));
+    adversary = scenario.adversary
 
     # Adversarial Markov decision process
     problem::MDP = AdversarialDrivingMDP(sut, [adversary], roadway, 0.1)
     state::Scene = rand(initialstate(problem))
-    prev_distance::Real = -Inf # Used when agent goes out of frame
+    prev_distance::Real = -1e10 # Used when agent goes out of frame
 
     # Noise distributions and disturbances (consistent with output variables in _logpdf)
     xposition_noise_veh::Distribution = Normal(0, 3) # Gaussian noise (notice larger σ)
@@ -39,7 +51,7 @@ end;
     yposition_noise_sut::Distribution = Normal(0, 3) # Gaussian noise
     velocity_noise_sut::Distribution = Normal(0, 1e-4) # Gaussian noise
 
-    disturbances = Disturbance[BlinkerVehicleControl(), BlinkerVehicleControl()] # Initial 0-noise disturbance
+    disturbances = scenario.disturbances # Initial 0-noise disturbance
 
     _logpdf::Function = (sample, state) -> 0 # Function for evaluating logpdf
 end
@@ -53,8 +65,8 @@ Change the SUT for the ego vehicle.
     - PrincetonDriver(v_des=10.0) # Princeton driver model with selected speed
     - TODO: Robert Dyro's behavior agent.
 """
-function AutoRiskSim(system)
-    sim = AutoRiskSim()
+function AutoRiskSim(system, scenario)
+    sim = AutoRiskSim(scenario=scenario)
     sim.sut.model.idm = system
     return sim
 end
@@ -81,7 +93,7 @@ function GrayBox.transition!(sim::AutoRiskSim, sample::GrayBox.EnvironmentSample
     noise_veh = Noise(pos = (sample[:xpos_veh].value, sample[:ypos_veh].value), vel = sample[:vel_veh].value) # reversed to match local pedestrain frame
     noise_sut = Noise(pos = (sample[:xpos_sut].value, sample[:ypos_sut].value), vel = sample[:vel_sut].value)
     sim.disturbances[1] = BlinkerVehicleControl(noise=noise_sut)
-    sim.disturbances[2] = BlinkerVehicleControl(noise=noise_veh)
+    sim.disturbances[2] = typeof(sim.disturbances[2])(noise=noise_veh) # could be BlinkerVehicleControl or PedestrianControl
 
     # step agents: given MDP, current state, and current action (i.e. disturbances)
     (sim.state, r) = @gen(:sp, :r)(sim.problem, sim.state, sim.disturbances)
@@ -97,10 +109,10 @@ Blackbox functions
 
 function BlackBox.initialize!(sim::AutoRiskSim)
     sim.t = 0
-    sim.problem = AdversarialDrivingMDP(sim.sut, [sim.adversary], roadway, 0.1)
+    sim.problem = AdversarialDrivingMDP(sim.sut, [sim.adversary], sim.roadway, 0.1)
     sim.state = rand(initialstate(sim.problem))
-    sim.disturbances = Disturbance[BlinkerVehicleControl(), BlinkerVehicleControl()] # noise-less
-    sim.prev_distance = -Inf
+    sim.disturbances = Disturbance[BlinkerVehicleControl(), typeof(sim.disturbances[2])()] # noise-less
+    sim.prev_distance = -1e10
 end
 
 out_of_frame(sim) = length(sim.state.entities) < 2 # either agent went out of frame
@@ -179,14 +191,61 @@ function POMDPStressTesting.cem_losses(d, sample; mdp::ASTMDP, initstate::ASTSta
     return -R # negative (loss)
 end
 
+
+"""
+Find the maximum standard deviation of the GrayBox.environment to be used in the DRL `output_factor`.
+"""
+function maximum_std(sim::AutoRiskSim)
+    env = GrayBox.environment(sim)
+    return maximum(std(env[k]) for k in keys(env))
+end
+
+
 ##############################################################################
+global STATE_PROXY = :none
+function GrayBox.state(sim::AutoRiskSim)
+    global STATE_PROXY
+
+    if STATE_PROXY == :distance
+        return [BlackBox.distance(sim)]
+    elseif STATE_PROXY == :rate
+        return [BlackBox.rate(sim.prev_distance, sim)]
+    elseif STATE_PROXY == :actual
+        return [sim.state]
+    elseif STATE_PROXY == :none
+        return nothing
+    end
+end
+
+
 """
 Setup Adaptive Stress Testing
 """
+function setup_ast(;
+        sut=IntelligentDriverModel(v_des=12.0),
+        scenario=scenario_hw_stopping(),
+        seed=0,
+        state_proxy=:none,
+        nnobs=true,
+        which_solver=:mcts, # :mcts, :cem, :ppo, :random
+        noise_adjustment=nothing,
+        rollout=AST.rollout)
 
-function setup_ast(net, net_params; sut=IntelligentDriverModel(v_des=12.0), seed=0, nnobs=true)
+    global STATE_PROXY
+
     # Create gray-box simulation object
-    sim::GrayBox.Simulation = AutoRiskSim(sut)
+    sim::GrayBox.Simulation = AutoRiskSim(sut, scenario)
+
+    # Adjust noise before training observation model
+    if !isnothing(noise_adjustment)
+        noise_adjustment(sim)
+    end
+
+    # Train observation model
+    if nnobs
+        @info "Training observation model."
+        net, net_params = training_phase(sim; seed=seed)
+    end
 
     # Modified logprob from Surrogate probability model
     function logprob(sample, state)
@@ -194,6 +253,7 @@ function setup_ast(net, net_params; sut=IntelligentDriverModel(v_des=12.0), seed
             scenes = [state]
             feat, y = preprocess_data(1, scenes);
             logprobs = evaluate_logprob(feat, y, net..., net_params)
+            # TODO: record the logprob(sample) for apples-to-apples comparison.
             return logprobs[1]
         else
             return logpdf(sample)
@@ -210,9 +270,11 @@ function setup_ast(net, net_params; sut=IntelligentDriverModel(v_des=12.0), seed
     mdp.params.collect_data = true # collect supervised dataset (𝐱=disturbances, y=isevent)
     mdp.params.use_potential_based_shaping = true
 
-    USE_CEM = false
+    STATE_PROXY = state_proxy # set the state-proxy value (needs to be global for method definition)
 
-    if USE_CEM
+    @info which_solver
+
+    if which_solver == :cem
         # Hyperparameters for CEM as the solver
         solver = POMDPStressTesting.CEMSolver(n_iterations=100,
                         #    num_samples=500,
@@ -220,13 +282,23 @@ function setup_ast(net, net_params; sut=IntelligentDriverModel(v_des=12.0), seed
                         #    min_elite_samples=20,
                         #    max_elite_samples=200,
                         episode_length=sim.params.endtime)
-    else
+    elseif which_solver == :mcts
         # Hyperparameters for MCTS-PW as the solver
         solver = MCTSPWSolver(n_iterations=1000,        # number of algorithm iterations
                               exploration_constant=1.0, # UCT exploration
                               k_action=1.0,             # action widening
                               alpha_action=0.5,         # action widening
+                              estimate_value=rollout,   # rollout policy
                               depth=sim.params.endtime) # tree depth
+    elseif which_solver == :ppo
+        solver = PPOSolver(num_episodes=1000,
+                           episode_length=sim.params.endtime,
+                           output_factor=maximum_std(sim),
+                           show_progress=false)
+    elseif which_solver == :random
+        solver = RandomSearchSolver(n_iterations=1000, episode_length=sim.params.endtime)
+    else
+        error("Solver does not exist ($which_solver)")
     end
     # Get online planner (no work done, yet)
     planner = solve(solver, mdp)

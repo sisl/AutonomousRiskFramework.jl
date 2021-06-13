@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.12.16
+# v0.14.7
 
 using Markdown
 using InteractiveUtils
@@ -22,9 +22,6 @@ catch
 	using AddPackage
 end
 
-# ╔═╡ 92ce9460-f62b-11ea-1a8c-179776b5a0b4
-@add using Distributions, Parameters, Random, Latexify, PlutoUI
-
 # ╔═╡ e7783510-047d-11eb-26b0-373b14638ff0
 try
 	using POMDPStressTesting
@@ -34,9 +31,6 @@ catch
 	using POMDPStressTesting
 end
 
-# ╔═╡ 687a90c0-0480-11eb-1ef4-03e93ffa400c
-@add using AutomotiveSimulator, AutomotiveVisualization
-
 # ╔═╡ cda24800-0488-11eb-1d7f-8d52b5f6b33e
 try
 	using AdversarialDriving
@@ -44,6 +38,18 @@ catch
 	pkg"dev https://github.com/sisl/AdversarialDriving.jl"
 	using AdversarialDriving
 end
+
+# ╔═╡ b67e4880-3bde-11eb-185e-313a83ee528e
+pkg"dev ../STLCG.jl/."
+
+# ╔═╡ c59df310-3be3-11eb-0e26-fb3a6fbb0c07
+pkg"add https://github.com/mossr/CrossEntropyVariants.jl"
+
+# ╔═╡ 92ce9460-f62b-11ea-1a8c-179776b5a0b4
+@add using Distributions, Parameters, Random, Latexify, PlutoUI
+
+# ╔═╡ 687a90c0-0480-11eb-1ef4-03e93ffa400c
+@add using AutomotiveSimulator, AutomotiveVisualization
 
 # ╔═╡ 3617eb60-0489-11eb-144a-232b222a0365
 @add using POMDPs, POMDPPolicies, POMDPSimulators
@@ -65,6 +71,12 @@ using CrossEntropyVariants
 
 # ╔═╡ 7a71fe60-3be6-11eb-1fe7-7bd3ab22ffc9
 using Flux
+
+# ╔═╡ 544c8ad0-8055-11eb-2d75-4fca60a122f7
+using Seaborn # required for episodic_figures
+
+# ╔═╡ 79282930-8056-11eb-12a8-e12c43024adb
+using RollingFunctions
 
 # ╔═╡ 83e51830-f62a-11ea-215d-a9767d7b07a5
 md"""
@@ -146,6 +158,9 @@ md"##### Simulation Histories"
 # ╔═╡ 4af33470-048b-11eb-0f8c-f93c7dcdb11b
 md"Run a simulation for the nominal behavior (i.e. no noisy)."
 
+# ╔═╡ 38c0cde0-8054-11eb-0c99-bdece77d42a3
+Base.rand(rng::AbstractRNG, s::Scene) = s # TODO: thought this was fixed already?
+
 # ╔═╡ 6bd32610-048a-11eb-316d-6dd779f7cdc4
 # Nominal Behavior
 hist = POMDPSimulators.simulate(HistoryRecorder(), ad_mdp,
@@ -177,9 +192,6 @@ md"##### Distance Metrics"
 md"""
 ###### Distance using STL
 """
-
-# ╔═╡ b67e4880-3bde-11eb-185e-313a83ee528e
-pkg"dev ../STLCG.jl/."
 
 # ╔═╡ b2869690-3be0-11eb-0199-8f72d717fe61
 md"""
@@ -296,9 +308,10 @@ Next, we define a `GrayBox.Simulation` structure.
 	problem::MDP = AdversarialDrivingMDP(sut, [adversary], ped_roadway, 0.1)
 	state::Scene = rand(initialstate(problem))
 	prev_distance::Real = -Inf # Used when agent goes out of frame
+    rate::Real = 0 # Current rate (TODO: used for GrayBox.state)
 
 	# Noise distributions and disturbances
-	xposition_noise::Distribution = Normal(0, 5) # Gaussian noise (notice larger σ)
+	xposition_noise::Distribution = Normal(0, 2) # Gaussian noise (notice larger σ)
 	yposition_noise::Distribution = Normal(0, 1) # Gaussian noise
 	velocity_noise::Distribution = Normal(0, 1) # Gaussian noise
 	disturbances = Disturbance[PedestrianControl()] # Initial 0-noise disturbance
@@ -483,7 +496,7 @@ final_is_distrs[1]
 
 # ╔═╡ 923e33e0-2491-11eb-1b9c-27f4842ad081
 function cem_rollout(mdp::ASTMDP, s::ASTState, d::Int64)
-	USE_PRIOR = false
+	USE_PRIOR = true
 	cem_mdp = mdp # deepcopy(mdp)
 	prev_top_k = cem_mdp.params.top_k
 	q_value = 0
@@ -503,7 +516,7 @@ function cem_rollout(mdp::ASTMDP, s::ASTState, d::Int64)
 
 	USE_MEAN = true # use the mean of the importance sampling distr, instead of rand.
 	
-	AST.go_to_state(mdp, s) # Records trace through this call
+	AST.go_to_state(mdp, s) # Records trace through this call # TODO: `record=true`???
 
 	for i in 1:length(is_distrs) # TODO: handle min(d, length) to select is_dist associated with `d`
 		is_distr = is_distrs[1]
@@ -581,7 +594,6 @@ end
 # ╔═╡ 92e3e160-249f-11eb-0d10-c3c67a74428e
 function ϵ_rollout(mdp::ASTMDP, s::ASTState, d::Int64; ϵ=0.5)
     if d == 0 || isterminal(mdp, s)
-        AST.go_to_state(mdp, s) # Records trace through this call
         return 0.0
     else
 		if rand() < ϵ
@@ -623,7 +635,6 @@ end
 # ╔═╡ bdcba74e-2b84-11eb-07ac-c16716b887e9
 function prior_rollout(mdp::ASTMDP, s::ASTState, d::Int64)
     if d == 0 || isterminal(mdp, s)
-        AST.go_to_state(mdp, s) # Records trace through this call
         return 0.0
     else
 		a::ASTAction = AST.random_action(mdp)
@@ -664,9 +675,6 @@ md"""
 ## Cross-Entropy Surrogate Method
 """
 
-# ╔═╡ c59df310-3be3-11eb-0e26-fb3a6fbb0c07
-pkg"add https://github.com/mossr/CrossEntropyVariants.jl"
-
 # ╔═╡ cff128d0-3be5-11eb-01a3-65e012391e48
 md"""
 ## Neural Network Q-Approximator
@@ -685,7 +693,10 @@ md"""
 end
 
 # ╔═╡ 7beae2c0-3be6-11eb-0e3d-5ba4d0c3c354
-model = Chain(Dense(1+6, 32), Dense(32, 1)) # d + |A| -> Q
+# model = Chain(Dense(1+6, 32), Dense(32, 1)) # d + |A| -> Q
+
+# ╔═╡ 17cd6400-3be8-11eb-30f5-8d31eadaa535
+# actions(ast_mdp) |> length
 
 # ╔═╡ dc769d50-3be6-11eb-3478-453ba24f4e7d
 𝒟[1][1][2].sample
@@ -695,6 +706,18 @@ md"""
 ## AST Setup and Running
 Setting up our simulation, we instantiate our simulation object and pass that to the Markov decision proccess (MDP) object of the adaptive stress testing formulation. We use Monte Carlo tree search (MCTS) with progressive widening on the action space as our solver. Hyperparameters are passed to `MCTSPWSolver`, which is a simple wrapper around the POMDPs.jl implementation of MCTS. Lastly, we solve the MDP to produce a planner. Note we are using the `ASTSampleAction`.
 """
+
+# ╔═╡ ddd341f0-8054-11eb-0cfe-8fecf2ce039c
+use_state_proxy = :distance # :distance, :rate, :actual
+
+# ╔═╡ db097390-8054-11eb-043f-f70669de2727
+if use_state_proxy == :distance
+    GrayBox.state(sim::AutoRiskSim) = [BlackBox.distance(sim)]
+elseif use_state_proxy == :rate
+    GrayBox.state(sim::AutoRiskSim) = [sim.rate]
+elseif use_state_proxy == :actual
+    GrayBox.state(sim::AutoRiskSim) = [sim.state]
+end
 
 # ╔═╡ fdf55130-f62f-11ea-33a4-a783b4d216dc
 function setup_ast(seed=0)
@@ -706,7 +729,8 @@ function setup_ast(seed=0)
     mdp.params.debug = true # record metrics
     mdp.params.top_k = 10   # record top k best trajectories
     mdp.params.seed = seed  # set RNG seed for determinism
-
+	mdp.params.collect_data = true
+	
     # Hyperparameters for MCTS-PW as the solver
     solver = MCTSPWSolver(n_iterations=10,        # number of algorithm iterations
                           exploration_constant=1.0, # UCT exploration
@@ -714,8 +738,8 @@ function setup_ast(seed=0)
                           alpha_action=0.95,         # action widening
                           depth=sim.params.endtime, # tree depth
 						  # estimate_value=ϵ_rollout) # rollout function
-						  estimate_value=cem_rollout) # rollout function
-						  # estimate_value=prior_rollout) # rollout function
+						  # estimate_value=cem_rollout) # rollout function
+						  estimate_value=prior_rollout) # rollout function
 
     # Get online planner (no work done, yet)
     planner = solve(solver, mdp)
@@ -732,10 +756,39 @@ After setup, we search for failures using the planner and output the best action
 # ╔═╡ 17d0ed20-f631-11ea-2e28-3bb9ca9a445f
 planner = setup_ast();
 
+# ╔═╡ ea6a4f60-8065-11eb-124b-11b6f705ae46
+mcts_mdp = planner.mdp;
+
 # ╔═╡ 1c47f652-f631-11ea-15f6-1b9b59700f36
 with_terminal() do
 	global action_trace = search!(planner)
 end
+
+# ╔═╡ 4e2a8671-29a6-4e1a-aada-678e3f19b7a0
+failure_metrics(planner)
+
+# ╔═╡ 1434889d-f030-466b-9c27-e2fa5c4de71d
+latex_metrics(failure_metrics(planner))
+
+# ╔═╡ 334b1ad5-9902-4d11-b7f0-276caa61c6b0
+planner.mdp.dataset
+
+# ╔═╡ 84136090-8055-11eb-1a8f-9dd5131257d2
+md"""
+## PPO
+"""
+
+# ╔═╡ 85e98020-8055-11eb-0fa7-b11f5f9ceb60
+# begin
+# 	ppo_mdp = setup_ast().mdp; # new copy
+# 	ppo_solver = PPOSolver(num_episodes=10_000) # 10_000
+# 	ppo_planner = solve(ppo_solver, ppo_mdp);
+# 	ppo_action_trace = search!(ppo_planner)
+# 	[AST.logpdf(action_trace); # MCTS
+# 	 AST.logpdf(cem_action_trace);
+# 	 AST.logpdf(ppo_action_trace)]
+# 	ppo_failure_rate = print_metrics(ppo_planner)
+# end
 
 # ╔═╡ 6ade4d00-05c2-11eb-3732-ff945f7ce127
 md"""
@@ -761,21 +814,6 @@ playback_trace = playback(planner, action_trace, BlackBox.distance, return_trace
 # ╔═╡ 7473adb0-f631-11ea-1c87-0f76b18a9ab6
 failure_rate = print_metrics(planner)
 
-# ╔═╡ 0d159de0-284f-11eb-230b-a1feaa0b0581
-visualize(planner)
-
-# ╔═╡ b6244db0-f63a-11ea-3b48-89d427664f5e
-md"""
-### Other Solvers: Cross-Entropy Method
-We can easily take our `ASTMDP` object (`planner.mdp`) and re-solve the MDP using a different solver—in this case the `CEMSolver`.
-"""
-
-# ╔═╡ c0cf83e0-05a5-11eb-32b5-6fb00cbc311b
-ast_mdp = deepcopy(planner.mdp); # re-used from MCTS run.
-
-# ╔═╡ 17cd6400-3be8-11eb-30f5-8d31eadaa535
-actions(ast_mdp) |> length
-
 # ╔═╡ 5043e8c0-284e-11eb-0c6d-7f3940b0a940
 begin
 	# TODO: get this index from the `trace` itself
@@ -788,11 +826,23 @@ begin
 	Markdown.parse(string("\$\$p_\\text{likely} = ", failure_likelihood_mcts, "\$\$"))
 end
 
+# ╔═╡ 0d159de0-284f-11eb-230b-a1feaa0b0581
+visualize(planner)
+
+# ╔═╡ b6244db0-f63a-11ea-3b48-89d427664f5e
+md"""
+### Other Solvers: Cross-Entropy Method
+We can easily take our `ASTMDP` object (`planner.mdp`) and re-solve the MDP using a different solver—in this case the `CEMSolver`.
+"""
+
+# ╔═╡ c0cf83e0-05a5-11eb-32b5-6fb00cbc311b
+cem_mdp = setup_ast().mdp; # deepcopy(planner.mdp); # re-used from MCTS run.
+
 # ╔═╡ 824bdde0-05bd-11eb-0594-cddd54c49757
-cem_solver = CEMSolver(n_iterations=100, episode_length=ast_mdp.sim.params.endtime)
+cem_solver = CEMSolver(n_iterations=100, episode_length=cem_mdp.sim.params.endtime)
 
 # ╔═╡ fb3fa610-f63a-11ea-2663-17224dc8aade
-cem_planner = solve(cem_solver, ast_mdp);
+cem_planner = solve(cem_solver, cem_mdp);
 
 # ╔═╡ ac2ec420-24a2-11eb-3cd4-b3751126845c
 md"Run CEM? $(@bind run_cem CheckBox())"
@@ -814,24 +864,24 @@ md"Notice the failure rate is higher when using `CEMSolver` than `MCTSPWSolver`.
 cem_failure_rate = print_metrics(cem_planner)
 
 # ╔═╡ 6b6fe810-24a2-11eb-2de0-5de07707e7c4
-episodic_figures(cem_planner.mdp); POMDPStressTesting.gcf()
+episodic_figures(cem_mdp); POMDPStressTesting.gcf()
 
 # ╔═╡ 7412e7b0-24a2-11eb-0523-9bb85e449a80
-distribution_figures(cem_planner.mdp); POMDPStressTesting.gcf()
+distribution_figures(cem_mdp); POMDPStressTesting.gcf()
 
 # ╔═╡ 38a4f220-2b89-11eb-14c6-c18aee509c28
 md"""
 ## PPO solver
 """
 
-# ╔═╡ 3b4ae4d0-2b89-11eb-0176-b3b84ddc6ec3
-ppo_solver = PPOSolver(num_episodes=100, episode_length=ast_mdp.sim.params.endtime)
-
 # ╔═╡ 6e7d2020-2b89-11eb-2153-236afd953dcd
-ast_mdp_ppo = deepcopy(planner.mdp); # re-used from MCTS run.
+ppo_mdp = setup_ast().mdp; # deepcopy(planner.mdp); # re-used from MCTS run.
+
+# ╔═╡ 3b4ae4d0-2b89-11eb-0176-b3b84ddc6ec3
+ppo_solver = PPOSolver(num_episodes=100, episode_length=ppo_mdp.sim.params.endtime)
 
 # ╔═╡ 69815690-2b89-11eb-3fbf-4b94773309da
-ppo_planner = solve(ppo_solver, ast_mdp_ppo);
+ppo_planner = solve(ppo_solver, ppo_mdp);
 
 # ╔═╡ e7a24060-2b8f-11eb-17ce-9751327ccc5a
 md"Run PPO? $(@bind run_ppo CheckBox())"
@@ -856,14 +906,127 @@ md"Run random baseline? $(@bind run_rand CheckBox())"
 
 # ╔═╡ 371953a2-2b8a-11eb-3f00-9b04999863b7
 if run_rand
-	rand_solver = RandomSearchSolver(n_iterations=100,
-		                             episode_length=ast_mdp.sim.params.endtime)
-	ast_mdp_rand = deepcopy(planner.mdp) # re-used from MCTS run.
+	ast_mdp_rand = setup_ast().mdp; # deepcopy(planner.mdp) # re-used from MCTS run.
+	rand_solver = RandomSearchSolver(n_iterations=1000,
+		                             episode_length=ast_mdp_rand.sim.params.endtime)
 	# ast_mdp_rand.params.seed  = 0
 	rand_planner = solve(rand_solver, ast_mdp_rand)
 	rand_action_trace = search!(rand_planner)
 	rand_failure_rate = print_metrics(rand_planner)
 end
+
+# ╔═╡ 6bd7b800-805f-11eb-2589-57f622fa14dc
+begin
+    figure()
+    title("Learning curve")
+    plot(runmean(mean.(ast_mdp_rand.metrics.returns), 1000), c="black")
+    plot(runmean(mean.(cem_mdp.metrics.returns), 1000), c="blue")
+    plot(runmean(mean.(mcts_mdp.metrics.returns), 1000), c="red")
+    # legend(["PPO", "CEM", "MCTS"])
+    legend(["Monte Carlo", "CEM", "MCTS"])
+	# legend(["CEM", "MCTS"])
+    gcf()
+end
+
+# ╔═╡ 37f09ab0-8056-11eb-2d19-a144d5b38193
+# using RollingFunctions
+function episodic_figures_multi(metrics::Vector, labels::Vector{String}, colors::Vector; gui::Bool=true, fillstd::Bool=false, learning_window=100, distance_window=5000, episodic_rewards=false)
+    PyPlot.pygui(gui) # Plot with GUI window (if true)
+    fig = figure(figsize=(7,9))
+    handles = []
+
+    for i in 1:length(metrics)
+        miss_distances = metrics[i].miss_distance
+        max_iters = length(miss_distances)
+
+        # Font size changes
+        plt.rc("axes", titlesize=15, labelsize=13)
+        plt.rc("legend", fontsize=12)
+
+
+        ## Plot 1: Learning curves (reward)
+        ax = fig.add_subplot(4,1,1)
+        G = mean.(metrics[i].returns)
+        G = runmean(G, learning_window)
+        title("Learning Curve")
+        ax.plot(G, color=colors[i])
+        xlabel("Episode")
+        ylabel("Undiscounted Returns")
+        # xscale("log")
+
+        ## Plot 2: Running miss distance mean
+        ax = fig.add_subplot(4,1,2)
+        title("Running Miss Distance Mean")
+
+        ax.axhline(y=0, color="black", linestyle="--", linewidth=1.0)
+
+        # rolling_mean = []
+        # d_sum = 0
+        # for i in 1:max_iters
+        #     d_sum += miss_distances[i]
+        #     push!(rolling_mean, d_sum/i)
+        # end
+        rolling_mean = runmean(mean.(metrics[i].miss_distance), distance_window)
+        # [mean(miss_distances[1:i]) for i in 1:max_iters]
+        ax.plot(rolling_mean, color=colors[i], zorder=2)
+        if fillstd # TODO. More efficient approach.
+            miss_std_below = [mean(miss_distances[1:i])-std(miss_distances[1:i]) for i in 1:max_iters]
+            miss_std_above = [mean(miss_distances[1:i])+std(miss_distances[1:i]) for i in 1:max_iters]
+            ax.fill_between(1:max_iters, miss_std_below, miss_std_above, color=colors[i], alpha=0.1)
+        end
+
+        ylabel("Miss Distance")
+        ax.tick_params(labelbottom=false)
+        # xscale("log")
+
+        ## Plot 3: Minimum miss distance
+        ax = fig.add_subplot(4,1,3)
+        title("Minimum Miss Distance")
+        if i == 1
+            pl0 = ax.axhline(y=0, color="black", linestyle="--", linewidth=1.0)
+            push!(handles, pl0)
+        end
+        rolling_min = []
+        current_min = Inf
+        for i in 1:max_iters
+            if miss_distances[i] < current_min
+                current_min = miss_distances[i]
+            end
+            push!(rolling_min, current_min)
+        end
+        pl1 = ax.plot(rolling_min, color=colors[i], label="AST")
+        ylabel("Miss Distance")
+        push!(handles, pl1[1])
+
+        ax.tick_params(labelbottom=false)
+        # xscale("log")
+
+        ## Plot 4: Cumulative failures
+        ax = fig.add_subplot(4,1,4)
+        E = metrics[i].event
+        max_iters = length(E)
+
+        title("Cumulative Number of Failure Events")
+        ax.plot(cumsum(E[1:max_iters]), color=colors[i])
+        if episodic_rewards
+            xlabel("Episode")
+        else
+            xlabel("Evaluation")
+        end
+        ylabel("Number of Events")
+
+        yscale("log")
+        # xscale("log")
+    end
+    fig.legend(handles, ["Event Horizon", labels...],
+               columnspacing=0.8, loc="lower center", bbox_to_anchor=(0.52, 0), fancybox=true, shadow=false, ncol=5)
+    plt.tight_layout()
+    fig.subplots_adjust(bottom=0.13) # <-- Change the 0.02 to work for your plot.
+end
+
+# ╔═╡ 2cef38b0-8056-11eb-0e43-35badf0d385d
+episodic_figures_multi([ppo_mdp.metrics, cem_mdp.metrics, mcts_mdp.metrics], ["PPO", "CEM", "MCTS"], ["darkcyan", "blue", "red"], learning_window=100); gcf()
+# episodic_figures_multi([cem_mdp.metrics, planner.mdp.metrics], ["CEM", "MCTS"], ["blue", "red"], learning_window=100); gcf()
 
 # ╔═╡ 00dd9240-05c1-11eb-3d13-ff544dc94b5d
 md"""
@@ -878,7 +1041,7 @@ begin
 	# findmax(ast_mdp.metrics.reward[ast_mdp.metrics.event])
 
 	failure_likelihood =
-		round(exp(maximum(ast_mdp.metrics.logprob[ast_mdp.metrics.event])), digits=4)
+		round(exp(maximum(ppo_mdp.metrics.logprob[ppo_mdp.metrics.event])), digits=4)
 
 	Markdown.parse(string("\$\$p = ", failure_likelihood, "\$\$"))
 end
@@ -961,6 +1124,7 @@ end
 # ╠═3cad38a0-05a5-11eb-3f6b-735eb1c3cb59
 # ╟─c6cc6f00-04cf-11eb-263c-c34c6a95db29
 # ╟─4af33470-048b-11eb-0f8c-f93c7dcdb11b
+# ╠═38c0cde0-8054-11eb-0c99-bdece77d42a3
 # ╠═6bd32610-048a-11eb-316d-6dd779f7cdc4
 # ╟─573ec9b0-048b-11eb-3b97-17d0bbb8d28b
 # ╠═766dd700-048a-11eb-0faa-ed69d2203b0a
@@ -1031,7 +1195,7 @@ end
 # ╠═b8875e20-2615-11eb-0f24-d700ce3fa5ab
 # ╠═e2e4f7f0-2614-11eb-0221-2166dd21d555
 # ╠═1485bdce-2615-11eb-2551-0bcf8c4477fa
-# ╠═dc2c8920-2536-11eb-1625-ab5ee68e2cce
+# ╟─dc2c8920-2536-11eb-1625-ab5ee68e2cce
 # ╠═91ad8ed0-24a0-11eb-2518-450a0f95159f
 # ╠═01b0f140-24a1-11eb-2b51-c17654f8f698
 # ╠═61c885de-24a4-11eb-232e-5df113729f2d
@@ -1056,11 +1220,20 @@ end
 # ╠═17cd6400-3be8-11eb-30f5-8d31eadaa535
 # ╠═dc769d50-3be6-11eb-3478-453ba24f4e7d
 # ╟─01da7aa0-f630-11ea-1262-f50453455766
+# ╠═ddd341f0-8054-11eb-0cfe-8fecf2ce039c
+# ╠═db097390-8054-11eb-043f-f70669de2727
 # ╠═fdf55130-f62f-11ea-33a4-a783b4d216dc
 # ╟─09c928f0-f631-11ea-3ef7-512a6bececcc
 # ╠═17d0ed20-f631-11ea-2e28-3bb9ca9a445f
+# ╠═ea6a4f60-8065-11eb-124b-11b6f705ae46
 # ╠═1c47f652-f631-11ea-15f6-1b9b59700f36
+# ╠═4e2a8671-29a6-4e1a-aada-678e3f19b7a0
+# ╠═1434889d-f030-466b-9c27-e2fa5c4de71d
+# ╠═334b1ad5-9902-4d11-b7f0-276caa61c6b0
+# ╟─84136090-8055-11eb-1a8f-9dd5131257d2
+# ╠═85e98020-8055-11eb-0fa7-b11f5f9ceb60
 # ╟─6ade4d00-05c2-11eb-3732-ff945f7ce127
+# ╠═544c8ad0-8055-11eb-2d75-4fca60a122f7
 # ╠═8efa3720-05be-11eb-2c3e-9519eb7d8e7a
 # ╠═22995300-05c2-11eb-3399-574d1fb2ed94
 # ╟─21530220-f631-11ea-3994-319c862d51f9
@@ -1080,15 +1253,19 @@ end
 # ╠═6b6fe810-24a2-11eb-2de0-5de07707e7c4
 # ╠═7412e7b0-24a2-11eb-0523-9bb85e449a80
 # ╟─38a4f220-2b89-11eb-14c6-c18aee509c28
-# ╠═3b4ae4d0-2b89-11eb-0176-b3b84ddc6ec3
 # ╠═6e7d2020-2b89-11eb-2153-236afd953dcd
+# ╠═3b4ae4d0-2b89-11eb-0176-b3b84ddc6ec3
 # ╠═69815690-2b89-11eb-3fbf-4b94773309da
 # ╟─e7a24060-2b8f-11eb-17ce-9751327ccc5a
 # ╠═8134b0c0-2b89-11eb-09f3-e50f52093132
 # ╠═a4fab5e2-2b89-11eb-1d20-b31c4761a77e
+# ╠═6bd7b800-805f-11eb-2589-57f622fa14dc
 # ╟─30b19e00-2b8a-11eb-1d25-91d098b53ac7
 # ╟─fbff1c90-2b8f-11eb-1da5-91bb366a9f7e
 # ╠═371953a2-2b8a-11eb-3f00-9b04999863b7
+# ╟─37f09ab0-8056-11eb-2d19-a144d5b38193
+# ╠═79282930-8056-11eb-12a8-e12c43024adb
+# ╠═2cef38b0-8056-11eb-0e43-35badf0d385d
 # ╟─00dd9240-05c1-11eb-3d13-ff544dc94b5d
 # ╟─49bb9090-05c4-11eb-1aa9-8b4488a05654
 # ╠═066f2bd0-05c4-11eb-032f-ad141ecd8070
