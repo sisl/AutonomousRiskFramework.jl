@@ -1,3 +1,4 @@
+using Revise
 using ObservationModels
 using AutomotiveSimulator
 using AutomotiveVisualization
@@ -109,7 +110,7 @@ end
 Generate Roadway, environment and define Agent functions
 """
 ## Geometry parameters
-roadway_length = 100.
+roadway_length = 50.
 
 roadway = gen_straight_roadway(3, roadway_length) # lanes and length (meters)
 
@@ -201,12 +202,12 @@ end;
     prev_distance::Real = -Inf # Used when agent goes out of frame
 
     # Noise distributions and disturbances (consistent with output variables in _logpdf)
-    xposition_noise_veh::Distribution = Normal(0, 5) # Gaussian noise (notice larger σ)
-    yposition_noise_veh::Distribution = Normal(0, 5) # Gaussian noise
+    xposition_noise_veh::Distribution = Normal(0, 3) # Gaussian noise (notice larger σ)
+    yposition_noise_veh::Distribution = Normal(0, 3) # Gaussian noise
     velocity_noise_veh::Distribution = Normal(0, 1e-4) # Gaussian noise
 
-    xposition_noise_sut::Distribution = Normal(0, 5) # Gaussian noise (notice larger σ)
-    yposition_noise_sut::Distribution = Normal(0, 5) # Gaussian noise
+    xposition_noise_sut::Distribution = Normal(0, 3) # Gaussian noise (notice larger σ)
+    yposition_noise_sut::Distribution = Normal(0, 3) # Gaussian noise
     velocity_noise_sut::Distribution = Normal(0, 1e-4) # Gaussian noise
     
     disturbances = Disturbance[BlinkerVehicleControl(), BlinkerVehicleControl()] # Initial 0-noise disturbance
@@ -231,7 +232,7 @@ function GrayBox.environment(sim::AutoRiskSim)
 end;
 
 function GrayBox.transition!(sim::AutoRiskSim, sample::GrayBox.EnvironmentSample)
-    sim.t += sim.problem.dt # Keep track of time
+    sim.t += 1 # sim.problem.dt # Keep track of time
     noise_veh = Noise(pos = (sample[:xpos_veh].value, sample[:ypos_veh].value), vel = sample[:vel_veh].value) # reversed to match local pedestrain frame
     noise_sut = Noise(pos = (sample[:xpos_sut].value, sample[:ypos_sut].value), vel = sample[:vel_sut].value)
     sim.disturbances[1] = BlinkerVehicleControl(noise=noise_sut)
@@ -401,29 +402,33 @@ function setup_ast(seed=0)
     mdp.params.debug = true # record metrics
     mdp.params.top_k = 10   # record top k best trajectories
     mdp.params.seed = seed  # set RNG seed for determinism
+    mdp.params.collect_data = true # collect supervised dataset (𝐱=disturbances, y=isevent)
 
-    # Hyperparameters for CEM as the solver
-    solver = POMDPStressTesting.CEMSolver(n_iterations=100,
-                    #    num_samples=500,
-                    #    elite_thresh=3000.,
-                    #    min_elite_samples=20,
-                    #    max_elite_samples=200,
-                       episode_length=sim.params.endtime)
+    USE_CEM = false
 
-    #  # Hyperparameters for MCTS-PW as the solver
-    #  solver = MCTSPWSolver(n_iterations=1000,        # number of algorithm iterations
-    #                         exploration_constant=1.0, # UCT exploration
-    #                         k_action=1.0,             # action widening
-    #                         alpha_action=0.5,         # action widening
-    #                         depth=sim.params.endtime) # tree depth
-
+    if USE_CEM
+        # Hyperparameters for CEM as the solver
+        solver = POMDPStressTesting.CEMSolver(n_iterations=100,
+                        #    num_samples=500,
+                        #    elite_thresh=3000.,
+                        #    min_elite_samples=20,
+                        #    max_elite_samples=200,
+                        episode_length=sim.params.endtime)
+    else
+        # Hyperparameters for MCTS-PW as the solver
+        solver = MCTSPWSolver(n_iterations=1000,        # number of algorithm iterations
+                              exploration_constant=1.0, # UCT exploration
+                              k_action=1.0,             # action widening
+                              alpha_action=0.5,         # action widening
+                              depth=sim.params.endtime) # tree depth
+    end
     # Get online planner (no work done, yet)
     planner = solve(solver, mdp)
 
     return planner
 end;
 
-planner = setup_ast();
+planner = setup_ast(10);
 
 action_trace = search!(planner)
 
@@ -437,15 +442,19 @@ Evaluate Plan (Metrics)
 
 playback_trace = playback(planner, action_trace, BlackBox.distance, return_trace=true);
 
-failure_rate = print_metrics(planner)
+failure_rate = print_metrics(planner).failure_rate
 
 begin
     # TODO: get this index from the `trace` itself
     # findmax(planner.mdp.metrics.reward[planner.mdp.metrics.event])
     # findmax(ast_mdp.metrics.reward[ast_mdp.metrics.event])
 
-    failure_likelihood =
-        round(exp(maximum(planner.mdp.metrics.logprob[planner.mdp.metrics.event])), digits=8)
+    failure_likelihood = NaN
+    if any(planner.mdp.metrics.event)
+        # Failures were found.
+        failure_likelihood =
+            round(exp(maximum(planner.mdp.metrics.logprob[planner.mdp.metrics.event])), digits=8)
+    end
 
     # Markdown.parse(string("\$\$p = ", failure_likelihood, "\$\$"))
     print(string("p = ", failure_likelihood, "\n"))
@@ -456,7 +465,12 @@ end
 Evaluate Plan (Interactive)
 """
 
-playback_trace = playback(planner, action_trace, sim->sim.state, return_trace=true)
+failure_action_set = filter(d->d[2], planner.mdp.dataset)
+
+# [end-1] to remove closure rate from 𝐱 data
+displayed_action_trace = convert(Vector{ASTAction}, failure_action_set[1][1][1:end-1]) # TODO: could be empty.
+
+playback_trace = playback(planner, displayed_action_trace, sim->sim.state, return_trace=true)
 
 win = Blink.Window()
 
@@ -465,3 +479,12 @@ man = @manipulate for t=slider(1:length(playback_trace), value=1., label="t")
 end;
 
 body!(win, man)
+
+
+include("failure_analysis.jl")
+plot_failure_distribution(planner.mdp.dataset)
+
+include("../../RiskSimulator.jl/src/RiskMetrics.jl")
+metrics = RiskMetrics(cost_data(planner.mdp.dataset), 0.2)
+include("../../RiskSimulator.jl/src/plotting.jl")
+risk_plot(metrics; mean_y=0.3, var_y=0.22, cvar_y=0.15, α_y=0.2)

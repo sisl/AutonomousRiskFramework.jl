@@ -1,9 +1,12 @@
+include("scenarios/scenarios.jl")
+
+buildingmap = BuildingMap()
+
 ####################################################################
 """
-Function for generating noisy entities based on GPS and range-bearing sensor observations
+Function for generating noisy entities based on GPS and range-bearing sensor observations.
+Makes a copy of the scene with the noise added to the vehicles in the state (updates noise in input scene).
 """
-
-# Makes a copy of the scene with the noise added to the vehicles in the state (updates noise in input scene)
 function noisy_scene!(scene::Scene, roadway::Roadway, egoid::Int64, ignore_idm::Bool)
     n_scene = Scene(Entity)
     ego = get_by_id(scene, egoid)
@@ -53,11 +56,7 @@ end
 """
 Generate Roadway, environment and define Agent functions
 """
-## Geometry parameters
-roadway_length = 50.
-
-# TODO: MOVE!
-roadway = gen_straight_roadway(3, roadway_length) # lanes and length (meters)
+# roadway = multi_lane_roadway()
 
 fixed_sats = [
     ObservationModels.Satellite(pos=VecE3(-1e7, 1e7, 1e7), clk_bias=0.0),
@@ -65,20 +64,21 @@ fixed_sats = [
     ObservationModels.Satellite(pos=VecE3(-1e7, 0.0, 1e7), clk_bias=0.0),
     ObservationModels.Satellite(pos=VecE3(100.0, 0.0, 1e7), clk_bias=0.0),
     ObservationModels.Satellite(pos=VecE3(1e7, 0.0, 1e7), clk_bias=0.0)
-        ]
+]
 
-# TODO: MOVE!
-buildingmap = BuildingMap()
+get_urban_vehicle_1(;id::Int64, s::Float64, v::Float64, noise::Noise, roadway::Roadway) =
+    (rng::AbstractRNG=Random.GLOBAL_RNG) -> BlinkerVehicle(
+        roadway=roadway,
+        lane=1, s=s, v=v,
+        id=id, noise=noise, goals=Int64[],
+        blinker=false)
 
-get_urban_vehicle_1(;id::Int64, s::Float64, v::Float64, noise::Noise) = (rng::AbstractRNG = Random.GLOBAL_RNG) -> BlinkerVehicle(roadway=roadway,
-                                    lane=1, s=s, v = v,
-                                    id = id, noise=noise, goals = Int64[],
-                                    blinker = false)
-
-get_urban_vehicle_2(;id::Int64, s::Float64, v::Float64, noise::Noise) = (rng::AbstractRNG = Random.GLOBAL_RNG) -> BlinkerVehicle(roadway=roadway,
-                                    lane=1, s=s, v = v,
-                                    id = id, noise=noise, goals = Int64[],
-                                    blinker = false)
+get_urban_vehicle_2(;id::Int64, s::Float64, v::Float64, noise::Noise, roadway::Roadway) =
+    (rng::AbstractRNG=Random.GLOBAL_RNG) -> BlinkerVehicle(
+        roadway=roadway,
+        lane=1, s=s, v=v,
+        id=id, noise=noise, goals=Int64[],
+        blinker=false)
 
 
 ####################################################################
@@ -86,16 +86,18 @@ get_urban_vehicle_2(;id::Int64, s::Float64, v::Float64, noise::Noise) = (rng::Ab
 Render instructions for Noisy Vehicle
 """
 
-function AutomotiveVisualization.add_renderable!(rendermodel::RenderModel, veh::Entity{BlinkerState, VehicleDef, Int64})
-    reg_veh = Entity(veh.state.veh_state, veh.def, veh.id)
-    add_renderable!(rendermodel, FancyCar(car=reg_veh))
+# TODO: `roadway` is assumped to be GLOBAL.
 
-    noisy_veh = Entity(noisy_entity(veh, roadway).state.veh_state, veh.def, veh.id)
-    ghost_color = weighted_color_mean(0.3, colorant"blue", colorant"white")
-    add_renderable!(rendermodel, FancyCar(car=noisy_veh, color=ghost_color))
+# function AutomotiveVisualization.add_renderable!(rendermodel::RenderModel, veh::Entity{BlinkerState, VehicleDef, Int64})
+#     reg_veh = Entity(veh.state.veh_state, veh.def, veh.id)
+#     add_renderable!(rendermodel, FancyCar(car=reg_veh))
 
-    li = laneid(veh)
-    bo = BlinkerOverlay(on = blinker(veh), veh = reg_veh, right=Tint_signal_right[li])
-    add_renderable!(rendermodel, bo)
-    return rendermodel
-end
+#     noisy_veh = Entity(noisy_entity(veh, roadway).state.veh_state, veh.def, veh.id)
+#     ghost_color = weighted_color_mean(0.3, colorant"blue", colorant"white")
+#     add_renderable!(rendermodel, FancyCar(car=noisy_veh, color=ghost_color))
+
+#     li = laneid(veh)
+#     bo = BlinkerOverlay(on = blinker(veh), veh = reg_veh, right=Tint_signal_right[li])
+#     add_renderable!(rendermodel, bo)
+#     return rendermodel
+# end

@@ -24,8 +24,40 @@ export Simulator,
 
        UrbanIDM,
        noisy_scene!,
-       roadway, # TODO.
+       # roadway, # TODO.
        buildingmap, # TODO.
+       cross_left_to_right,
+       cross_bottom_to_top,
+       t_left_to_right,
+       t_right_to_turn,
+       t_bottom_to_turn_left,
+       hw_behind,
+       hw_stopping,
+       cw_left_to_right,
+       cw_pedestrian_walking_up,
+       hw_straight,
+       hw_merging,
+       x_intersection,
+       t_intersection,
+       multi_lane_roadway,
+       crosswalk_roadway,
+       merging_roadway,
+       get_XIDM_template,
+       get_scenario,
+       get_scenario_string,
+       SCENARIO,
+       CROSSING,
+       T_HEAD_ON,
+       T_LEFT,
+       STOPPING,
+       MERGING,
+       CROSSWALK,
+       scenario_t_head_on_turn,
+       scenario_t_left_turn,
+       scenario_hw_stopping,
+       scenario_crossing,
+       scenario_pedestrian_crosswalk,
+       scenario_hw_merging,
 
        AutoRiskSim,
        AutoRiskParams,
@@ -61,9 +93,11 @@ export Simulator,
        metric_area_plot,
        risk_area,
        overall_area,
-       plot_multivariate_distance_rate,
+       plot_multivariate_distance_and_rate,
        analyze_fit,
        compute_svm,
+
+       ppo_rollout,
 
        # AutomotiveSimulator.jl
        IntelligentDriverModel,
@@ -71,7 +105,10 @@ export Simulator,
 
        # POMDPStressTesting.jl
        search!,
-       failure_metrics
+       get_action,
+       failure_metrics,
+       most_likely_failure,
+       FailureMetrics
 
 Random.seed!(4) # TODO: reconcile with AST.jl and MDN training.
 
@@ -81,9 +118,11 @@ include("ast.jl")
 include("training_phase.jl")
 include("visualization/interactive.jl")
 include("visualization/plotting.jl")
+include("rollouts/ppo_rollout.jl")
 include("risk_assessment.jl")
 
 
+#=
 struct SafetyValidationTask
     scenario
     disturbances
@@ -95,9 +134,6 @@ end
     dynamics = nothing
 end
 
-@with_kw mutable struct Scenario
-    file = nothing
-end
 
 @with_kw mutable struct Simulator
     vehicles::Vector{Vehicle} = Vehicle[]
@@ -122,5 +158,6 @@ Streamlined evaluation for aggregate metrics.
 function evaluate(sim::Simulator)
     @info "Running evaluation:\n$sim"
 end
+=#
 
 end # module

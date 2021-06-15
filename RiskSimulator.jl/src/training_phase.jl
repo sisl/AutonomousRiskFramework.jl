@@ -1,11 +1,10 @@
-function training_phase()
+function training_phase(simx::AutoRiskSim; seed=0, epochs=20)
     ##############################################################################
     # Generate initial samples
     ##############################################################################
 
-    simx = AutoRiskSim();
-
     # Scenes based on current IDM
+    Random.seed!(seed)
     BlackBox.initialize!(simx);
     d = copy(simx.disturbances)
     hr = HistoryRecorder(max_steps=simx.params.endtime)
@@ -14,10 +13,10 @@ function training_phase()
 
     # Sensor noises in the IDM scenes
     scenes = Vector{typeof(simx.state)}() 
-    for epoch=1:20
+    for epoch in 1:epochs
         for idm_scene in idm_scenes
             scene = copy(idm_scene)
-            noisy_scene!(scene, roadway, sutid(simx.problem), true)
+            noisy_scene!(scene, simx.roadway, sutid(simx.problem), true)
             push!(scenes, scene)
         end
     end
