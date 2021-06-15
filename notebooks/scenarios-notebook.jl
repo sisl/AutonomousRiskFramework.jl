@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.14.7
+# v0.14.8
 
 using Markdown
 using InteractiveUtils
@@ -42,6 +42,9 @@ end
 md"""
 # Cross intersection
 """
+
+# ╔═╡ eb446feb-52fa-4555-9be2-c5da8ea68324
+Revise.retry()
 
 # ╔═╡ 72cb2bec-8b11-461a-836b-457dcfa95f69
 roadwayX = x_intersection(r=r, w=w, l=25)
@@ -264,7 +267,8 @@ roadwayCW, crosswalk = crosswalk_roadway()
 begin
 	# TODO.
 	modelsCW = deepcopy(models)
-    modelsCW[1] = TIDM(ped_TIDM_template) # Important
+	# NOTE: ped_TIDM_template or get_XIDM_template()
+    modelsCW[1] = TIDM(get_XIDM_template()) # Important
     modelsCW[2] = AdversarialPedestrian() # Important
 
 	veh0CW = cw_left_to_right(id=1, roadway=roadwayCW)()
@@ -289,6 +293,7 @@ PlutoUI.TableOfContents()
 # ╠═a044340e-beaa-4953-8914-1e35ee4e3a81
 # ╠═8ef9e8b2-e8d7-451d-90e2-f6350aeae46e
 # ╟─8791fb30-d376-495d-9fce-964d3fe6519a
+# ╠═eb446feb-52fa-4555-9be2-c5da8ea68324
 # ╠═72cb2bec-8b11-461a-836b-457dcfa95f69
 # ╠═6b79e36c-89e9-4cab-9edd-d090cdc23f4b
 # ╠═cc54e9f3-d3db-4a14-b7cf-3fbdd2de862f

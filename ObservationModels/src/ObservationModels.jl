@@ -1,4 +1,5 @@
 module ObservationModels
+    using CrossEntropyMethod # for Distributions.logprob and Base.rand utilities
     using Distributions
     using Parameters
     using Random

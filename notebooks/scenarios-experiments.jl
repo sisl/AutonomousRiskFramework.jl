@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.14.7
+# v0.14.8
 
 using Markdown
 using InteractiveUtils
@@ -59,7 +59,7 @@ begin
 end;
 
 # ╔═╡ 6d5dacb1-c68f-4a36-9d65-87f0d92ed234
-SEEDS = 1000:1001
+SEEDS = 1:2
 
 # ╔═╡ 41bed420-834b-4bf3-bac6-9fa349142d10
 md"""
@@ -79,7 +79,7 @@ SCENARIO
 
 # ╔═╡ 582542ee-09d3-48e8-b8de-787293618302
 begin
-	SC = CROSSWALK
+	SC = STOPPING
 	scenario = get_scenario(SC)
 	scenario_string = get_scenario_string(SC)
 end
@@ -90,8 +90,10 @@ function change_noise_disturbance!(sim)
 
 	# Scenario specific noise
 	if SC == CROSSING 
-		σ = 7
-		σᵥ = 1
+		# σ = 4
+		# σᵥ = 2
+		σ = 1
+		σᵥ = 1/10
 	elseif SC == T_HEAD_ON
 		σ = 10
 		σᵥ = 4
@@ -105,8 +107,8 @@ function change_noise_disturbance!(sim)
 		σ = 2
     	σᵥ = 1
 	elseif SC == CROSSWALK
-		σ = 1
-		σᵥ = 1e-8
+		σ = 2
+		σᵥ = 1/10
 	end
 	
     sim.xposition_noise_veh = Normal(0, σ)
@@ -156,7 +158,7 @@ learned_solver = :ppo
 # ╔═╡ 2dbec591-d445-4ff1-a8bd-638314ac149e
 begin
 	system = IntelligentDriverModel(v_des=12.0)
-
+	
 	learned_planner = setup_ast(sut=system, scenario=scenario, seed=SEED,
 		nnobs=use_nn_obs_model, state_proxy=state_proxy, which_solver=learned_solver,
 		noise_adjustment=adjust_noise ? change_noise_disturbance! : nothing)
@@ -176,7 +178,7 @@ md"""
 """
 
 # ╔═╡ 74276517-e275-4e3b-9be0-968961d413cc
-use_learned_rollout = true
+use_learned_rollout = false
 
 # ╔═╡ a84a95cc-3e99-405a-aa40-133b26ea5f58
 begin
@@ -232,9 +234,6 @@ begin
 	RiskSimulator.POMDPStressTesting.latex_metrics(
 		mean(failure_metrics_vector2), std(failure_metrics_vector2))
 end
-
-# ╔═╡ abbb60b3-fff0-4ee0-89d6-6ba3aadc1b31
-planner2.mdp.sim.state;
 
 # ╔═╡ 8e606b42-b881-44ff-a3ac-3760bc699e2e
 md"""
@@ -298,7 +297,7 @@ end; md"**TODO**: `AutomotiveVisualization.add_renderable!`"
 md"Visualize? $(@bind viz CheckBox())"
 
 # ╔═╡ 8d1b9eb5-b2c9-46c5-a7f1-05413d0a4034
-viz && fail_metrics.num_failures > 0 && visualize_most_likely_failure(planner)
+viz && failure_metrics_vector[end].num_failures > 0 && visualize_most_likely_failure(planner)
 
 # ╔═╡ a2df95b7-f768-407f-9481-e88cb79a74d6
 PlutoUI.TableOfContents()
@@ -319,7 +318,6 @@ PlutoUI.TableOfContents()
 # ╠═90860f18-72a4-442b-8404-4bd3d717ec77
 # ╟─595cf7d7-9559-4427-9d99-0ba25f9c3212
 # ╠═7bc840a4-981b-4656-b496-2da65989cab1
-# ╠═abbb60b3-fff0-4ee0-89d6-6ba3aadc1b31
 # ╟─ab6b9bed-4485-43eb-81c4-2fce07d4f2d2
 # ╠═cb0cf557-0c2f-4b4e-acf3-4c5803c550dd
 # ╠═c741297a-bd52-45db-b0da-4b1441af8470

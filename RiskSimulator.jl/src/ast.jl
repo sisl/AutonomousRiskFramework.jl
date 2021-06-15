@@ -202,6 +202,15 @@ end
 
 
 ##############################################################################
+function state2vec(scene::Scene)
+    statevec = Float64[]
+    for entity in scene.entities
+        push!(statevec, entity.state.veh_state.posG...)
+        push!(statevec, entity.state.veh_state.v)
+    end
+    return statevec
+end
+
 global STATE_PROXY = :none
 function GrayBox.state(sim::AutoRiskSim)
     global STATE_PROXY
@@ -210,8 +219,8 @@ function GrayBox.state(sim::AutoRiskSim)
         return [BlackBox.distance(sim)]
     elseif STATE_PROXY == :rate
         return [BlackBox.rate(sim.prev_distance, sim)]
-    elseif STATE_PROXY == :actual
-        return [sim.state]
+    elseif STATE_PROXY == :actual || STATE_PROXY == :true
+        return state2vec(sim.state)
     elseif STATE_PROXY == :none
         return nothing
     end
@@ -229,6 +238,7 @@ function setup_ast(;
         nnobs=true,
         which_solver=:mcts, # :mcts, :cem, :ppo, :random
         noise_adjustment=nothing,
+        use_potential_based_shaping=true,
         rollout=AST.rollout)
 
     global STATE_PROXY
@@ -268,7 +278,7 @@ function setup_ast(;
     mdp.params.top_k = 10   # record top k best trajectories
     mdp.params.seed = seed  # set RNG seed for determinism
     mdp.params.collect_data = true # collect supervised dataset (𝐱=disturbances, y=isevent)
-    mdp.params.use_potential_based_shaping = true
+    mdp.params.use_potential_based_shaping = use_potential_based_shaping
 
     STATE_PROXY = state_proxy # set the state-proxy value (needs to be global for method definition)
 
@@ -291,7 +301,8 @@ function setup_ast(;
                               estimate_value=rollout,   # rollout policy
                               depth=sim.params.endtime) # tree depth
     elseif which_solver == :ppo
-        solver = PPOSolver(num_episodes=1000,
+        solver = PPOSolver(num_episodes=1000, # Doubled.
+                           η=1e-1,
                            episode_length=sim.params.endtime,
                            output_factor=maximum_std(sim),
                            show_progress=false)

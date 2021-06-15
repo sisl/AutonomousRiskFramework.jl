@@ -19,9 +19,7 @@ version = "2.4.0"
 
 [[AdversarialDriving]]
 deps = ["AutomotiveSimulator", "AutomotiveVisualization", "Cairo", "Distributions", "LinearAlgebra", "POMDPModelTools", "POMDPPolicies", "POMDPSimulators", "POMDPs", "Parameters", "Random", "Reel", "Test"]
-git-tree-sha1 = "d53ddf8f70d0ca4bdb0b4cbf7e8614be71fae823"
-repo-rev = "master"
-repo-url = "https://github.com/sisl/AdversarialDriving.jl"
+path = "C:\\Users\\mossr\\.julia\\dev\\AdversarialDriving"
 uuid = "0f7eb3e9-d51f-47f4-b915-6157e1c8ce29"
 version = "0.1.0"
 
@@ -199,6 +197,12 @@ version = "0.2.2"
 git-tree-sha1 = "3f71217b538d7aaee0b69ab47d9b7724ca8afa0d"
 uuid = "a8cc5b0e-0ffa-5ad4-8c14-923d3ee1735f"
 version = "4.0.4"
+
+[[CrossEntropyMethod]]
+deps = ["Distributions", "POMDPPolicies", "POMDPSimulators", "POMDPs", "ProgressMeter", "Random"]
+git-tree-sha1 = "4c9aceee852f1824b76ed0d75d411070cce17a0e"
+uuid = "f7e364ee-db6c-46d3-b598-27dc284d9c4d"
+version = "0.1.0"
 
 [[DataAPI]]
 git-tree-sha1 = "dfb3b7e89e395be1e25c2ad6d7690dc29cc53b1d"
@@ -1142,7 +1146,7 @@ uuid = "02c8fc9c-b97f-50b9-bbe4-9be30ff0a78a"
 version = "2.9.10+3"
 
 [[XSLT_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Libgcrypt_jll", "Pkg", "XML2_jll"]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Libgcrypt_jll", "Libgpg_error_jll", "Pkg", "XML2_jll"]
 git-tree-sha1 = "2b3eac39df218762d2d005702d601cd44c997497"
 uuid = "aed1982a-8fda-507f-9586-7b0439959a61"
 version = "1.1.33+4"
