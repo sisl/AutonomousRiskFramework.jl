@@ -15,10 +15,12 @@ function scp_fns_gen(obj_fn::Function; use_SAD::Bool = true, check::Bool = true)
   f_fn(arg1) = f_fn_(arg1, args_ref[]...)
 
   # generate dense versions
-  g_fn_ = SAD.jacobian_gen(f_fn_; argnums = 1)
-  h_fn_ = SAD.hessian_gen(f_fn_; argnums = 1)
-  g_fn_dense!(ret, arg1) = (ret[:] = g_fn_(arg1, args_ref[]...)[:]; return)
-  h_fn_dense!(ret, arg1) = (ret[:, :] = h_fn_(arg1, args_ref[]...); return)
+  if check
+    g_fn_ = SAD.jacobian_gen(f_fn_; argnums = 1)
+    h_fn_ = SAD.hessian_gen(f_fn_; argnums = 1)
+  else
+    g_fn_, h_fn_ = nothing, nothing
+  end
 
   # generate sparse versions
   function g_fn_sad!(ret, arg1)
@@ -49,6 +51,8 @@ function scp_fns_gen(obj_fn::Function; use_SAD::Bool = true, check::Bool = true)
 
   # return the appropriate versions
   if !use_SAD
+    g_fn_dense!(ret, arg1) = (ret[:] = g_fn_(arg1, args_ref[]...)[:]; return)
+    h_fn_dense!(ret, arg1) = (ret[:, :] = h_fn_(arg1, args_ref[]...); return)
     return f_fn, g_fn_dense!, h_fn_dense!, args_ref
   else
     return f_fn, g_fn_sad!, h_fn_sad!, args_ref
@@ -66,7 +70,7 @@ function solve_mpc(
   N::Int = -1, # number of timesteps in the plan
   max_it::Int = 10, # maximum number of SCP iterations
   reg::Union{Tuple{T,T},Vector{T}} = (1e-1, 1e-1), # SCP regularization
-  use_rollout::Bool=false, # whether to use rollout or the linear approx.
+  use_rollout::Bool = false, # whether to use rollout or the linear approx.
   cache::Dict{String,Any} = Dict{String,Any}(), # cache, avoids fn regeneration
   debug::Bool = false, # whether to print debugging info
   debug_plot::Bool = false, # whether to plot the trajectories (for debugging)
@@ -83,7 +87,8 @@ function solve_mpc(
   (size(P_dyn, 2) > 1) && (N = size(P_dyn, 2))
   (U != nothing) && (N = size(U, 2))
   P_dyn = size(P_dyn, 2) == 1 ? repeat(P_dyn, 1, N) : P_dyn
-  X = X == nothing ? repeat(x0, 1, N + 1) :
+  X =
+    X == nothing ? repeat(x0, 1, N + 1) :
     (size(X, 2) == N + 1 ? X : [X, X[:, end - 1]])
   U = U == nothing ? 1e-3 * randn(udim, N) : U
 
@@ -109,8 +114,14 @@ function solve_mpc(
     args_ref[] = (X_prev, U_prev, reg, Ft, ft, params...)
 
 
-    results =
-      Optim.optimize(f_fn, g_fn!, h_fn!, reshape(U_prev, :), Optim.Newton())
+    results = Optim.optimize(
+      f_fn,
+      g_fn!,
+      h_fn!,
+      reshape(U_prev, :),
+      Optim.Newton(),
+      Optim.Options(iterations = 20, time_limit=1.0),
+    )
     U = reshape(results.minimizer, size(U)...)
     if use_rollout
       X = rollout(U, x0, f, fx, fu, X_prev, U_prev)
@@ -138,5 +149,5 @@ function solve_mpc(
       end
     end
   end
-  return [x0 X], U, cache
+  return X, U, cache
 end

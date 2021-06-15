@@ -1,0 +1,8 @@
+fu[1,1]=(u_scale[1]*dt^2)/2.0e+0
+fu[1,2]=0
+fu[2,1]=u_scale[1]*dt
+fu[2,2]=0
+fu[3,1]=((2*u[1]*u_scale[1]^2*dt^4+4*u_scale[1]*x[2]*dt^3)/r)/1.2e+1
+fu[3,2]=(u_scale[2]*dt^2)/2.0e+0
+fu[4,1]=((2*u[1]*u_scale[1]^2*dt^3+3*u_scale[1]*x[2]*dt^2)/r)/3.0e+0
+fu[4,2]=u_scale[2]*dt

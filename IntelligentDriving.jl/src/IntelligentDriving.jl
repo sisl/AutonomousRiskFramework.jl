@@ -1,7 +1,9 @@
 module IntelligentDriving
 
-using LinearAlgebra, Statistics, Printf
+using Random, LinearAlgebra, Statistics, Printf
 using Zygote, Optim, PyCall, Debugger, Documenter
+
+using AutomotiveSimulator
 
 #include(joinpath(@__DIR__, "../../SpAutoDiff.jl/src/SpAutoDiff.jl"))
 #const SAD = SpAutoDiff
@@ -22,6 +24,11 @@ include("utils.jl")
 include("scp.jl")
 include("dynamics.jl")
 
+include("mpc_driver_types.jl")
+include("mpc_driver_utils.jl")
+include("objective_fns.jl")
+include("mpc_driver.jl")
+
 stack = SAD.stack
 
 #export stack, reduce_sum
@@ -29,5 +36,7 @@ stack = SAD.stack
 export scp_fns_gen
 export rollout, linearized_dynamics
 export unicycle_f, unicycle_fx, unicycle_fu
+
+export MPCDriver
 
 end

@@ -1,0 +1,15 @@
+load(eigen)$ load(linearalgebra)$ load(vect)$
+assume(dt > 0)$
+
+v_lon: x[2] + dt * u_scale[1] * u[1]$
+v_lat: x[4] + integrate(v_lon^2 / r + u_scale[2] * u[2], dt, 0, dt);
+p_lon: x[1] + integrate(v_lon, dt, 0, dt);
+p_lat: x[3] + integrate(v_lat, dt, 0, dt);
+
+f: [p_lon, v_lon, p_lat, v_lat]$
+fx: jacobian(f, [x[1], x[2], x[3], x[4]])$
+fu: jacobian(f, [u[1], u[2]])$
+
+with_stdout("output/f_lane.txt", fortran(f));
+with_stdout("output/fx_lane.txt", fortran(fx));
+with_stdout("output/fu_lane.txt", fortran(fu));

@@ -22,7 +22,6 @@ function test()
   xdim, udim, N = 4, 2, 20
   x0 = [0.0, 0.0, 0.0, pi / 2]
   X_prev, U_prev = repeat(x0, 1, N), zeros(udim, N)
-  U = 1e-3 * randn(udim, N)
   P_dyn = repeat(reshape([0.1, 1.0, 1.0], :, 1), 1, N)
 
   Q_diag = repeat([1e0, 1e0, 1e-3, 1e-3], 1, N)

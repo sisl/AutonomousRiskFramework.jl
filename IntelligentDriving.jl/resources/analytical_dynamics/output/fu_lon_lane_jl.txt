@@ -1,0 +1,2 @@
+fu[1,1]=(u_scale[1]*dt^2)/2.0e+0
+fu[2,1]=u_scale[1]*dt
