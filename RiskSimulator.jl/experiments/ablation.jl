@@ -27,26 +27,26 @@ Random.seed!(SEED);
 
 SEEDS = 1:2 # TODO: 10.
 
-function change_noise_disturbance!(sim)
+function change_noise_disturbance!(sim, scenario_key)
     σ0 = 1e-300
 
     # Scenario specific noise
-    if SC == CROSSING 
-        σ = 1
-        σᵥ = 1/10
-    elseif SC == T_HEAD_ON
+    if scenario_key == CROSSING 
         σ = 10
-        σᵥ = 4
-    elseif SC == T_LEFT
+        σᵥ = 2
+    elseif scenario_key == T_HEAD_ON
         σ = 10
-        σᵥ = 1
-    elseif SC == STOPPING
+        σᵥ = 2
+    elseif scenario_key == T_LEFT
+        σ = 10
+        σᵥ = 2
+    elseif scenario_key == STOPPING
         σ = 2
-        σᵥ = σ/100
-    elseif SC == MERGING
-        σ = 2
+        σᵥ = 1e-4
+    elseif scenario_key == MERGING
+        σ = 3
         σᵥ = 1
-    elseif SC == CROSSWALK
+    elseif scenario_key == CROSSWALK
         σ = 2
         σᵥ = 1/10
     end
@@ -60,35 +60,25 @@ function change_noise_disturbance!(sim)
     sim.velocity_noise_sut = Normal(0, σᵥ)
 end
 
-@show SCENARIO
+# scenario_string = get_scenario_string(SC)
 
-SC = STOPPING
-scenario = get_scenario(SC)
-scenario_string = get_scenario_string(SC)
-
-# state_proxy = :distance # :distance, :rate, :actual, :none
-# which_solver = :mcts
-# use_nn_obs_model = false
-# adjust_noise = true
-# learned_solver = :ppo
-# use_learned_rollout = false
-
-
-system = IntelligentDriverModel(v_des=12.0)
-system2 = PrincetonDriver(v_des=12.0)
+# Get fresh copies of the SUTs
+SUT = () -> IntelligentDriverModel(v_des=12.0)
+SUT2 = () -> PrincetonDriver(v_des=12.0)
 
 
 function run_learned_rollout_phase(system,
-                                   scenario,
+                                   scenario_key,
                                    seed,
                                    use_nn_obs_model,
                                    state_proxy,
                                    learned_solver,
                                    adjust_noise)
     @info "Running learned rollout phase..."
+    scenario = get_scenario(scenario_key)
     learned_planner = setup_ast(sut=system, scenario=scenario, seed=seed,
         nnobs=use_nn_obs_model, state_proxy=state_proxy, which_solver=learned_solver,
-        noise_adjustment=adjust_noise ? change_noise_disturbance! : nothing)
+        noise_adjustment=adjust_noise ? sim->change_noise_disturbance!(sim,scenario_key) : nothing)
     search!(learned_planner)
     learned_fail_metrics = failure_metrics(learned_planner)
     @show learned_fail_metrics
@@ -98,7 +88,7 @@ end
 
 
 function run_sut(system,
-                  scenario,
+                  scenario_key,
                   seeds,
                   include_rate_reward,
                   use_nn_obs_model,
@@ -108,8 +98,10 @@ function run_sut(system,
                   use_learned_rollout)
 
     if use_learned_rollout
-        learned_rollout = run_learned_rollout_phase(system, scenario, first(seeds), use_nn_obs_model, state_proxy, :ppo, adjust_noise)
+        learned_rollout = run_learned_rollout_phase(system, scenario_key, first(seeds), use_nn_obs_model, state_proxy, :ppo, adjust_noise)
     end
+
+    scenario = get_scenario(scenario_key)
 
     failure_metrics_vector::Vector{FailureMetrics} = []
     planner = nothing
@@ -117,7 +109,7 @@ function run_sut(system,
         planner = setup_ast(sut=system, scenario=scenario, seed=seed,
             nnobs=use_nn_obs_model, state_proxy=state_proxy,
             which_solver=which_solver,
-            noise_adjustment=adjust_noise ? change_noise_disturbance! : nothing,
+            noise_adjustment=adjust_noise ? sim->change_noise_disturbance!(sim,scenario_key) : nothing,
             rollout=use_learned_rollout ? learned_rollout : RiskSimulator.AST.rollout,
             use_potential_based_shaping=include_rate_reward
         )
@@ -130,7 +122,7 @@ function run_sut(system,
     end
     # Save last planner.
     @info "Saving..."
-    # save_planner(planner, system, scenario, seeds, use_nn_obs_model, state_proxy, which_solver, adjust_noise, use_learned_rollout)
+    # save_planner(planner, system, scenario_key, seeds, use_nn_obs_model, state_proxy, which_solver, adjust_noise, use_learned_rollout)
     @info mean(failure_metrics_vector)
 
     # TODO: Print to file.
@@ -142,7 +134,7 @@ end
 
 function save_planner(planner,
                       system,
-                      scenario,
+                      scenario_key,
                       seed,
                       use_nn_obs_model,
                       state_proxy,
@@ -151,7 +143,7 @@ function save_planner(planner,
                       use_learned_rollout)
 
     # metrics
-    filename = join([typeof(system), SC, "seed$seed", "obs-$use_nn_obs_model", "state-proxy-$state_proxy", which_solver, "adjnoise-$adjust_noise", "rollout-$use_learned_rollout"], ".")
+    filename = join([typeof(system), scenario_key, "seed$seed", "obs-$use_nn_obs_model", "state-proxy-$state_proxy", which_solver, "adjnoise-$adjust_noise", "rollout-$use_learned_rollout"], ".")
     save("metrics.$filename.jld", "metrics", planner.mdp.metrics)
 
     # dataset

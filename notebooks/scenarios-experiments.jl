@@ -137,7 +137,7 @@ md"""
 which_solver = :mcts
 
 # ╔═╡ c741297a-bd52-45db-b0da-4b1441af8470
-use_nn_obs_model = false
+use_nn_obs_model = true
 
 # ╔═╡ e7945ae2-a67c-4ca5-9b62-3dc3f6e5e95f
 adjust_noise = true
@@ -178,7 +178,7 @@ md"""
 """
 
 # ╔═╡ 74276517-e275-4e3b-9be0-968961d413cc
-use_learned_rollout = false
+use_learned_rollout = true
 
 # ╔═╡ a84a95cc-3e99-405a-aa40-133b26ea5f58
 begin

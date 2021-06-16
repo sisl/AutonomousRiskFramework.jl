@@ -61,7 +61,7 @@ end
 
 
 function get_XIDM_template()
-    XIDM_template = Tint_TIDM_template
+    XIDM_template = deepcopy(Tint_TIDM_template)
     XIDM_template.goals[7] = [5,6]
     XIDM_template.intersection_enter_loc[7] = copy(XIDM_template.intersection_enter_loc[6])
     XIDM_template.intersection_exit_loc[7] = copy(XIDM_template.intersection_exit_loc[6])
