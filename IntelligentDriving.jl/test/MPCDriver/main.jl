@@ -21,7 +21,7 @@ scene = Scene([
     :bob,
   ),
   Entity(
-    VehicleState(VecSE2(10.0, -w, 0.0), roadway, 15.0),
+    VehicleState(VecSE2(25.0, -w, 0.0), roadway, 15.0),
     VehicleDef(),
     :charlie,
   ),
@@ -55,6 +55,22 @@ models = Dict{Symbol,DriverModel}(
 set_desired_speed!(models[:alice], 12.0)
 set_desired_speed!(models[:bob], 12.0)
 set_desired_speed!(models[:charlie], 15.0)
+
+# test track_longitudinal! #####################################################
+#ego, oth = models[:charlie], models[:alice]
+#ego_ent = filter(x -> x.id == :charlie, collect(scene))[1]
+#oth_ent = filter(x -> x.id == :alice, collect(scene))[1]
+#v_ego, v_oth = velf(ego_ent).s, velf(oth_ent).s
+#
+#track_longitudinal!(
+#  ego,
+#  v_ego,
+#  v_oth,
+#  get_frenet_relative_position(oth_ent, ego_ent, roadway).Δs,
+#)
+#println()
+#display(models[:charlie].a_lon)
+#display(models[:charlie].a_lat)
 
 scenes = simulate(scene, roadway, models, nticks, timestep)
 #frames = render_frames(scenes, roadway)

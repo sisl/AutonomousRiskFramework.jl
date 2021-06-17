@@ -53,6 +53,34 @@ function AutomotiveSimulator.observe!(
   driver
 end
 
+function AutomotiveSimulator.track_longitudinal!(
+  driver::MPCDriver,
+  v_ego::Float64,
+  v_oth::Float64,
+  headway::Float64,
+)
+  x0 = [0.0, v_ego, 0.0, 0.0] # assume we're in the center of the lane
+  x_other = [x0[1] + headway, v_oth, 0.0, 0.0]
+  other_trajs = [fixed_speed_predict_trajectory(x_other, driver.N, driver.dt)]
+  X_ref = fixed_speed_predict_trajectory(
+    [x0[1], driver.v_ref, 0, 0],
+    driver.N,
+    driver.dt,
+  )
+  U_ref = zeros(2, driver.N)
+  Q_diag = repeat([1e-5, 3e-1, 1e0, 1e0], 1, driver.N)
+  R_diag = repeat(1e-2 * ones(2), 1, driver.N)
+
+  params = Q_diag, R_diag, X_ref, U_ref, other_trajs
+
+  # compute the MPC plan and extract control
+  @time X, U = solve_mpc!(driver, x0, params...)
+  u0 = U[:, 1]
+  driver.a_lon = u0[1]
+  #driver.a_lat = 0.0 # do not affect lateral velocity
+  
+  return driver
+end
 # overriding functions required by AutomotiveSimulator #########################
 Base.rand(rng::AbstractRNG, m::MPCDriver) = LatLonAccel(m.a_lat, m.a_lon)
 
