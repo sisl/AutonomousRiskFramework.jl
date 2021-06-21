@@ -113,7 +113,6 @@ function solve_mpc(
     Ft, ft = linearized_dynamics(x0, f, fx, fu, X_prev, U_prev)
     args_ref[] = (X_prev, U_prev, reg, Ft, ft, params...)
 
-
     results = Optim.optimize(
       f_fn,
       g_fn!,

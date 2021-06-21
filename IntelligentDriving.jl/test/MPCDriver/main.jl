@@ -49,7 +49,7 @@ models = Dict{Symbol,DriverModel}(
     ProportionalLaneTracker(), # lateral model
     IntelligentDriverModel(), # longitudinal model
   ),
-  :charlie => ID.MPCDriver(),
+  :charlie => ID.MPCDriver(ID.track_reference_avoid_others_obj_fn, "lon_lane"),
 )
 
 set_desired_speed!(models[:alice], 12.0)

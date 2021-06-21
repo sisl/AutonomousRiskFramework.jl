@@ -32,7 +32,11 @@ end
 function solve_mpc!(driver::MPCDriver, x0::Vector{Float64}, params...)
   @assert driver.mpc_problem != nothing
   mpc_problem = driver.mpc_problem
-  P_dyn = repeat([driver.dt, 1.0, 1.0, 1e20], 1, driver.N)
+  if driver.dynamics == "lon_lane"
+    P_dyn = repeat([driver.dt, 1.0, 1e20], 1, driver.N)
+  else
+    P_dyn = repeat([driver.dt, 1.0, 1.0, 1e20], 1, driver.N)
+  end
   X_prev, U_prev = mpc_problem.X, mpc_problem.U
   X, U, cache = solve_mpc(
     driver.dynamics,

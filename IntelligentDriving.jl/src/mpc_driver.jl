@@ -36,10 +36,14 @@ function AutomotiveSimulator.observe!(
   Q_diag = repeat([1e-5, 3e-1, 3e-1, 1e-1], 1, driver.N)
   R_diag = repeat(1e-1 * ones(2), 1, driver.N)
 
+  if driver.dynamics == "lon_lane"
+    x0, X_ref, U_ref = x0[1:2], X_ref[1:2, :], U_ref[1:1, :]
+    Q_diag, R_diag = Q_diag[1:2, :], R_diag[1:1, :]
+  end
   params = Q_diag, R_diag, X_ref, U_ref, other_trajs
 
   # compute the MPC plan and extract control
-  @time X, U = solve_mpc!(driver, x0, params...)
+  X, U = solve_mpc!(driver, x0, params...)
   u0 = U[:, 1]
   driver.a_lon = u0[1]
   driver.a_lat = length(u0) == 2 ? u0[2] : 0.0 # allow longitudinal dynamics only
@@ -71,10 +75,14 @@ function AutomotiveSimulator.track_longitudinal!(
   Q_diag = repeat([1e-5, 3e-1, 1e0, 1e0], 1, driver.N)
   R_diag = repeat(1e-2 * ones(2), 1, driver.N)
 
+  if driver.dynamics == "lon_lane"
+    x0, X_ref, U_ref = x0[1:2], X_ref[1:2, :], U_ref[1:1, :]
+    Q_diag, R_diag = Q_diag[1:2, :], R_diag[1:1, :]
+  end
   params = Q_diag, R_diag, X_ref, U_ref, other_trajs
 
   # compute the MPC plan and extract control
-  @time X, U = solve_mpc!(driver, x0, params...)
+  X, U = solve_mpc!(driver, x0, params...)
   u0 = U[:, 1]
   driver.a_lon = u0[1]
   #driver.a_lat = 0.0 # do not affect lateral velocity

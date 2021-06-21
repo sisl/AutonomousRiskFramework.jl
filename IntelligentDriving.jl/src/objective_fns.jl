@@ -11,7 +11,11 @@ function track_reference_avoid_others_obj_fn(X, U, params...)
 
   # avoid other agents in the scene
   dists_s = [(X[1, :] - other_traj[1, :]) .^ 2 for other_traj in other_trajs]
-  dists_t = [(X[3, :] - other_traj[3, :]) .^ 2 for other_traj in other_trajs]
+  if size(X, 1) > 2
+    dists_t = [(X[3, :] - other_traj[3, :]) .^ 2 for other_traj in other_trajs]
+  else
+    dists_t = [(zeros(size(X, 2)) - other_traj[3, :]) .^ 2 for other_traj in other_trajs]
+  end
   dist_penalty = sum(
     sum(exp.(-dist_s ./ 4.0 - dist_t))
     for (dist_s, dist_t) in zip(dists_s, dists_t)
