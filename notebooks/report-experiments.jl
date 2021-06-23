@@ -25,6 +25,9 @@ begin
 	using Distributions
 end
 
+# ╔═╡ 53b7e517-056d-410c-967b-44ae5a759a9e
+using LaTeXStrings, Plots, ColorSchemes
+
 # ╔═╡ e738e8ec-b31c-4dc7-9f77-71a728743d86
 AutomotiveVisualization.colortheme["background"] = colorant"white";
 
@@ -172,6 +175,12 @@ end
 # ╔═╡ bfc678f4-744b-4f3a-bbf1-bcfdbb2d718a
 learned_rollout = (mdp, s, d) -> ppo_rollout(mdp, s, d, learned_planner)
 
+# ╔═╡ 2506ff19-144d-4ca8-9e4c-f9dcc1b47bf4
+RiskSimulator.set_state_proxy(:actual)
+
+# ╔═╡ 61ffdbb2-ad0d-4165-9240-dba5088c030a
+RiskSimulator.GrayBox.state(learned_planner.mdp.sim)
+
 # ╔═╡ fc0e2a65-5257-4a5b-b3c9-2e9573f3fb1d
 md"""
 ### Efficient MCTS with learned rollouts
@@ -250,26 +259,91 @@ begin
 	p_risk = plot_risk(metrics; mean_y=3.33, var_y=3.25, cvar_y=2.1, α_y=2.8)
 end
 
+# ╔═╡ 3f46a418-b031-4949-9658-07c59b5b0b23
+typeof(𝒟)
+
 # ╔═╡ bfdec09b-9c4a-4883-8c27-f8633d9b40f9
 begin
 	𝒟2 = planner2.mdp.dataset
 
 	# Plot cost distribution.
 	metrics2 = risk_assessment(𝒟2, α)
-	p_risk2 = plot_risk(metrics2; mean_y=3.33, var_y=3.25, cvar_y=2.1, α_y=2.8)
+	p_risk2 = plot_risk(metrics2; mean_y=2.33, var_y=2.25, cvar_y=1.1, α_y=1.8)
+end
+
+# ╔═╡ 434b3688-3d8d-4edc-8bee-454a9be2a968
+function plot_combined_cost(metrics_set, labels; mean_y=0.036, var_y=0.02, cvar_y=0.01, α_y=0.017, show_mean=false, show_cvar=true, show_worst=false)
+	pyplot()
+	RiskSimulator.use_latex_fonts()
+
+	n = length(metrics_set)
+	p = nothing	
+	
+	for i in 1:n
+		metrics = metrics_set[i]
+		label = labels[i]
+	
+		Z = metrics.Z
+		color = get(ColorSchemes.viridis, 1 - i/n) # reverse
+		histogram_func = i==1 ? histogram : histogram!
+		p = histogram_func(Z,
+			color=color,
+			label=label,
+			alpha=0.5,
+			reuse=false,
+			xlabel="cost",
+			ylabel="density",
+			framestyle=:box,
+			normalize=:pdf, size=(600, 300))
+		font_size = 11
+
+		if show_mean
+			# Expected cost value
+			𝔼 = metrics.mean
+			plot!([𝔼, 𝔼], [0, mean_y], color="black", linewidth=2, label=nothing)
+			annotate!([(𝔼, mean_y*1.04, text(L"\mathbb{E}[{\operatorname{cost}}]", font_size))])
+		end
+
+		worst = metrics.worst
+		if show_worst
+			# Worst case
+			plot!([worst, worst], [0, var_y], color="black", linewidth=2, label=nothing)
+			annotate!([(worst, var_y*1.08, text(L"\operatorname{worst\ case}", font_size))])
+		end
+		
+		if show_cvar
+			# Conditional Value at Risk (CVaR)
+			cvar = metrics.cvar
+			plot!([cvar, cvar], [0, cvar_y], color=color, linewidth=2, label=nothing)
+			annotate!([(cvar, cvar_y*1.15, text("CVaR\n($label)", font_size))])
+		end
+
+		RiskSimulator.zero_ylims()
+		# p = xlims!(xlims()[1], worst+0.1worst)
+	end
+
+	return p
+end
+
+# ╔═╡ 86c933b1-368f-446f-b1fa-77eb5f1b2d31
+plot_combined_cost([metrics, metrics2], ["IDM", "Princeton"]; mean_y=3.33, var_y=3.25, cvar_y=2.1, α_y=2.8)
+
+# ╔═╡ 757e7c71-ddf2-4fc1-9b85-0f685f0cf990
+function inverse_max_likelihood(failure_metrics_vector_set)
+	return 1/maximum(map(fmv->maximum(map(fm->exp(fm.highest_loglikelihood), fmv)), failure_metrics_vector_set)) # 1/max(p)
 end
 
 # ╔═╡ de7c77a0-cf88-4484-867d-2fd3680e34ee
 begin
 	𝐰 = ones(7)
-	𝐰[end] = 1/max(maximum(map(fm->exp(fm.highest_loglikelihood), failure_metrics_vector)), maximum(map(fm->exp(fm.highest_loglikelihood), failure_metrics_vector2))) # 1/max(p)
+	𝐰[end] = inverse_max_likelihood([failure_metrics_vector, failure_metrics_vector2]) 
 
 	areas = overall_area([planner, planner2], weights=𝐰, α=α)
 	area_idm = round(areas[1], digits=5)
 	area_princeton = round(areas[2], digits=5)
 	p_metrics = plot_overall_metrics([planner, planner2],
-		["IDM ($area_idm)", "Princeton ($area_princeton)"]; 
-		weights=𝐰, α=α, title="Overall Risk:\n$scenario_string")
+		["IDM ($area_idm)", "Princeton ($area_princeton)", "Third"]; 
+		weights=𝐰, α=α, title="Risk area: $scenario_string")
 end
 
 # ╔═╡ c1bf67e9-cfee-486b-8db9-9f7f0e40125b
@@ -327,6 +401,8 @@ PlutoUI.TableOfContents()
 # ╠═1e2f3595-6b02-4c92-bffa-22f64b740bbc
 # ╠═2dbec591-d445-4ff1-a8bd-638314ac149e
 # ╠═bfc678f4-744b-4f3a-bbf1-bcfdbb2d718a
+# ╠═2506ff19-144d-4ca8-9e4c-f9dcc1b47bf4
+# ╠═61ffdbb2-ad0d-4165-9240-dba5088c030a
 # ╟─fc0e2a65-5257-4a5b-b3c9-2e9573f3fb1d
 # ╠═74276517-e275-4e3b-9be0-968961d413cc
 # ╠═a84a95cc-3e99-405a-aa40-133b26ea5f58
@@ -335,7 +411,12 @@ PlutoUI.TableOfContents()
 # ╠═d35ce4ee-9a38-4c6a-8ab0-78bd2ccdc249
 # ╟─8e606b42-b881-44ff-a3ac-3760bc699e2e
 # ╠═2f016a52-87b0-42dd-ab0b-af1f31b9eb79
+# ╠═3f46a418-b031-4949-9658-07c59b5b0b23
 # ╠═bfdec09b-9c4a-4883-8c27-f8633d9b40f9
+# ╠═53b7e517-056d-410c-967b-44ae5a759a9e
+# ╠═434b3688-3d8d-4edc-8bee-454a9be2a968
+# ╠═86c933b1-368f-446f-b1fa-77eb5f1b2d31
+# ╠═757e7c71-ddf2-4fc1-9b85-0f685f0cf990
 # ╠═de7c77a0-cf88-4484-867d-2fd3680e34ee
 # ╟─c1bf67e9-cfee-486b-8db9-9f7f0e40125b
 # ╟─e44b5f2b-faa9-4e7a-956e-702547f54788

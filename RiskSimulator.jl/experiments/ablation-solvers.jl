@@ -15,7 +15,7 @@ function run_ablation_solvers(system)
         for which_solver in [:random, :mcts]
             count += 1
             @show count, seeds, scenario_key, typeof(system), which_solver
-            run_sut(system, scenario_key, seeds, include_rate_reward, use_nnobs, state_proxy, which_solver, adjust_noise, use_learned_rollout)
+            @time run_sut(system, scenario_key, seeds, include_rate_reward, use_nnobs, state_proxy, which_solver, adjust_noise, use_learned_rollout)
         end
     end
 end

@@ -97,3 +97,22 @@ Base.rand(rng::AbstractRNG, m::MPCDriver) = LatLonAccel(m.a_lat, m.a_lon)
 #
 #Distributions.logpdf(driver::MPCDriver, a::LatLonAccel) =
 #  logpdf(driver.mlat, a.a_lat) * logpdf(driver.mlon, a.a_lon)
+
+
+# Computes the time it takes to cover a given distance, assuming the current acceleration of the provided idm
+function AdversarialDriving.time_to_cross_distance_const_acc(veh::Entity, mpc::MPCDriver, ds::Float64)
+    v = vel(veh)
+    d = v^2 + 2*mpc.a_lon*ds
+    d < 0 && return 0 # We have already passed the point we are trying to get to
+    if isnothing(mpc.v_ref)
+        vf = sqrt(d)
+    else
+        vf = min(mpc.v_ref, sqrt(d))
+    end
+    2*ds/(vf + v)
+end
+
+function Base.rand(rng::AbstractRNG, model, mpc::MPCDriver)
+    na = model.next_action
+    BlinkerVehicleControl(mpc.a_lon, na.da, na.toggle_goal, na.toggle_blinker, na.noise)
+end

@@ -1,23 +1,15 @@
 # Ablation studies
-using Distributed
+using Revise
+using RiskSimulator
+using IntelligentDriving
+using POMDPStressTesting
+using AutomotiveSimulator
+using AutomotiveVisualization
+using AdversarialDriving
+using Random
+using Distributions
+using JLD
 
-num_threads = 4
-if nprocs() < num_threads
-    addprocs(num_threads - nprocs())
-end
-
-
-@everywhere using Revise
-@everywhere using RiskSimulator
-@everywhere using POMDPStressTesting
-@everywhere using AutomotiveSimulator
-@everywhere using AutomotiveVisualization
-@everywhere using AdversarialDriving
-@everywhere using Random
-@everywhere using Distributions
-@everywhere using JLD
-
-@everywhere begin
 
 AutomotiveVisualization.colortheme["background"] = colorant"white";
 AutomotiveVisualization.set_render_mode(:fancy);
@@ -25,7 +17,7 @@ AutomotiveVisualization.set_render_mode(:fancy);
 SEED = 1000
 Random.seed!(SEED);
 
-SEEDS = 1:2 # TODO: 10.
+PLANNERS = Dict()
 
 function change_noise_disturbance!(sim, scenario_key)
     σ0 = 1e-300
@@ -65,6 +57,12 @@ end
 # Get fresh copies of the SUTs
 SUT = () -> IntelligentDriverModel(v_des=12.0)
 SUT2 = () -> PrincetonDriver(v_des=12.0)
+SUT3 = () -> begin
+    obj_fn = IntelligentDriving.track_reference_avoid_others_obj_fn
+    m = MPCDriver(obj_fn, "lon_lane")
+    set_desired_speed!(m, 12.0)
+    return m
+end
 
 
 function run_learned_rollout_phase(system,
@@ -117,15 +115,18 @@ function run_sut(system,
         # Run AST.
         search!(planner)
         fail_metrics = failure_metrics(planner)
+        @show fail_metrics
         push!(failure_metrics_vector, fail_metrics)
 
+        # Save global planner.
+        @info "Saving..."
+        save_planner(planner, system, scenario_key, seed, use_nn_obs_model, state_proxy, which_solver, adjust_noise, use_learned_rollout)
     end
-    # Save last planner.
-    @info "Saving..."
+    # # Save last planner.
+    # @info "Saving..."
     # save_planner(planner, system, scenario_key, seeds, use_nn_obs_model, state_proxy, which_solver, adjust_noise, use_learned_rollout)
     @info mean(failure_metrics_vector)
 
-    # TODO: Print to file.
     latex = RiskSimulator.POMDPStressTesting.latex_metrics(mean(failure_metrics_vector), std(failure_metrics_vector))
     println(latex)
     return latex
@@ -142,12 +143,14 @@ function save_planner(planner,
                       adjust_noise,
                       use_learned_rollout)
 
+    global PLANNERS
+    planner_key = join([typeof(system), scenario_key, "seed$seed"], ".")
+    PLANNERS[planner_key] = planner
+
     # metrics
-    filename = join([typeof(system), scenario_key, "seed$seed", "obs-$use_nn_obs_model", "state-proxy-$state_proxy", which_solver, "adjnoise-$adjust_noise", "rollout-$use_learned_rollout"], ".")
-    save("metrics.$filename.jld", "metrics", planner.mdp.metrics)
+    # filename = join([typeof(system), scenario_key, "seed$seed", "obs-$use_nn_obs_model", "state-proxy-$state_proxy", which_solver, "adjnoise-$adjust_noise", "rollout-$use_learned_rollout"], ".")
+    # save("metrics.$filename.jld", "metrics", planner.mdp.metrics)
 
     # dataset
-    save("dataset.$filename.jld", "metrics", planner.mdp.dataset)
-end
-
+    # save("dataset.$filename.jld", "metrics", planner.mdp.dataset)
 end

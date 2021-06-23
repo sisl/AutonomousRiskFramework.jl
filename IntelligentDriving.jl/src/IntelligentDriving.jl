@@ -4,6 +4,7 @@ using Random, LinearAlgebra, Statistics, Printf
 using Zygote, Optim, PyCall, Debugger, Documenter
 
 using AutomotiveSimulator
+using AdversarialDriving
 
 #include(joinpath(@__DIR__, "../../SpAutoDiff.jl/src/SpAutoDiff.jl"))
 #const SAD = SpAutoDiff

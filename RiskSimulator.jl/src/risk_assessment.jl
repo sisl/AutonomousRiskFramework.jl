@@ -56,8 +56,19 @@ CVaR(𝒞) = mean(𝒞)
 
 
 # TODO: Rename to `risk_metrics`?
-function risk_assessment(𝒟, α=0.2)
+risk_assessment(planner, α=0.2) = risk_assessment(planner.mdp.dataset, α)
+function risk_assessment(𝒟::Vector, α=0.2)
     metrics = RiskMetrics(cost_data(𝒟), α)
+    return metrics
+end
+
+
+"""
+Combine datasets from different runs then collect risk metrics.
+"""
+function collect_metrics(planners, α)
+    dataset = vcat(map(planner->planner.mdp.dataset, planners)...)
+    metrics = risk_assessment(dataset, α)
     return metrics
 end
 

@@ -22,6 +22,9 @@ begin
 	using RiskSimulator
 end
 
+# ╔═╡ b91adfce-0482-4ba9-9923-36447d3d5be4
+using IntelligentDriving
+
 # ╔═╡ 1b064105-d928-4832-a7df-c89d07a4e048
 using PlutoUI
 
@@ -61,11 +64,32 @@ models = Dict{Int, AutomotiveSimulator.DriverModel}(
     2 => USE_TIDM ? TIDM(XIDM_template) : IntelligentDriverModel(), 
 )
 
+# ╔═╡ c120e7b5-8e94-4a3b-a6ce-b85197229722
+# begin
+# 	models[1].idm = MPCDriver()
+# 	set_desired_speed!(models[1].idm, 12.0)
+# end
+
 # ╔═╡ a7e2f3a9-7326-4fd5-8577-3fcf30f08f3f
 begin
 	timestep = 0.1
 	nticks = 80
 end
+
+# ╔═╡ 78413728-8e4d-4f5f-a3bf-96105661b213
+# Computes the time it takes to cover a given distance, assuming the current acceleration of the provided idm
+function AdversarialDriving.time_to_cross_distance_const_acc(veh::Entity, mpc::MPCDriver, ds::Float64)
+    v = vel(veh)
+    d = v^2 + 2*mpc.a_lon*ds
+    d < 0 && return 0 # We have already passed the point we are trying to get to
+    if isnothing(mpc.v_ref)
+		vf = sqrt(d)
+	else
+		vf = min(mpc.v_ref, sqrt(d))
+	end
+    2*ds/(vf + v)
+end
+
 
 # ╔═╡ becc1d57-878b-4c0a-93a1-cec012a7a7ae
 begin
@@ -82,7 +106,7 @@ dt = 1
 @bind sim_t Slider(1:dt:length(scenesX))
 
 # ╔═╡ 097f734a-15df-42d0-9619-1432e5b78554
-render([roadwayX, scenesX[sim_t]])
+render([roadwayX, scenesX[sim_t], (VelocityArrow(entity=x) for x in scenesX[sim_t])...])
 
 # ╔═╡ 7fb572f5-b825-405d-b48a-461ff2d29b3a
 function distance(scene)
@@ -121,7 +145,7 @@ end;
 @bind sim_tT Slider(1:dt:length(scenesT))
 
 # ╔═╡ e3d4acbd-373c-4998-ae04-34dd04a8179a
-render([roadwayT, scenesT[sim_tT]])
+render([roadwayT, scenesT[sim_tT], (VelocityArrow(entity=x) for x in scenesT[sim_tT])...])
 
 # ╔═╡ d7678894-f592-401a-89ef-986dafe3ca8e
 md"""
@@ -140,7 +164,7 @@ end;
 @bind sim_tTT Slider(1:dt:length(scenesTT))
 
 # ╔═╡ 4e5e67a7-a615-4598-8c5b-28201b178d92
-render([roadwayT, scenesTT[sim_tTT]])
+render([roadwayT, scenesTT[sim_tTT], (VelocityArrow(entity=x) for x in scenesTT[sim_tTT])...])
 
 # ╔═╡ e5cac1ca-306b-45fb-ad4f-6bea83044acc
 md"""
@@ -178,7 +202,7 @@ struct RenderableCircle
 end
 
 # ╔═╡ 0fd123ae-6dd4-4a0d-bd5d-ec2eb4af9757
-obstacle = RenderableCircle(VecE2(6.05r,0), 1/2, RGB(0.8,0.2,0.2));
+obstacle = RenderableCircle(VecE2(5.0r,0), 1/2, RGB(0.8,0.2,0.2));
 
 # ╔═╡ d7f68a57-b800-4685-9224-ede9b4e4740c
 function AutomotiveVisualization.add_renderable!(rendermodel::RenderModel, circle::RenderableCircle)
@@ -192,7 +216,7 @@ function AutomotiveVisualization.add_renderable!(rendermodel::RenderModel, circl
 end
 
 # ╔═╡ b04e403d-590b-4448-8383-c1fe81332f31
-render([roadwayHW, scenesHW[sim_tHW], obstacle])
+render([roadwayHW, scenesHW[sim_tHW], obstacle, (VelocityArrow(entity=x) for x in scenesHW[sim_tHW])...])
 
 # ╔═╡ 462f0e84-cfe1-4ca5-b8fc-5ce9999303d0
 md"""
@@ -282,13 +306,14 @@ end;
 @bind sim_tCW Slider(1:dt:length(scenesCW))
 
 # ╔═╡ a06a35d3-6611-4740-b43c-2c21084c4cc8
-render([roadwayCW, crosswalk, scenesCW[sim_tCW]])
+render([roadwayCW, crosswalk, scenesCW[sim_tCW], (VelocityArrow(entity=x) for x in scenesCW[sim_tCW])...])
 
 # ╔═╡ f33ef352-c881-4788-9957-db843d07d3f1
 PlutoUI.TableOfContents()
 
 # ╔═╡ Cell order:
 # ╠═576e7079-56d3-45f9-a4da-3bccde50455b
+# ╠═b91adfce-0482-4ba9-9923-36447d3d5be4
 # ╠═fa36e749-a4fc-4d20-a7b2-ee8c31de696f
 # ╠═a044340e-beaa-4953-8914-1e35ee4e3a81
 # ╠═8ef9e8b2-e8d7-451d-90e2-f6350aeae46e
@@ -298,7 +323,9 @@ PlutoUI.TableOfContents()
 # ╠═6b79e36c-89e9-4cab-9edd-d090cdc23f4b
 # ╠═cc54e9f3-d3db-4a14-b7cf-3fbdd2de862f
 # ╠═0508608b-d3bc-4ae9-ac5b-62eec7d22018
+# ╠═c120e7b5-8e94-4a3b-a6ce-b85197229722
 # ╠═a7e2f3a9-7326-4fd5-8577-3fcf30f08f3f
+# ╠═78413728-8e4d-4f5f-a3bf-96105661b213
 # ╠═becc1d57-878b-4c0a-93a1-cec012a7a7ae
 # ╠═1b064105-d928-4832-a7df-c89d07a4e048
 # ╠═38fe26a3-5eef-41ce-be19-3dd6ef9b5ea4

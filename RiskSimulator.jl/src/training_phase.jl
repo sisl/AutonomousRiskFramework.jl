@@ -16,8 +16,12 @@ function training_phase(simx::AutoRiskSim; seed=0, epochs=20)
     for epoch in 1:epochs
         for idm_scene in idm_scenes
             scene = copy(idm_scene)
-            noisy_scene!(scene, simx.roadway, sutid(simx.problem), true)
-            push!(scenes, scene)
+            try
+                noisy_scene!(scene, simx.roadway, sutid(simx.problem), true)
+                push!(scenes, scene)
+            catch err
+                @warn err
+            end
         end
     end
 

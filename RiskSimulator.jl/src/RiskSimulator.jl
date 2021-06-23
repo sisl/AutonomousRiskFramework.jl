@@ -1,5 +1,6 @@
 module RiskSimulator # Naming? TODO: RiskAssessment?
 
+using IntelligentDriving
 using ObservationModels
 using AutomotiveSimulator
 using AutomotiveVisualization
@@ -73,6 +74,7 @@ export Simulator,
        CVaR,
        worst_case,
        risk_assessment,
+       collect_metrics,
        cost_data,
        distance_data,
        latex_metrics,

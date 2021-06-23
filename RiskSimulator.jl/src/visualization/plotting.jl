@@ -41,6 +41,7 @@ function plot_cost_distribution(Z)
         label=nothing,
         alpha=0.5,
         reuse=false,
+        framestyle=:box,
         xlabel=L"\operatorname{cost}",
         ylabel=L"\operatorname{density}",
         normalize=:pdf, size=(600, 300))
@@ -257,7 +258,10 @@ end
 
 function plot_metrics(metricvec::Vector, metricnames::Vector, labels::Vector)
     pyplot() # polar plots only work well with PyPlot
-    disable_latex_fonts() # publication worthy.
+
+    # disable_latex_fonts()
+    use_latex_fonts() # publication worthy.
+
     n = length(metricvec)
     local p
     for i in 1:n
@@ -285,6 +289,7 @@ end
 
 risk_area(plannervec::Vector; weights=ones(4)) = [localarea(m) for m in collect_risk_metrics(plannervec; weights=weights)[1]]
 overall_area(plannervec::Vector; weights=ones(4+3), α=α, log_likelihood=false) = [localarea(m) for m in collect_overall_metrics(plannervec; weights=weights, α=α, log_likelihood=log_likelihood)[1]]
+overall_area(planner; weights=ones(4+3), α=α, log_likelihood=false) = [localarea(m) for m in collect_overall_metrics([planner]; weights=weights, α=α, log_likelihood=log_likelihood)[1]]
 
 function localarea(m::Vector)
     A = 0

@@ -44,7 +44,11 @@ function AdversarialDriving.step_scene(mdp::AdversarialDriving.AdversarialDrivin
     for (i, veh) in enumerate(s)
         m = model(mdp, veh.id)
         observe!(m, s, mdp.roadway, veh.id)
-        a = rand(rng, m)
+        if typeof(m.idm) <: MPCDriver
+            a = rand(rng, m, m.idm)
+        else
+            a = rand(rng, m)
+        end
         bv = Entity(propagate(veh, a, mdp.roadway, mdp.dt), veh.def, veh.id)
         !end_of_road(bv, mdp.roadway, mdp.end_of_road) && push!(entities, bv)
     end

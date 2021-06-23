@@ -226,6 +226,10 @@ function GrayBox.state(sim::AutoRiskSim)
     end
 end
 
+function set_state_proxy(state_proxy)
+    global STATE_PROXY
+    STATE_PROXY = state_proxy
+end
 
 """
 Setup Adaptive Stress Testing
@@ -259,7 +263,7 @@ function setup_ast(;
 
     # Modified logprob from Surrogate probability model
     function logprob(sample, state)
-        if nnobs
+        if nnobs && (!out_of_frame(sim))
             scenes = [state]
             feat, y = preprocess_data(1, scenes);
             logprobs = evaluate_logprob(feat, y, net..., net_params)
@@ -301,11 +305,11 @@ function setup_ast(;
                               estimate_value=rollout,   # rollout policy
                               depth=sim.params.endtime) # tree depth
     elseif which_solver == :ppo
-        solver = PPOSolver(num_episodes=1000, # Doubled.
+        solver = PPOSolver(num_episodes=1000,
                            η=1e-1,
                            episode_length=sim.params.endtime,
                            output_factor=maximum_std(sim),
-                           show_progress=false)
+                           show_progress=true)
     elseif which_solver == :random
         solver = RandomSearchSolver(n_iterations=1000, episode_length=sim.params.endtime)
     else
