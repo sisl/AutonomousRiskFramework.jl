@@ -91,6 +91,62 @@ function plot_risk(metrics; mean_y=0.036, var_y=0.02, cvar_y=0.01, α_y=0.017)
 end
 
 
+function plot_combined_cost(metrics_set, labels; mean_y=0.036, var_y=0.02, cvar_y=0.01, α_y=0.017, show_mean=false, show_cvar=false, show_worst=false)
+    pgfplotsx()
+    use_latex_fonts()
+
+    n = length(metrics_set)
+    p = nothing 
+    
+    for i in 1:n
+        metrics = metrics_set[i]
+        label = labels[i]
+    
+        Z = metrics.Z
+        color = get(ColorSchemes.viridis, 1 - i/n) # reverse
+        histogram_func = i==1 ? histogram : histogram!
+        p = histogram_func(Z,
+            bins=30,
+            color=color,
+            label=label,
+            alpha=0.5,
+            reuse=false,
+            xlabel="cost (closure rate at collision)",
+            ylabel="density",
+            title="cost distribution",
+            framestyle=:box,
+            legend=:topright,
+            normalize=:pdf, size=(600, 300))
+        font_size = 11
+
+        if show_mean
+            # Expected cost value
+            𝔼 = metrics.mean
+            plot!([𝔼, 𝔼], [0, mean_y], color="black", linewidth=2, label=nothing)
+            annotate!([(𝔼, mean_y*1.04, text(L"\mathbb{E}[{\operatorname{cost}}]", font_size))])
+        end
+
+        worst = metrics.worst
+        if show_worst
+            # Worst case
+            plot!([worst, worst], [0, var_y], color="black", linewidth=2, label=nothing)
+            annotate!([(worst, var_y*1.08, text(L"\operatorname{worst\ case}", font_size))])
+        end
+        
+        if show_cvar
+            # Conditional Value at Risk (CVaR)
+            cvar = metrics.cvar
+            plot!([cvar, cvar], [0, cvar_y], color=color, linewidth=2, label=nothing)
+            annotate!([(cvar, cvar_y*1.15, text("\\shortstack{CVaR\\\\($label)}", font_size))])
+        end
+
+        # zero_ylims()
+    end
+
+    return p
+end
+
+
 function plot_failure_distribution(𝒟, key1=:xpos_sut, key2=:ypos_sut)
     failure_samples_x = []
     failure_samples_y = []
@@ -213,11 +269,12 @@ function collect_risk_metrics(metricsvec::Vector; weights=ones(4), label_spacing
     return (M, metricnames)
 end
 
-function collect_overall_metrics(plannervec::Vector; weights=ones(4+3), α=α, log_likelihood=false)
-    planner_metrics, risk_metric_names = collect_risk_metrics([RiskMetrics(cost_data(planner.mdp.dataset), α) for planner in plannervec]; weights=weights[1:4])
-    for i in 1:length(plannervec)
-        planner = plannervec[i]
-        local_fm = failure_metrics(planner)
+
+collect_overall_metrics(plannervec::Vector; weights=ones(4+3), α=α, log_likelihood=false) = collect_overall_metrics(map(planner->planner.mdp.dataset, plannervec), map(planner->planner.mdp.metrics, plannervec), weights=weights, α=α, log_likelihood=log_likelihood)
+function collect_overall_metrics(datasets::Vector, metrics::Vector; weights=ones(4+3), α=α, log_likelihood=false)
+    planner_metrics, risk_metric_names = collect_risk_metrics([RiskMetrics(cost_data(dataset), α) for dataset in datasets]; weights=weights[1:4])
+    for i in 1:length(metrics)
+        local_fm = failure_metrics(metrics[i])
         # How easily were failures found? Higher percentage of episodes, worse (using 1st failure)
         ease_of_failure = (local_fm.num_terminals - local_fm.first_failure) / local_fm.num_terminals
         ll = log_likelihood ? local_fm.highest_loglikelihood : exp(local_fm.highest_loglikelihood)
@@ -225,7 +282,7 @@ function collect_overall_metrics(plannervec::Vector; weights=ones(4+3), α=α, l
         push!(planner_metrics[i], local_fm.failure_rate/100 * weights[5], ease_of_failure * weights[6], ll)
     end
     M = planner_metrics
-    metricnames = vcat(risk_metric_names, "fail-rate", "ease(fail)", "max(log p)")
+    metricnames = vcat(risk_metric_names, "fail-rate", "ease(fail)", log_likelihood ? "max(log p)" : "max(p)")
     return M, metricnames
 end
 
@@ -244,12 +301,13 @@ end
 """
 Polar area plot for combined RiskMetrics and FailureMetrics.
 """
-function plot_overall_metrics(plannervec::Vector, labels::Vector; weights=ones(4+3), α, log_likelihood=false, title="Risk and failure metrics", area=false)
-    M, metricnames = collect_overall_metrics(plannervec; weights=weights, α=α, log_likelihood=log_likelihood)
+plot_polar_risk(plannervec::Vector, labels::Vector; weights=ones(4+3), α, log_likelihood=false, title="Risk and failure metrics", area=false) = plot_polar_risk(map(planner->planner.mdp.dataset, plannervec), map(planner->planner.mdp.metrics, plannervec), labels; weights=weights, α=α, log_likelihood=log_likelihood, title=title, area=area)
+function plot_polar_risk(datasets::Vector, metrics::Vector, labels::Vector; weights=ones(4+3), α, log_likelihood=false, title="Risk and failure metrics", area=false)
+    M, metricnames = collect_overall_metrics(datasets, metrics; weights=weights, α=α, log_likelihood=log_likelihood)
     p = plot_metrics(M, metricnames, labels)
     # Note, `PyPlot.title` necessary when passed back Plots.backend_object
     if area
-        title = string(title, ": ", overall_area(plannervec; weights=weights, α=α, log_likelihood=log_likelihood))
+        title = string(title, ": ", overall_area(datasets, metrics; weights=weights, α=α, log_likelihood=log_likelihood))
     end
     Plots.PyPlot.title(title, fontdict=Dict("fontsize"=>18), pad=15)
     return p
@@ -271,7 +329,10 @@ function plot_metrics(metricvec::Vector, metricnames::Vector, labels::Vector)
 
     # Adjust the polar xtick labels
     obj = Plots.backend_object(p)
-    obj.axes[1].tick_params(pad=11)
+    obj.axes[1].tick_params(pad=20)
+
+    # Increase x/y tick font size
+    Plots.PyPlot.tick_params(axis="both", which="major", labelsize=14)
     return obj
 end
 
@@ -287,8 +348,10 @@ function metric_area_plot(Y, i, n, metricnames, label; first=false)
 end
 
 
+# risk_area(datasets::Vector, metrics::Vector; weights=ones(4)) = [localarea(m) for m in collect_risk_metrics([RiskMetrics(cost_data(dataset), α) for dataset in datasets]; weights=weights)[1]]
 risk_area(plannervec::Vector; weights=ones(4)) = [localarea(m) for m in collect_risk_metrics(plannervec; weights=weights)[1]]
 overall_area(plannervec::Vector; weights=ones(4+3), α=α, log_likelihood=false) = [localarea(m) for m in collect_overall_metrics(plannervec; weights=weights, α=α, log_likelihood=log_likelihood)[1]]
+overall_area(datasets::Vector, metrics::Vector; weights=ones(4+3), α=α, log_likelihood=false) = [localarea(m) for m in collect_overall_metrics(datasets, metrics; weights=weights, α=α, log_likelihood=log_likelihood)[1]]
 overall_area(planner; weights=ones(4+3), α=α, log_likelihood=false) = [localarea(m) for m in collect_overall_metrics([planner]; weights=weights, α=α, log_likelihood=log_likelihood)[1]]
 
 function localarea(m::Vector)
@@ -298,6 +361,11 @@ function localarea(m::Vector)
     end
     return A
 end
+
+
+
+
+
 
 """
 Plot rate vs. distance with fitted multivariate Gaussians, and separete univariate Gaussians.

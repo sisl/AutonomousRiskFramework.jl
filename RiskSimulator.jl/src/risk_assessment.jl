@@ -58,16 +58,25 @@ CVaR(𝒞) = mean(𝒞)
 # TODO: Rename to `risk_metrics`?
 risk_assessment(planner, α=0.2) = risk_assessment(planner.mdp.dataset, α)
 function risk_assessment(𝒟::Vector, α=0.2)
-    metrics = RiskMetrics(cost_data(𝒟), α)
-    return metrics
+    Z = cost_data(𝒟)
+    if length(Z) == 0
+        # No failures, no cost distribution.
+        return RiskMetrics([Inf], α)
+    else
+        metrics = RiskMetrics(Z, α)
+        return metrics
+    end
 end
+
+
+combine_datasets(planners) = vcat(map(planner->planner.mdp.dataset, planners)...)
 
 
 """
 Combine datasets from different runs then collect risk metrics.
 """
 function collect_metrics(planners, α)
-    dataset = vcat(map(planner->planner.mdp.dataset, planners)...)
+    dataset = combine_datasets(planners)
     metrics = risk_assessment(dataset, α)
     return metrics
 end
@@ -82,6 +91,7 @@ function cost_data(𝒟; nonfailures=false, terminal_only=true)
         costs = [d[1][end][2:end] for d in filter(d->nonfailures ? !d[2] : d[2], 𝒟)]
         # when we collect data for FULL trajectory (not just at the terminal state)
         if terminal_only
+            filter!(!isempty, costs)
             return convert(Vector{Real}, vcat(last.(costs)...))
         else
             return convert(Vector{Real}, vcat(costs...))
@@ -126,3 +136,29 @@ function latex_metrics(metrics::RiskMetrics)
 "\\text{worst case} &=", round(metrics.worst, digits=3), "\\\\",
 "\\end{align}\$\$"))
 end
+
+
+"""
+Weight used to normalize maximum likelihood in polar plot/AUC.
+"""
+function inverse_max_likelihood(failure_metrics_vector_set)
+    return 1/maximum(map(fmv->maximum(map(fm->exp(fm.highest_loglikelihood), fmv)), failure_metrics_vector_set)) # 1/max(p)
+end
+
+
+function risk_statistic(rms::Vector{RiskMetrics}, func)
+    Z = vcat(map(m->m.Z, rms)...)
+    α = first(rms).α
+    𝒫 = ecdf(Z)
+    𝒞 = conditional_distr(𝒫, Z, α)
+
+    Z_mean = func(filter(!isinf, [m.mean for m in rms]))
+    var = func(filter(!isinf, [m.var for m in rms]))
+    cvar = func(filter(!isinf, [m.cvar for m in rms]))
+    worst = func(filter(!isinf, [m.worst for m in rms]))
+
+    return RiskMetrics(Z=Z, α=α, 𝒫=𝒫, 𝒞=𝒞, mean=Z_mean, var=var, cvar=cvar, worst=worst)
+end
+
+Statistics.mean(rms::Vector{RiskMetrics}) = risk_statistic(rms, mean)
+Statistics.std(rms::Vector{RiskMetrics}) = risk_statistic(rms, std)

@@ -273,7 +273,7 @@ end
 
 # ╔═╡ 434b3688-3d8d-4edc-8bee-454a9be2a968
 function plot_combined_cost(metrics_set, labels; mean_y=0.036, var_y=0.02, cvar_y=0.01, α_y=0.017, show_mean=false, show_cvar=true, show_worst=false)
-	pyplot()
+	pgfplotsx()
 	RiskSimulator.use_latex_fonts()
 
 	n = length(metrics_set)
@@ -291,9 +291,11 @@ function plot_combined_cost(metrics_set, labels; mean_y=0.036, var_y=0.02, cvar_
 			label=label,
 			alpha=0.5,
 			reuse=false,
-			xlabel="cost",
+			xlabel="cost (closure rate at collision)",
 			ylabel="density",
+			title="cost distribution",
 			framestyle=:box,
+			legend=:topright,
 			normalize=:pdf, size=(600, 300))
 		font_size = 11
 
@@ -315,36 +317,40 @@ function plot_combined_cost(metrics_set, labels; mean_y=0.036, var_y=0.02, cvar_
 			# Conditional Value at Risk (CVaR)
 			cvar = metrics.cvar
 			plot!([cvar, cvar], [0, cvar_y], color=color, linewidth=2, label=nothing)
-			annotate!([(cvar, cvar_y*1.15, text("CVaR\n($label)", font_size))])
+			annotate!([(cvar, cvar_y*1.15, text("\\shortstack{CVaR\\\\($label)}", font_size))])
 		end
 
-		RiskSimulator.zero_ylims()
-		# p = xlims!(xlims()[1], worst+0.1worst)
+		# RiskSimulator.zero_ylims()
 	end
 
 	return p
 end
 
 # ╔═╡ 86c933b1-368f-446f-b1fa-77eb5f1b2d31
-plot_combined_cost([metrics, metrics2], ["IDM", "Princeton"]; mean_y=3.33, var_y=3.25, cvar_y=2.1, α_y=2.8)
+pcc = plot_combined_cost([metrics, metrics2], ["IDM", "Princeton"]; mean_y=3.33, var_y=3.25, cvar_y=2.1, α_y=2.8)
 
-# ╔═╡ 757e7c71-ddf2-4fc1-9b85-0f685f0cf990
-function inverse_max_likelihood(failure_metrics_vector_set)
-	return 1/maximum(map(fmv->maximum(map(fm->exp(fm.highest_loglikelihood), fmv)), failure_metrics_vector_set)) # 1/max(p)
-end
+# ╔═╡ abc3b6e2-346a-4e7f-8345-db9ad587d5c6
+savefig(pcc, "cost.tex")
 
 # ╔═╡ de7c77a0-cf88-4484-867d-2fd3680e34ee
 begin
 	𝐰 = ones(7)
+	# 𝐰[end-2] = 𝐰[end-1] = 𝐰[end] = 10
 	𝐰[end] = inverse_max_likelihood([failure_metrics_vector, failure_metrics_vector2]) 
 
 	areas = overall_area([planner, planner2], weights=𝐰, α=α)
 	area_idm = round(areas[1], digits=5)
 	area_princeton = round(areas[2], digits=5)
-	p_metrics = plot_overall_metrics([planner, planner2],
+	p_metrics = plot_polar_risk([planner, planner2],
 		["IDM ($area_idm)", "Princeton ($area_princeton)", "Third"]; 
 		weights=𝐰, α=α, title="Risk area: $scenario_string")
 end
+
+# ╔═╡ c0a078db-238d-4de0-bbae-73a01b233545
+Revise.retry()
+
+# ╔═╡ 8a503ac9-3791-454c-a3a7-af29f9fc1468
+Plots.PyPlot.savefig("polar.pdf", bbox_inches="tight")
 
 # ╔═╡ c1bf67e9-cfee-486b-8db9-9f7f0e40125b
 md"""
@@ -416,8 +422,10 @@ PlutoUI.TableOfContents()
 # ╠═53b7e517-056d-410c-967b-44ae5a759a9e
 # ╠═434b3688-3d8d-4edc-8bee-454a9be2a968
 # ╠═86c933b1-368f-446f-b1fa-77eb5f1b2d31
-# ╠═757e7c71-ddf2-4fc1-9b85-0f685f0cf990
+# ╠═abc3b6e2-346a-4e7f-8345-db9ad587d5c6
 # ╠═de7c77a0-cf88-4484-867d-2fd3680e34ee
+# ╠═c0a078db-238d-4de0-bbae-73a01b233545
+# ╠═8a503ac9-3791-454c-a3a7-af29f9fc1468
 # ╟─c1bf67e9-cfee-486b-8db9-9f7f0e40125b
 # ╟─e44b5f2b-faa9-4e7a-956e-702547f54788
 # ╟─dcc3d3e3-3c44-4aaf-9d73-02818160afba

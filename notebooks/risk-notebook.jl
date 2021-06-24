@@ -290,7 +290,7 @@ Now using _all_ metrics (i.e., risk metrics _and_ failure metrics from AST), we 
 𝐰′ = [1, 1, 1, 1, 1, 1, 1];
 
 # ╔═╡ f9c101cc-6861-4ac3-95f9-a96a6fa757f7
-plotting.plot_overall_metrics([planner,planner2], ["IDM","Princeton"]; weights=𝐰′,α=α)
+plotting.plot_polar_risk([planner,planner2], ["IDM","Princeton"]; weights=𝐰′,α=α)
 
 # ╔═╡ ed25fe07-36f3-4264-99ba-6181eb4adca9
 md"""

@@ -40,7 +40,7 @@ p_risk = plot_risk(metrics; mean_y=0.33, var_y=0.25, cvar_y=0.1, α_y=0.2)
 
 # Polar plot of risk and failure metrics
 𝐰 = ones(7)
-p_metrics = plot_overall_metrics([planner], ["IDM"]; weights=𝐰, α=α)
+p_metrics = plot_polar_risk([planner], ["IDM"]; weights=𝐰, α=α)
 
 
 # Playback most likely failure.
