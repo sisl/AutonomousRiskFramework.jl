@@ -2,8 +2,6 @@ ScenarioRunner for CARLA (Modified for Adaptive Stress Testing)
 ========================
 Modified from [ScenarioRunner](https://github.com/carla-simulator/scenario_runner)
 
-TODO: connect as fork of the main repository
-
 Instructions
 ========================
 1. Launch CARLA server
@@ -20,3 +18,9 @@ python config.py --map Town01 --port 2222 --spectator-loc 80.37 25.30 0.0 --no-r
 ```
 python scenario_runner_ast.py --route .\srunner\data\routes_ast.xml .\srunner\data\ast_scenarios.json --port 2222 --agent .\srunner\autoagents\ast_agent.py --record recordings
 ```
+
+TODO:
+=====================
+1. Connect as fork of the main repository
+2. Clean and structure the codebase
+3. Remove hard-coded settings
