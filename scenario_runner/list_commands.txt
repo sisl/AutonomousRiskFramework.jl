@@ -1,0 +1,18 @@
+.\CarlaUE4.exe -carla-rpc-port=2222 -windowed -ResX=320 -ResY=240 -benchmark -fps=10 -quality-level=Low
+
+python config.py --map Town01 --port 2222 --spectator-loc 80.37 25.30 0.0 --no-rendering
+
+python scenario_runner.py --scenario OppositeVehicleRunningRedLight001 --configFile red_light_config.xml --trafficManagerPort 8001 --timeout 120 --port 2222
+
+python scenario_runner_ast.py --route .\srunner\data\routes_ast.xml .\srunner\data\ast_scenarios.json --port 2222 --agent .\srunner\autoagents\ast_agent.py --record recordings
+
+# %CARLA_ROOT% is the CARLA installation directory
+# %SCENARIO_RUNNER% is the ScenarioRunner installation directory
+# <VERSION> is the correct string for the Python version being used
+# In a build from source, the .egg files may be in: ${CARLA_ROOT}/PythonAPI/dist/ instead of ${CARLA_ROOT}/PythonAPI
+set CARLA_ROOT=C:\Users\shubh\OneDrive\Documents\Carla\WindowsNoEditor
+set SCENARIO_RUNNER_ROOT=C:\Users\shubh\OneDrive\Documents\Carla\WindowsNoEditor\PythonAPI\scenario_runner
+set PYTHONPATH=%PYTHONPATH%;%CARLA_ROOT%\PythonAPI\carla\dist\carla-0.9.10-py3.7-win-amd64.egg
+set PYTHONPATH=%PYTHONPATH%;%CARLA_ROOT%\PythonAPI\carla\agents
+set PYTHONPATH=%PYTHONPATH%;%CARLA_ROOT%\PythonAPI\carla
+set PYTHONPATH=%PYTHONPATH%;%CARLA_ROOT%\PythonAPI

@@ -9,13 +9,13 @@ end;
 
 @with_kw struct MDNParams
     N_modes::Int = 2
-    in_dims::Int = 8
+    in_dims::Int = 10
     out_dims::Int = 6
     hidden_dims::Int = 20
     lr::Float64 = 0.01
     momentum::Float64 = 0.99
     batch_size::Int = 10
-    N_epoch::Int = 10
+    N_epoch::Int = 30
 end;
 
 stop_gradient(f) = f()
