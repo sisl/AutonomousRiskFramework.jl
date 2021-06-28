@@ -1,1 +1,0 @@
-python scenario_runner.py --scenario OppositeVehicleRunningRedLight001 --reloadWorld --configFile red_light_config.xml

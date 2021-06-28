@@ -1,7 +1,0 @@
-[deps]
-CrossEntropyMethod = "f7e364ee-db6c-46d3-b598-27dc284d9c4d"
-Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
-LightXML = "9c8b4983-aa76-5018-a973-4c85ecc9e179"
-POMDPStressTesting = "6fc570d8-62cd-4d35-b113-bbf3c1b8276a"
-RLInterface = "3065fe53-3878-5aed-aae7-ab641be43734"
-Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
