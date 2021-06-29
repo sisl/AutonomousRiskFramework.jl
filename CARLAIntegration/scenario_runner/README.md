@@ -4,10 +4,10 @@ Modified from [ScenarioRunner](https://github.com/carla-simulator/scenario_runne
 
 Dependencies
 ========================
-# Python: 
+#### Python: 
 Check `requirements.txt`
 
-# Julia: 
+#### Julia: 
 Check `Project.toml`
 
 Instructions
