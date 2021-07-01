@@ -1,3 +1,3 @@
 using Pkg
 
-Pkg.develop(PackageSpec(url="./RiskSimulator.jl"))
+Pkg.develop(PackageSpec(url="./ObservationModels"))
