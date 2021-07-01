@@ -1,3 +1,3 @@
-import Pkg
+using Pkg
 
-Pkg.develop(PackageSpec(url=".Y/RiskSimulator.jl"))
+Pkg.develop(PackageSpec(url="./RiskSimulator.jl"))
