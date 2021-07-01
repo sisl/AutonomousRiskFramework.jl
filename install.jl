@@ -1,0 +1,16 @@
+import Pkg
+
+Pkg.add("Revise")
+Pkg.add("ColorSchemes")
+Pkg.add("PyPlot")
+Pkg.add(url="https://github.com/JuliaPOMDP/RLInterface.jl")
+Pkg.add(url="https://github.com/sisl/POMDPStressTesting.jl")
+Pkg.add("AutomotiveSimulator")
+Pkg.add("AutomotiveVisualization")
+Pkg.add(url="https://github.com/sisl/AdversarialDriving.jl")
+Pkg.add(url="https://github.com/sisl/InterpretableValidation.jl")
+Pkg.add(url="https://github.com/sisl/ExprRules.jl")
+Pkg.add("POMDPs")
+Pkg.add(url="https://github.com/sisl/Vec.jl")
+Pkg.add(url="https://github.com/rdyro/SpAutoDiff.jl")
+Pkg.add("Pluto")
