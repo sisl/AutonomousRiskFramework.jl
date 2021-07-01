@@ -8,9 +8,7 @@ Random.seed!(SEED)
 
 # Phase 1: Observation model training.
 # ————————————————————————————————————————————————
-
-#COMMENTED THIS OUT TO TEST
-# net, net_params = training_phase()
+net, net_params = training_phase()
 
 
 # Phase 2: Failure search.
@@ -19,8 +17,7 @@ Random.seed!(SEED)
 system = IntelligentDriverModel(v_des=12.0)
 
 # Setup the AST planner.
-# planner = setup_ast(net, net_params; sut=system, seed=SEED)
-planner = setup_ast(sut=system, seed=SEED)
+planner = setup_ast(net, net_params; sut=system, seed=SEED)
 
 # Run most likely failure search.
 action_trace = search!(planner)
