@@ -1,4 +1,4 @@
-.\CarlaUE4.exe -carla-rpc-port=2222 -windowed -ResX=320 -ResY=240 -benchmark -fps=10 -quality-level=Low
+C:\Carla\CarlaUE4.exe -carla-rpc-port=2222 -windowed -ResX=320 -ResY=240 -benchmark -fps=10 -quality-level=Low
 
 python config.py --map Town01 --port 2222 --spectator-loc 80.37 25.30 0.0 --no-rendering
 
