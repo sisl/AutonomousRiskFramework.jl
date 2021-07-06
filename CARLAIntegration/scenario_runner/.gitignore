@@ -9,7 +9,6 @@ srunner/utilities/*.pyc
 srunner/utilities/__pycache__/
 results*.txt
 recordings/
-*.json
 *.log
 .project
 .pydevproject
