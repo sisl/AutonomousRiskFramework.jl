@@ -1,9 +1,10 @@
+using Base: Bool
 using CrossEntropyMethod
 using Distributions, Random
 using Statistics
 using Parameters
 using POMDPStressTesting
-
+# using RiskSimulator
 ##############################################################################
 """
 Create Simulation
@@ -13,16 +14,21 @@ Create Simulation
     endtime::Int64 = 60 # Simulate end time
     episodic_rewards::Bool = false # decision making process with epsidic rewards
     give_intermediate_reward::Bool = false # give log-probability as reward during intermediate gen calls (used only if `episodic_rewards`)
-    reward_bonus::Float64 = episodic_rewards ? 100 : 0 # reward received when event is found, multiplicative when using `episodic_rewards`
-    use_potential_based_shaping::Bool = true # apply potential-based reward shaping to speed up learning
+    reward_bonus::Float64 = episodic_rewards ? 100 : 350 # reward received when event is found, multiplicative when using `episodic_rewards`
+    use_potential_based_shaping::Bool = false # apply potential-based reward shaping to speed up learning
     pass_seed_action::Bool = false # pass the selected RNG seed to the GrayBox.transition! and BlackBox.evaluate! functions
     discount::Float64 = 1.0 # discount factor (generally 1.0 to not discount later samples in the trajectory)
+    debug::Bool = true
+    collect_data::Bool = true # collect supervised data {(𝐱=rates, y=isevent), ...} 
 end;
 
 @with_kw mutable struct CarlaSim <: GrayBox.Simulation
     t::Real = 0 # Current time
     dt::Real = 1 # Time interval
     params::CarlaParams = CarlaParams() # Parameters
+    metrics::AST.ASTMetrics = AST.ASTMetrics() # Metrics to record
+
+    dataset::Vector = [] # (𝐱=disturbances, y=isevent) supervised dataset
     
     # Adversarial Markov decision process
     reset_fn = (x)->0
@@ -67,8 +73,9 @@ function GrayBox.transition!(sim::CarlaSim, sample::GrayBox.EnvironmentSample)
 
     # step agents: given MDP, current state, and current action (i.e. disturbances)
     (_running, _collision, sim.distance) = sim.step_fn(sim.disturbances)
+    @show _running, _collision, sim.distance
     sim.running = _running > 0
-    sim.collision = _collision > 0
+    sim.collision = _collision == true
 
     # return log-likelihood of actions, summation handled by `logpdf()`
     return sim._logpdf(sample, sim.state)::Real
@@ -110,10 +117,50 @@ function BlackBox.evaluate!(sim::CarlaSim, sample::GrayBox.EnvironmentSample)
     return (logprob::Real, d::Real, event::Bool)
 end
 
-# Pulling from POMDPStressTesting since not exported
+# Pulling from POMDPStressTesting since not exported and modifying with CarlaSim
 function rate(d_prev::Real, sim::CarlaSim)
     return d_prev - BlackBox.distance(sim)
 end
+
+###################################################################
+"""
+Record tools (modified from POMDPStressTesting.jl)
+"""
+function record(sim::CarlaSim, sym::Symbol, val)
+    if sim.params.debug
+        push!(getproperty(sim.metrics, sym), val)
+    end
+end
+
+function record(sim::CarlaSim; logprob=1, prob=exp(logprob), miss_distance=Inf, reward=-Inf, event=false, terminal=false, rate=-Inf)
+    record(sim, :prob, prob)
+    record(sim, :logprob, logprob)
+    record(sim, :miss_distance, miss_distance)
+    record(sim, :reward, reward)
+    record(sim, :intermediate_reward, reward)
+    record(sim, :rate, rate)
+    record(sim, :event, event)
+    record(sim, :terminal, terminal)
+end
+
+function record_returns(sim::CarlaSim)
+    # compute returns up to now.
+    rewards = sim.metrics.intermediate_reward
+    G = returns(rewards, γ=sim.params.discount)
+    record(sim, :returns, G)
+    sim.metrics.intermediate_reward = [] # reset
+end
+
+
+function returns(R; γ=1)
+    T = length(R)
+    G = zeros(T)
+    for t in reverse(1:T)
+        G[t] = t==T ? R[t] : G[t] = R[t] + γ*G[t+1]
+    end
+    return G
+end
+
 
 # Modified function without MDP
 function reward(sim::CarlaSim, logprob::Real, isevent::Bool, isterminal::Bool, miss_distance::Real, rate::Real)
@@ -140,10 +187,17 @@ function reward(sim::CarlaSim, logprob::Real, isevent::Bool, isterminal::Bool, m
             r += rate # potential-based reward shaping
         end
     end
-
+    # Record metrics
+    record(sim, prob=exp(logprob), logprob=logprob, miss_distance=miss_distance, reward=r, event=isevent, terminal=isterminal, rate=rate)
+    if isterminal
+        # end of episode
+        record_returns(sim)
+    end
     return r
 end
 
+TMP_DATA_RATE = []
+TMP_DATA_DISTANCE = []
 function POMDPStressTesting.cem_losses(d, sample; sim::CarlaSim)
     sample_length = length(last(first(sample)))
     env = GrayBox.environment(sim)
@@ -160,11 +214,29 @@ function POMDPStressTesting.cem_losses(d, sample; sim::CarlaSim)
         _rate = rate(sim.prev_distance, sim)
         r = reward(sim, logprob, _isevent, BlackBox.isterminal(sim), miss_distance, _rate)
         R += r
+        
+        # Data collection of {(𝐱=rates, y=isevent), ...}
+        if sim.params.collect_data
+            global TMP_DATA_RATE, TMP_DATA_DISTANCE
+            closure_rate = _rate
+            distance = BlackBox.distance(sim)
+            push!(TMP_DATA_RATE, closure_rate)
+            push!(TMP_DATA_DISTANCE, distance)
+
+            if BlackBox.isterminal(sim)
+                𝐱 = [sample, TMP_DATA_DISTANCE, TMP_DATA_RATE]
+                y = _isevent
+                push!(sim.dataset, (𝐱, y))
+                TMP_DATA_DISTANCE = []
+                TMP_DATA_RATE = []
+            end
+        end
+        
         if BlackBox.isterminal(sim)
             break                
         end
     end
-
+    @show "Reward: ", -R
     return -R
 end
 
@@ -184,8 +256,8 @@ function run_CEM(step_fn, reset_fn)
     loss = (d, sample)->POMDPStressTesting.cem_losses(d, sample; sim)
     is_dist_opt = cross_entropy_method(loss,
                                        is_dist_0;
-                                       max_iter=3,
-                                       N=10,
+                                       max_iter=1,
+                                       N=5,
                                     #    min_elite_samples=planner.solver.min_elite_samples,
                                     #    max_elite_samples=planner.solver.max_elite_samples,
                                     #    elite_thresh=planner.solver.elite_thresh,
@@ -193,7 +265,26 @@ function run_CEM(step_fn, reset_fn)
                                     #    add_entropy=planner.solver.add_entropy,
                                        verbose=false,
                                        show_progress=true,
-                                       batched=false)
+                                       batched=false
+                                    )
+    # Risk Assessment.
+    # ————————————————————————————————————————————————
+    fail_metrics = POMDPStressTesting.print_metrics(sim.metrics) 
+    @show fail_metrics
+    
+    α = 0.2 # Risk tolerance.
+    𝒟 = sim.dataset
+
+    p_closure = plot_closure_rate_distribution(𝒟; reuse=false)
+
+    # Plot cost distribution.
+    metrics = risk_assessment(𝒟, α)
+    @show metrics
+    p_risk = plot_risk(metrics; mean_y=0.33, var_y=0.25, cvar_y=0.1, α_y=0.2)
+    
+    # Polar plot of risk and failure metrics
+    𝐰 = ones(7)
+    p_metrics = plot_polar_risk(𝒟, metrics, ["Carla BaseAgent"]; weights=𝐰, α=α)
     
     failure_path = Statistics.mean(is_dist_opt)
     disturbances = zeros(2, sim.params.endtime)

@@ -31,8 +31,9 @@ import json
 import pkg_resources
 import numpy as np
 from julia import Main, Pkg
-Pkg.activate(r'C:\Users\shubh\OneDrive\Documents\Carla\WindowsNoEditor\PythonAPI\scenario_runner\Project.toml')
+Pkg.activate(r'Project.toml')
 Main.include("ast_tools.jl")
+Main.include("visualization.jl")
 
 import carla
 
@@ -450,6 +451,7 @@ class ScenarioRunner(object):
             result = False
 
         self._cleanup()
+        # print("Collision: ", collision)
         return result, collision
 
     def _run_scenarios(self):
@@ -520,7 +522,22 @@ class ScenarioRunner(object):
                 running, distance = self.manager.tick_scenario_ast(disturbance)
                 if not running:
                     break
-            rewards = 0
+            rewards = False
+            if not running:
+                result, rewards = self._stop_scenario(self.temp_scenario['start_time'], self.temp_scenario['recorder_name'], self.temp_scenario['scenario'])
+                self._cleanup()
+            return running, rewards, distance
+
+        def record_step_fn(values):
+            self._args.record = temp_record
+            values = np.array(values)
+            disturbance = {'x': values[0], 'y': values[1]}
+            running = True
+            while running:
+                running, distance = self.manager.tick_scenario_ast(disturbance)
+                if not running:
+                    break
+            rewards = False
             if not running:
                 result, rewards = self._stop_scenario(self.temp_scenario['start_time'], self.temp_scenario['recorder_name'], self.temp_scenario['scenario'])
                 self._cleanup()
@@ -528,15 +545,13 @@ class ScenarioRunner(object):
 
         failure_disturbance = Main.run_CEM(step_fn, reset_fn)
 
-        print(failure_disturbance)
+        # print(failure_disturbance)
         
-        # self._args.record = temp_record
-        
-        # for config in route_configurations:
-        #     config.name = config.name[:-1] + "failure"
-        #     config.policy = {'x': failure_disturbance[0, :], 'y': failure_disturbance[1, :]}
-        #     result, _c = self._load_and_run_scenario(config)
-        #     self._cleanup()
+        for config in route_configurations:
+            config.name = config.name[:-1] + "failure"
+            config.policy = {'x': failure_disturbance[0, :], 'y': failure_disturbance[1, :]}
+            result, _c = self._load_and_run_scenario(config)
+            self._cleanup()
         result = True
         return result
 
