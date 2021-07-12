@@ -28,12 +28,13 @@ import signal
 import sys
 import time
 import json
-import pkg_resources
-import numpy as np
+# import pkg_resources
+# import numpy as np
 from julia import Main, Pkg
 Pkg.activate(r'Project.toml')
 Main.include("ast_tools.jl")
 Main.include("visualization.jl")
+Main.include("risk_metrics.jl")
 
 import carla
 
@@ -94,9 +95,9 @@ class ScenarioRunner(object):
 
         self.traffic_manager = self.client.get_trafficmanager(int(self._args.trafficManagerPort))
 
-        dist = pkg_resources.get_distribution("carla")
-        if LooseVersion(dist.version) < LooseVersion('0.9.10'):
-            raise ImportError("CARLA version 0.9.10 or newer required. CARLA version found: {}".format(dist))
+        # dist = pkg_resources.get_distribution("carla")
+        # if LooseVersion(dist.version) < LooseVersion('0.9.10'):
+        #     raise ImportError("CARLA version 0.9.10 or newer required. CARLA version found: {}".format(dist))
 
         # Load agent if requested via command line args
         # If something goes wrong an exception will be thrown by importlib (ok here)
@@ -507,7 +508,7 @@ class ScenarioRunner(object):
         block_size = 10
 
         def reset_fn():
-            config.name = config.name[:-1] + str(self.temp_scenario['count'])
+            config.name = "RouteScenario_" + str(self.temp_scenario['count'])
             start_time, recorder_name, scenario = self._load_scenario(config)
             self.temp_scenario['start_time'] = start_time
             self.temp_scenario['recorder_name'] = recorder_name
@@ -515,7 +516,7 @@ class ScenarioRunner(object):
             self.temp_scenario['count'] += 1
 
         def step_fn(values):
-            values = np.array(values)
+            values = list(values)
             disturbance = {'x': values[0], 'y': values[1]}
             running = True
             for _ in range(block_size):
@@ -530,7 +531,7 @@ class ScenarioRunner(object):
 
         def record_step_fn(values):
             self._args.record = temp_record
-            values = np.array(values)
+            values = list(values)
             disturbance = {'x': values[0], 'y': values[1]}
             running = True
             while running:
@@ -543,15 +544,15 @@ class ScenarioRunner(object):
                 self._cleanup()
             return running, rewards, distance
 
-        failure_disturbance = Main.run_CEM(step_fn, reset_fn)
+        failure_disturbance = Main.run_CEM(step_fn, reset_fn, record_step_fn)
 
         # print(failure_disturbance)
         
-        for config in route_configurations:
-            config.name = config.name[:-1] + "failure"
-            config.policy = {'x': failure_disturbance[0, :], 'y': failure_disturbance[1, :]}
-            result, _c = self._load_and_run_scenario(config)
-            self._cleanup()
+        # for config in route_configurations:
+        #     config.name = config.name[:-1] + "failure"
+        #     config.policy = {'x': failure_disturbance[0, :], 'y': failure_disturbance[1, :]}
+        #     result, _c = self._load_and_run_scenario(config)
+        #     self._cleanup()
         result = True
         return result
 

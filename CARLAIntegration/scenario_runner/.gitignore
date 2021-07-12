@@ -9,6 +9,8 @@ srunner/utilities/*.pyc
 srunner/utilities/__pycache__/
 results*.txt
 recordings/
+variables/
+plots/
 *.log
 .project
 .pydevproject

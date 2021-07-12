@@ -1,7 +1,7 @@
 using ColorSchemes
 using Convex
 using Distributions
-using Plots
+using FFMPEG, Plots
 using PGFPlotsX
 using POMDPStressTesting # for: failure_metrics
 using LaTeXStrings
@@ -19,18 +19,18 @@ global NFCOLOR = "#2ca02c"
 function use_latex_fonts(using_plots_jl=true)
     # Use LaTeX fonts for rendering PyPlots
     mpl = using_plots_jl ? Plots.PyPlot.matplotlib : matplotlib
-    mpl.rc("font", family=["serif"])
-    mpl.rc("font", serif=["Helvetica"])
-    mpl.rc("text", usetex=true)
+    mpl[:rc]("font", family=["serif"])
+    mpl[:rc]("font", serif=["Helvetica"])
+    mpl[:rc]("text", usetex=true)
 end
 
 
 function disable_latex_fonts(using_plots_jl=true)
     # Use LaTeX fonts for rendering PyPlots
     mpl = using_plots_jl ? Plots.PyPlot.matplotlib : matplotlib
-    mpl.rc("font", family=["serif"])
-    mpl.rc("font", serif=["Helvetica"])
-    mpl.rc("text", usetex=false)
+    mpl[:rc]("font", family=["serif"])
+    mpl[:rc]("font", serif=["Helvetica"])
+    mpl[:rc]("text", usetex=false)
 end
 
 
@@ -87,13 +87,14 @@ function plot_risk(metrics; mean_y=0.036, var_y=0.02, cvar_y=0.01, α_y=0.017)
     annotate!([(α_mid, α_y*1.1, text(L"\operatorname{top}\ (1-\alpha)\ \operatorname{quantile}", font_size-3))])
 
     zero_ylims()
-    xlims!(xlims()[1], worst+0.1worst)
+    xlims!(xlims()[1], worst+0.01worst)
 end
 
 
 function plot_combined_cost(metrics_set, labels; mean_y=0.036, var_y=0.02, cvar_y=0.01, α_y=0.017, show_mean=false, show_cvar=false, show_worst=false)
     pgfplotsx()
-    use_latex_fonts()
+    # use_latex_fonts()
+    disable_latex_fonts()
 
     n = length(metrics_set)
     p = nothing 
@@ -147,7 +148,7 @@ function plot_combined_cost(metrics_set, labels; mean_y=0.036, var_y=0.02, cvar_
 end
 
 
-function plot_failure_distribution(𝒟, key1=:xpos_sut, key2=:ypos_sut)
+function plot_failure_distribution(𝒟, key1=:xpos_veh, key2=:ypos_veh)
     failure_samples_x = []
     failure_samples_y = []
     failure_samples_z = []
@@ -211,7 +212,7 @@ function plot_closure_rate_distribution(𝒟, show_nonfailures=true; reuse=true,
 
     failure_cr = cost_data(𝒟)
     nonfailure_cr = cost_data(𝒟, nonfailures=true)
-
+    
     if (show_nonfailures && !isempty(nonfailure_cr))
         histogram(nonfailure_cr, alpha=0.5, label="non-failure", normalize=:pdf, color=NFCOLOR)
     end
@@ -227,10 +228,38 @@ function plot_closure_rate_distribution(𝒟, show_nonfailures=true; reuse=true,
 
     ylabel!("pdf")
     xlabel!("closure rate (severity)")
+    # xlabel!("min distance")
     zero_ylims()
     return p
 end
 
+# Severity of failure
+function plot_miss_distance_distribution(𝒟, show_nonfailures=true; reuse=true, gamma=false)
+    # Full distribution of closure rates (i.e., failure or not)
+    # histogram([d[1][end] for d in 𝒟], normalize=:probability)
+    gr()
+
+    failure_cr = distance_data(𝒟)
+    nonfailure_cr = distance_data(𝒟, nonfailures=true)
+    
+    if (show_nonfailures && !isempty(nonfailure_cr))
+        histogram(nonfailure_cr, alpha=0.5, label="non-failure", normalize=:pdf, color=NFCOLOR)
+    end
+    histogram!(failure_cr, alpha=0.5, label="failure", normalize=:pdf, reuse=reuse, color=FCOLOR)
+
+    if gamma
+        # Fit gamma distributions (only on failures, b/c rate will be non-negative)
+        G_fail = fit(Gamma, failure_cr)
+    else
+        G_fail = fit(Normal, failure_cr)
+    end
+    p = plot!(x->pdf(G_fail,x), xlim=xlims(), label="fit (failure)", color="crimson", linewidth=2)
+
+    ylabel!("pdf")
+    xlabel!("min distance (before collision)")
+    zero_ylims()
+    return p
+end
 
 """
 Estimate the probabiltiy of failure using the beta distribution.
@@ -317,8 +346,8 @@ end
 function plot_metrics(metricvec::Vector, metricnames::Vector, labels::Vector)
     pyplot() # polar plots only work well with PyPlot
 
-    # disable_latex_fonts()
-    use_latex_fonts() # publication worthy.
+    disable_latex_fonts()
+    # use_latex_fonts() # publication worthy.
 
     n = length(metricvec)
     local p
@@ -376,7 +405,8 @@ function plot_multivariate_distance_and_rate(𝒟; gda=false, gdatype=:qda, shar
     pp = Plots.PyPlot
 
     # Use LaTeX fonts for rendering PyPlots
-    use_latex_fonts()
+    # use_latex_fonts()
+    disable_latex_fonts()
 
     if subplots
         pp.figure(figsize=figsize.*1.75)

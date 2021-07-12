@@ -4,6 +4,9 @@ using Distributions, Random
 using Statistics
 using Parameters
 using POMDPStressTesting
+using FFMPEG, Plots
+using FileIO
+using Dates
 # using RiskSimulator
 ##############################################################################
 """
@@ -14,12 +17,14 @@ Create Simulation
     endtime::Int64 = 60 # Simulate end time
     episodic_rewards::Bool = false # decision making process with epsidic rewards
     give_intermediate_reward::Bool = false # give log-probability as reward during intermediate gen calls (used only if `episodic_rewards`)
-    reward_bonus::Float64 = episodic_rewards ? 100 : 350 # reward received when event is found, multiplicative when using `episodic_rewards`
+    reward_bonus::Float64 = episodic_rewards ? 100 : 100 # reward received when event is found, multiplicative when using `episodic_rewards`
     use_potential_based_shaping::Bool = false # apply potential-based reward shaping to speed up learning
     pass_seed_action::Bool = false # pass the selected RNG seed to the GrayBox.transition! and BlackBox.evaluate! functions
     discount::Float64 = 1.0 # discount factor (generally 1.0 to not discount later samples in the trajectory)
     debug::Bool = true
     collect_data::Bool = true # collect supervised data {(𝐱=rates, y=isevent), ...} 
+    resume::Bool = true
+    resume_path = raw"variables\record_2021_07_11_170347.jld2"
 end;
 
 @with_kw mutable struct CarlaSim <: GrayBox.Simulation
@@ -36,16 +41,16 @@ end;
     state = 0
     running = true
     collision = false
-    distance::Real = Inf
-    prev_distance::Real = -Inf # Used when agent goes out of frame
+    distance::Real = -1e10
+    prev_distance::Real = -1e10 # Used when agent goes out of frame
 
     # Noise distributions and disturbances (consistent with output variables in _logpdf)
-    xposition_noise_veh::Distribution = Normal(0, 5) # Gaussian noise (notice larger σ)
-    yposition_noise_veh::Distribution = Normal(0, 5) # Gaussian noise
+    xposition_noise_veh::Distribution = Normal(0, 4) # Gaussian noise (notice larger σ)
+    yposition_noise_veh::Distribution = Normal(0, 4) # Gaussian noise
     velocity_noise_veh::Distribution = Normal(0, 1e-4) # Gaussian noise
 
-    xposition_noise_sut::Distribution = Normal(0, 5) # Gaussian noise (notice larger σ)
-    yposition_noise_sut::Distribution = Normal(0, 5) # Gaussian noise
+    xposition_noise_sut::Distribution = Normal(0, 4) # Gaussian noise (notice larger σ)
+    yposition_noise_sut::Distribution = Normal(0, 4) # Gaussian noise
     velocity_noise_sut::Distribution = Normal(0, 1e-4) # Gaussian noise
     
     disturbances::Vector{Float64} = Float64[0.0, 0.0] # Initial 0-noise disturbance
@@ -72,8 +77,10 @@ function GrayBox.transition!(sim::CarlaSim, sample::GrayBox.EnvironmentSample)
     sim.disturbances[2] = sample[:ypos_veh].value
 
     # step agents: given MDP, current state, and current action (i.e. disturbances)
+    sim.prev_distance = sim.distance
     (_running, _collision, sim.distance) = sim.step_fn(sim.disturbances)
-    @show _running, _collision, sim.distance
+    _rate = rate(sim.prev_distance, sim);
+    @show _running, _collision, sim.distance, _rate
     sim.running = _running > 0
     sim.collision = _collision == true
 
@@ -92,8 +99,8 @@ function BlackBox.initialize!(sim::CarlaSim)
     sim.state = 0
     sim.reset_fn()
     sim.disturbances = [0, 0] # noise-less
-    sim.prev_distance = -Inf
-    sim.distance = Inf
+    sim.prev_distance = -1e10
+    sim.distance = -1e10
     sim.collision = false
 end
 
@@ -204,6 +211,7 @@ function POMDPStressTesting.cem_losses(d, sample; sim::CarlaSim)
     R = 0 # accumulated reward
     BlackBox.initialize!(sim)
 
+    max_rate = 0
     for i in 1:sample_length
         env_sample = GrayBox.EnvironmentSample()
         for k in keys(sample)
@@ -212,30 +220,40 @@ function POMDPStressTesting.cem_losses(d, sample; sim::CarlaSim)
         end
         (logprob, miss_distance, _isevent) = BlackBox.evaluate!(sim, env_sample)
         _rate = rate(sim.prev_distance, sim)
+        max_rate = (max_rate > _rate) || (i<sample_length/1.5) ? max_rate : _rate
         r = reward(sim, logprob, _isevent, BlackBox.isterminal(sim), miss_distance, _rate)
         R += r
         
-        # Data collection of {(𝐱=rates, y=isevent), ...}
-        if sim.params.collect_data
-            global TMP_DATA_RATE, TMP_DATA_DISTANCE
-            closure_rate = _rate
-            distance = BlackBox.distance(sim)
-            push!(TMP_DATA_RATE, closure_rate)
-            push!(TMP_DATA_DISTANCE, distance)
-
-            if BlackBox.isterminal(sim)
-                𝐱 = [sample, TMP_DATA_DISTANCE, TMP_DATA_RATE]
-                y = _isevent
-                push!(sim.dataset, (𝐱, y))
-                TMP_DATA_DISTANCE = []
-                TMP_DATA_RATE = []
-            end
-        end
+        # # Data collection of {(𝐱=rates, y=isevent), ...}
+        # if sim.params.collect_data
+        #     global TMP_DATA_RATE, TMP_DATA_DISTANCE
+        #     closure_rate = _rate
+        #     distance = BlackBox.distance(sim)
+        #     push!(TMP_DATA_RATE, closure_rate)
+        #     push!(TMP_DATA_DISTANCE, distance)
+        # end
         
         if BlackBox.isterminal(sim)
+            # Data collection of {(𝐱=disturbances, y=isevent), ...}
+            if sim.params.collect_data
+                closure_rate = max_rate
+                distance = BlackBox.distance(sim)
+                𝐱 = vcat(sample, distance, closure_rate)
+                y = BlackBox.isevent(sim)
+                push!(sim.dataset, (𝐱, y))
+            end
             break                
         end
     end
+    # if sim.params.collect_data
+    #     global TMP_DATA_RATE, TMP_DATA_DISTANCE
+    #     𝐱 = [sample, TMP_DATA_DISTANCE, TMP_DATA_RATE]
+    #     y = BlackBox.isevent(sim)
+    #     push!(sim.dataset, (𝐱, y))
+    #     TMP_DATA_DISTANCE = []
+    #     TMP_DATA_RATE = []
+    # end
+
     @show "Reward: ", -R
     return -R
 end
@@ -244,49 +262,61 @@ function Statistics.mean(d::Dict{Symbol, Vector{Sampleable}})
     Dict(k => Statistics.mean.(d[k]) for k in keys(d))
 end
 
-function run_CEM(step_fn, reset_fn)
+function run_CEM(step_fn, reset_fn, record_step_fn)
     # Create gray-box simulation object
     sim::GrayBox.Simulation = CarlaSim(step_fn=step_fn, reset_fn=reset_fn)
     env::GrayBox.Environment = GrayBox.environment(sim)
-    
-    # Importance sampling distributions, fill one per time step.
-    is_dist_0 = convert(Dict{Symbol, Vector{Sampleable}}, env, sim.params.endtime)
 
+    if sim.params.resume
+        tmp = load(sim.params.resume_path)
+        sim.metrics = tmp["metrics"]
+        sim.dataset = tmp["dataset"]
+        is_dist_0 = tmp["is_dist_opt"]
+    else
+        # Importance sampling distributions, fill one per time step.
+        is_dist_0 = convert(Dict{Symbol, Vector{Sampleable}}, env, sim.params.endtime)
+    end
+    
     # Run cross-entropy method using importance sampling
     loss = (d, sample)->POMDPStressTesting.cem_losses(d, sample; sim)
-    is_dist_opt = cross_entropy_method(loss,
-                                       is_dist_0;
-                                       max_iter=1,
-                                       N=5,
-                                    #    min_elite_samples=planner.solver.min_elite_samples,
-                                    #    max_elite_samples=planner.solver.max_elite_samples,
-                                    #    elite_thresh=planner.solver.elite_thresh,
-                                    #    weight_fn=planner.solver.weight_fn,
-                                    #    add_entropy=planner.solver.add_entropy,
-                                       verbose=false,
-                                       show_progress=true,
-                                       batched=false
-                                    )
-    # Risk Assessment.
-    # ————————————————————————————————————————————————
-    fail_metrics = POMDPStressTesting.print_metrics(sim.metrics) 
-    @show fail_metrics
-    
-    α = 0.2 # Risk tolerance.
-    𝒟 = sim.dataset
+    for i_cem=1:20
+        is_dist_opt = cross_entropy_method(loss,
+                                        is_dist_0;
+                                        max_iter=1,
+                                        N=50,
+                                        #    min_elite_samples=planner.solver.min_elite_samples,
+                                        #    max_elite_samples=planner.solver.max_elite_samples,
+                                        elite_thresh=280,
+                                        #    weight_fn=planner.solver.weight_fn,
+                                        #    add_entropy=planner.solver.add_entropy,
+                                        verbose=false,
+                                        show_progress=true,
+                                        batched=false
+                                        )
+        # Risk Assessment.
+        # ————————————————————————————————————————————————
+        fail_metrics = POMDPStressTesting.print_metrics(sim.metrics) 
+        @show fail_metrics
+        
+        timestamp = Dates.format(now(), "_yyyy_mm_dd_HHMMSS")
+        save(raw"variables\record"*timestamp*".jld2", Dict("metrics" => sim.metrics, "dataset" => sim.dataset, "is_dist_opt" => is_dist_opt))
+        is_dist_0 = is_dist_opt
+    end
+    # p_closure = plot_closure_rate_distribution(𝒟; reuse=false)
+    # savefig(p_closure,raw"plots\closure_rate_distribution"*timestamp*".png")
 
-    p_closure = plot_closure_rate_distribution(𝒟; reuse=false)
-
-    # Plot cost distribution.
-    metrics = risk_assessment(𝒟, α)
-    @show metrics
-    p_risk = plot_risk(metrics; mean_y=0.33, var_y=0.25, cvar_y=0.1, α_y=0.2)
+    # # Plot cost distribution.
+    # metrics = risk_assessment(𝒟, α)
+    # @show metrics
+    # p_risk = plot_risk(metrics; mean_y=0.33, var_y=0.25, cvar_y=0.1, α_y=0.2)
+    # savefig(p_risk,raw"plots\risk"*timestamp*".png")
     
-    # Polar plot of risk and failure metrics
-    𝐰 = ones(7)
-    p_metrics = plot_polar_risk(𝒟, metrics, ["Carla BaseAgent"]; weights=𝐰, α=α)
+    # # Polar plot of risk and failure metrics
+    # 𝐰 = ones(7)
+    # p_metrics = plot_polar_risk([𝒟], [sim.metrics], ["Carla BaseAgent"]; weights=𝐰, α=α)
+    # savefig(p_metrics,raw"plots\polar_risk"*timestamp*".png")
     
-    failure_path = Statistics.mean(is_dist_opt)
+    failure_path = Statistics.mean(is_dist_0)
     disturbances = zeros(2, sim.params.endtime)
     disturbances[1, :] = failure_path[:xpos_veh]
     disturbances[2, :] = failure_path[:ypos_veh]
