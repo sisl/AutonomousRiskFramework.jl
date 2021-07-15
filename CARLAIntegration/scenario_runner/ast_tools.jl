@@ -23,7 +23,7 @@ Create Simulation
     discount::Float64 = 1.0 # discount factor (generally 1.0 to not discount later samples in the trajectory)
     debug::Bool = true
     collect_data::Bool = true # collect supervised data {(𝐱=rates, y=isevent), ...} 
-    resume::Bool = true
+    resume::Bool = false
     resume_path = raw"variables\record_2021_07_11_170347.jld2"
 end;
 
