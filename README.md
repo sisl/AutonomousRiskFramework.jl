@@ -85,7 +85,7 @@ To install the necessary python packages, we install
 
     pip3 install -r /home/carla//AutonomousRiskFramework/CARLAIntegration/scenario_runner/requirements.txt
 
-*Installation of the Julia packages needs to be included here*
+*Note: The required Julia packages have already been installed as part of the Dockerfile, in the future as soon as the repository is public, this can also easily be done for the Python packages.*
 
 ## Running Carla
 Assuming that the terminal that was used to configure the container, was not closed and the container ID still is `a182e68e7243`, Carla can be launched using the following command.
