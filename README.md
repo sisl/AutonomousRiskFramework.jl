@@ -3,7 +3,7 @@
 This readme document is intended to lead through the installation of Docker and the necessary packages. 
 
 ## Installation of Docker and NVIDIA Docker on the Host Machine
-To fully Carla, the NVIDIA extension for Docker must be installed. For this section, it is not assumed that Docker is installed on the host macine at all. The installation has been tested on Ubuntu 20.04 as host system. The following instructions can also be found with more explanations [here](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html#docker). Using the following command (assuming curl is installed with `sudo apt-get install curl`) will install Docker.
+To fully use Carla, the NVIDIA extension for Docker must be installed. For this section, it is not assumed that Docker is installed on the host macine at all. The installation has been tested on Ubuntu 20.04 as host system. The following instructions can also be found with more explanations [here](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html#docker). Using the following command (assuming curl is installed with `sudo apt-get install curl`) will install Docker.
 
     curl https://get.docker.com | sh && sudo systemctl --now enable docker
 
