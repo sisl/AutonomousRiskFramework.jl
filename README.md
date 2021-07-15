@@ -63,6 +63,19 @@ The output should look similar to this:
     autonomous_risk_framework   0.1       bc29d0c5140a   21 seconds ago   10.8GB
     carlasim/carla              0.9.11    95ae4b17d967   6 months ago     9.86GB
 
+## Configuration Inside the Container
+As the github repository is not public yet and building the Docker image is a non-interactive process, some configuration must be done manually at this point inside the Docker container. This mainly includes downloading the repository and installing all the dependencies.
+To open the image and create a new container, use the following command (the options are not necessary at the moment, but it is assumed that we want to open Carla later).
+
+    sudo docker run --runtime=nvidia --gpus all -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -it autonomous_risk_framework:0.1 bash
+    
+The output should look like
+
+    carla@a182e68e7243:~$
+    
+where `a182e68e7243` is the container ID. In the next step, the github repository is cloned in the home directory and the branch is changed to the branch dedicated for the docker container.
+
+    git clone 
    
 
 
