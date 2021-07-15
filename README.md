@@ -75,9 +75,34 @@ The output should look like
     
 where `a182e68e7243` is the container ID. In the next step, the github repository is cloned in the home directory and the branch is changed to the branch dedicated for the docker container.
 
-    git clone 
+    git clone https://github.com/sisl/AutonomousRiskFramework.git
+    
+    cd AutonomousRiskFramework
+    
+    git checkout marc/carla_docker
    
+To install the necessary python packages, we install
 
+    pip3 install -r /home/carla//AutonomousRiskFramework/CARLAIntegration/scenario_runner/requirements.txt
+
+*Installation of the Julia packages needs to be included here*
+
+## Running Carla
+Assuming that the terminal that was used to configure the container, was not closed and the container ID still is `a182e68e7243`, Carla can be launched using the following command.
+
+    /home/carla/CarlaUE4.sh -carla-rpc-port=2222 -windowed -ResX=320 -ResY=240 -benchmark -fps=10 -quality-level=Low -opengl
+
+The Carla window should open at this point and (for Carla 0.9.11) show a roundabout with a fountain. 
+
+To interact with the server, a new terminal window is required. With this window, it is possible to connect to the current session of the docker container by typing in the **new** terminal:
+
+    sudo docker exec -it a182e68e7243 bash
+ 
+where `a182e68e7243` should be replaced with the correct container ID. We can now change the map and the position of the spectator using the modified `config.py` file that is located in the `./CARLAIntegration/util/` directory. Such a command could look like:
+
+    python3 /home/carla/AutonomousRiskFramework/CARLAIntegration/util/config.py --map Town01 --port 2222 --spectator-loc 80.37 25.30 0.0    
+
+*Continue with how to execute AST*
 
 ## Contacts
 - Stanford Intelligent Systems Laboratory (SISL)
