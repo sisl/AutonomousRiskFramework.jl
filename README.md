@@ -49,7 +49,21 @@ This should create an output that looks approximately like the following:
     +-----------------------------------------------------------------------------+
 
 ## Building the Docker Image from the Dockerfile
+The file to build the image, the `Dockerfile` is located in the `Docker` directory. Building the image can be done using the following command:
 
+    sudo docker build -t autonomous_risk_framework:0.1 /PATH_TO_AUTONOMOUSRISKFRAMEWORK/Docker
+    
+To verify that the build was successful, the following command can be used to list locally available images.
+
+    sudo docker images
+    
+The output should look similar to this:
+
+    REPOSITORY                  TAG       IMAGE ID       CREATED          SIZE
+    autonomous_risk_framework   0.1       bc29d0c5140a   21 seconds ago   10.8GB
+    carlasim/carla              0.9.11    95ae4b17d967   6 months ago     9.86GB
+
+   
 
 
 ## Contacts
