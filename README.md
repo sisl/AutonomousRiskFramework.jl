@@ -83,7 +83,7 @@ where `a182e68e7243` is the container ID. In the next step, the github repositor
    
 To install the necessary python packages, we install
 
-    pip3 install -r /home/carla//AutonomousRiskFramework/CARLAIntegration/scenario_runner/requirements.txt
+    pip3 install -r /home/carla//AutonomousRiskFramework/CARLAIntegration/scenario_runner/requirements.txt && pip3 install -r /home/carla//AutonomousRiskFramework/CARLAIntegration/scenario_runner/ephem_requirement.txt
 
 *Note: The required Julia packages have already been installed as part of the Dockerfile, in the future as soon as the repository is public, this can also easily be done for the Python packages.*
 
@@ -121,6 +121,13 @@ After the successful test, it is advised to save the container as a new image to
     sudo docker commit a182e68e7243 autonomous_risk_framework_with_files:0.1
     
 where `a182e68e7243` should be replaced with your container ID. The new image name will then be `autonomous_risk_framework_with_files` and can be opened as described in the section *Configuration Inside the Container* by replacing `autonomous_risk_framework` with `autonomous_risk_framework_with_files`. No more configuration is required and the instructions from the section *Running Carla* and *Running AST* can be used directly. 
+
+## Alternative Download of the complete Docker Image
+Instead of building the Docker image according to the instructions above, the entire image (including all files) can be downloaded from Dockerhub using the command:
+
+    sudo docker pull marcschlichting/risk_assessment:0.1
+    
+The image now has the name `risk_assessment`.
 
 ## Contacts
 - Stanford Intelligent Systems Laboratory (SISL)
