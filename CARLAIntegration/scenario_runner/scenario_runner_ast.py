@@ -31,7 +31,7 @@ import json
 # import pkg_resources
 # import numpy as np
 from julia import Main, Pkg
-Pkg.activate(r'Project.toml')
+# Pkg.activate(r'Project.toml')
 Main.include("ast_tools.jl")
 Main.include("visualization.jl")
 Main.include("risk_metrics.jl")
