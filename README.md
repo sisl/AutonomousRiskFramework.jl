@@ -102,7 +102,25 @@ where `a182e68e7243` should be replaced with the correct container ID. We can no
 
     python3 /home/carla/AutonomousRiskFramework/CARLAIntegration/util/config.py --map Town01 --port 2222 --spectator-loc 80.37 25.30 0.0    
 
-*Continue with how to execute AST*
+## Running AST
+Running the actual failure search requires `python-jl` which was already installed when creating the docker image. This is necessary for the Python-Julia-Python bridge to work correctly. Details can be found [here](https://pyjulia.readthedocs.io/en/latest/troubleshooting.html). For starting the actual AST failure search, first navigate to the `scenario_runner` directory:
+
+    cd /home/carla/AutonomousRiskFramework/CARLAIntegration/scenario_runner/
+    
+From there, run the `scenario_runner_ast.py` file using `python-jl`:
+
+    python-jl scenario_runner_ast.py --route ./srunner/data/routes_ast.xml ./srunner/data/ast_scenarios.json --port 2222 --agent ./srunner/autoagents/ast_agent.py --record recordings
+    
+When running for the first time after building the image, it is possible that some CUDA dependencies for Julia need to be downloaded. This should happen automatically. After this, the command line output in the second terminal as well as rendered view should show a car taking a left turn at an intersection with a pedestrian crossing the street after the intersection. If this happens, the installation was successful.
+
+*Note: At this point it is not possible to use the plotting functions to create the risk metric plots because the packages `Plots` and `FFMPEG` cannot be installed inside the Nvidia Docker container for now. This will be resolved in the future.
+
+## Saving the container as a new image
+After the successful test, it is advised to save the container as a new image to not always have to download the github repository again (which can't be done as part of the creation of the Docker image as this doesn't allow for the interactive process that is required for cloning private github repositories). After the test, exit the container in both terminals and use the following command (on the host system):
+
+    sudo docker commit a182e68e7243 autonomous_risk_framework_with_files:0.1
+    
+where `a182e68e7243` should be replaced with your container ID. The new image name will then be `autonomous_risk_framework_with_files` and can be opened as described in the section *Configuration Inside the Container* by replacing `autonomous_risk_framework` with `autonomous_risk_framework_with_files`. No more configuration is required and the instructions from the section *Running Carla* and *Running AST* can be used directly. 
 
 ## Contacts
 - Stanford Intelligent Systems Laboratory (SISL)
