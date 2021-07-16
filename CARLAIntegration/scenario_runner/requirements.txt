@@ -87,4 +87,3 @@ wheel==0.36.2
 widgetsnbextension==3.5.1
 xmlschema==1.0.18
 zipp==3.4.1
-ephem==4.0.0.2
