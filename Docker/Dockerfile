@@ -1,6 +1,6 @@
 FROM ubuntu:18.04 as base-image
 
-LABEL maintainer "NVIDIA CORPORATION <cudatools@nvidia.com>"
+LABEL maintainer "Marc Schlichting <mschl@stanford.edu>"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gnupg2 curl ca-certificates && \
@@ -123,6 +123,3 @@ RUN julia -e 'import Pkg; Pkg.add("Random");Pkg.add("SCS");Pkg.add("StatsBase")'
 RUN julia -e 'import Pkg; Pkg.add(url="https://github.com/sisl/Vec.jl.git")'
 RUN julia -e 'import Pkg; Pkg.add("FFMPEG"); Pkg.add("Plots")'
 RUN julia -e 'import Pkg; Pkg.add("PyCall")'
-
-
-
