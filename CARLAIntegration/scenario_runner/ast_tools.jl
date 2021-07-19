@@ -4,7 +4,7 @@ using Distributions, Random
 using Statistics
 using Parameters
 using POMDPStressTesting
-# using FFMPEG, Plots
+using FFMPEG, Plots
 using FileIO
 using Dates
 # using RiskSimulator
