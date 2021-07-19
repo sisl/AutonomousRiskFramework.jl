@@ -113,8 +113,6 @@ From there, run the `scenario_runner_ast.py` file using `python-jl`:
     
 When running for the first time after building the image, it is possible that some CUDA dependencies for Julia need to be downloaded. This should happen automatically. After this, the command line output in the second terminal as well as rendered view should show a car taking a left turn at an intersection with a pedestrian crossing the street after the intersection. If this happens, the installation was successful.
 
-*Note: At this point it is not possible to use the plotting functions to create the risk metric plots because the packages `Plots` and `FFMPEG` cannot be installed inside the Nvidia Docker container for now. This will be resolved in the future.
-
 ## Saving the container as a new image
 After the successful test, it is advised to save the container as a new image to not always have to download the github repository again (which can't be done as part of the creation of the Docker image as this doesn't allow for the interactive process that is required for cloning private github repositories). After the test, exit the container in both terminals and use the following command (on the host system):
 
