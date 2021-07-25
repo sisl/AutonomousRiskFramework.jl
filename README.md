@@ -83,7 +83,7 @@ where `a182e68e7243` is the container ID. In the next step, the github repositor
    
 To install the necessary python packages, we install
 
-    pip3 install -r /home/carla//AutonomousRiskFramework/CARLAIntegration/scenario_runner/requirements.txt && pip3 install -r /home/carla//AutonomousRiskFramework/CARLAIntegration/scenario_runner/ephem_requirement.txt
+    pip3 install -r /home/carla/AutonomousRiskFramework/CARLAIntegration/scenario_runner/requirements.txt && pip3 install -r /home/carla//AutonomousRiskFramework/CARLAIntegration/scenario_runner/ephem_requirement.txt
 
 *Note: The required Julia packages have already been installed as part of the Dockerfile, in the future as soon as the repository is public, this can also easily be done for the Python packages.*
 
