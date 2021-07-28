@@ -102,8 +102,8 @@ The output should look similar to this:
 ## Configuration Inside the Container
 As the github repository is not public yet and building the Docker image is a non-interactive process, some configuration must be done manually at this point inside the Docker container. This mainly includes downloading the repository and installing all the dependencies.
 To open the image and create a new container, use the following command (the options are not necessary at the moment, but it is assumed that we want to open Carla later).
-
-    sudo docker run --runtime=nvidia --gpus all -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -it autonomous_risk_framework:0.1 bash
+    
+    sudo docker run --net=host -it marcschlichting/risk_assessment:0.1 bash
     
 The output should look like
 
@@ -124,24 +124,24 @@ To install the necessary python packages, we install
 *Note: The required Julia packages have already been installed as part of the Dockerfile, in the future as soon as the repository is public, this can also easily be done for the Python packages.*
 
 ## Running Carla
-Assuming that the terminal that was used to configure the container, was not closed and the container ID still is `a182e68e7243`, Carla can be launched using the following command.
+Using a new terminal window, the offical Carla image can be launched and the ports can be exposed and published to the host system:
 
-    /home/carla/CarlaUE4.sh -carla-rpc-port=2222 -windowed -ResX=320 -ResY=240 -benchmark -fps=10 -quality-level=Low -opengl
+    sudo docker run -p 2222-2224:2222-2224 --runtime=nvidia --net=bridge --gpus all -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -it carlasim/carla:0.9.11 bash
+
+Then Carla can be launched using:
+
+    /home/carla/CarlaUE4.sh -carla-rpc-port=2222 -windowed -ResX=640 -ResY=480 -benchmark -fps=10 -quality-level=Epic -opengl
 
 The Carla window should open at this point and (for Carla 0.9.11) show a roundabout with a fountain. 
 
-To interact with the server, a new terminal window is required. With this window, it is possible to connect to the current session of the docker container by typing in the **new** terminal:
+To interact with the Carla server, we switch over to the old container where we downloaded all the dependencies. We can now change the map and the position of the spectator using the modified `config.py` file that is located in the `./CARLAIntegration/util/` directory. Such a command could look like:
 
-    sudo docker exec -it a182e68e7243 bash
- 
-where `a182e68e7243` should be replaced with the correct container ID. We can now change the map and the position of the spectator using the modified `config.py` file that is located in the `./CARLAIntegration/util/` directory. Such a command could look like:
-
-    python3 /home/carla/AutonomousRiskFramework/CARLAIntegration/util/config.py --map Town01 --port 2222 --spectator-loc 80.37 25.30 0.0    
+    python3 /root/AutonomousRiskFramework/CARLAIntegration/util/config.py --map Town01 --port 2222 --spectator-loc 80.37 25.30 0.0  
 
 ## Running AST
-Running the actual failure search requires `python-jl` which was already installed when creating the docker image. This is necessary for the Python-Julia-Python bridge to work correctly. Details can be found [here](https://pyjulia.readthedocs.io/en/latest/troubleshooting.html). For starting the actual AST failure search, first navigate to the `scenario_runner` directory:
+Running the actual failure search requires `python-jl` which was already installed when creating the docker image. This is necessary for the Python-Julia-Python bridge to work correctly. Details can be found [here](https://pyjulia.readthedocs.io/en/latest/troubleshooting.html). For starting the actual AST failure search, first navigate to the `scenario_runner` directory (in the AST container):
 
-    cd /home/carla/AutonomousRiskFramework/CARLAIntegration/scenario_runner/
+    cd /root/AutonomousRiskFramework/CARLAIntegration/scenario_runner/
     
 From there, run the `scenario_runner_ast.py` file using `python-jl`:
 
@@ -150,18 +150,11 @@ From there, run the `scenario_runner_ast.py` file using `python-jl`:
 When running for the first time after building the image, it is possible that some CUDA dependencies for Julia need to be downloaded. This should happen automatically. After this, the command line output in the second terminal as well as rendered view should show a car taking a left turn at an intersection with a pedestrian crossing the street after the intersection. If this happens, the installation was successful.
 
 ## Saving the container as a new image
-After the successful test, it is advised to save the container as a new image to not always have to download the github repository again (which can't be done as part of the creation of the Docker image as this doesn't allow for the interactive process that is required for cloning private github repositories). After the test, exit the container in both terminals and use the following command (on the host system):
+After the successful test, it is advised to save the container as a new image to not always have to download the github repository again (which can't be done as part of the building process of the Docker image as this doesn't allow for the interactive process that is required for cloning private github repositories). After the test, exit the container in both terminals and use the following command (on the host system):
 
-    sudo docker commit a182e68e7243 autonomous_risk_framework_with_files:0.1
+    sudo docker commit a182e68e7243 marcschlichting/risk_assessment:0.1
     
-where `a182e68e7243` should be replaced with your container ID. The new image name will then be `autonomous_risk_framework_with_files` and can be opened as described in the section *Configuration Inside the Container* by replacing `autonomous_risk_framework` with `autonomous_risk_framework_with_files`. No more configuration is required and the instructions from the section *Running Carla* and *Running AST* can be used directly. 
-
-## Alternative Download of the complete Docker Image
-Instead of building the Docker image according to the instructions above, the entire image (including all files) can be downloaded from Dockerhub using the command:
-
-    sudo docker pull marcschlichting/risk_assessment:0.1
-    
-The image now has the name `risk_assessment`.
+where `a182e68e7243` should be replaced with your container ID for the `autonomous_risk_framework` container. If the ID is unknown, using the `sudo docker ps` from a new terminal window, that lists all active containers, can help. The new image name will then be `marcschlichting/risk_assessment:0.1` and can be opened like a pre-compiled image.
 
 ## Contacts
 - Stanford Intelligent Systems Laboratory (SISL)
