@@ -48,8 +48,44 @@ This should create an output that looks approximately like the following:
     |=============================================================================|
     +-----------------------------------------------------------------------------+
 
+## Using Pre-Built Docker Images
+For stability reasons, two separate Docker images are used: One image for the Carla server and one image for AST (including all the Python and Julia dependencies. For the Carla image, the offical Carla Docker image will be used. At the time of writing these instructions, the most current version of Carla is 0.9.11 and we will use this version. The image can be pulled using the following command:
+
+    sudo docker pull caralsim/carala:0.9.11
+    
+This should download and extract the official Carla Docker image. To create a Docker container (an instance of the image), the following command can be used:
+
+    sudo docker run -p 2222-2224:2222-2224 --runtime=nvidia --gpus all -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -it carlasim/carla:0.9.11 bash
+    
+The command above creates a Docker container of the official Carla image and starts the container. Since the communication betwen the carla server and the AST environment will be over TCP Port 2222-2224 (any other port could be used as well), those ports are exposed published to the host machine. Now, Carla can be launched using the following command:
+
+    /home/carla/CarlaUE4.sh -carla-rpc-port=2222 -windowed -ResX=640 -ResY=480 -benchmark -fps=10 -quality-level=Epic -opengl
+
+The `-opengl` tag is for compatibility, as found that `-vulkan`, despite being advertised as working doesn't always work. Also, when comparing performance between the two options, we did not find significant performance differences. Especially when running the entire setup *off-screen*, the `-opengl` option is mandatory because the Vulkan engine isn't supported for the version of Unreal Engine that is used with the current version of Carla. When starting carla inside the Docker container, it is normal to get warning messages about sound card drivers that can't be found. This shouldn't be concerning, as currently no sounds are used. 
+
+If carla was launched successfully, a new terminal window can be opened and in a similar procedure, the image for AST can be downloaded.
+
+    sudo docker pull marcschlichting/risk_assessment:0.1
+    
+After downloading this image and extracting it, a *normal* Docker container can be started and launched (the NVIDIA extension is not necessary for this part). However, the `net=host` option enables the Docker container to communicate to the Carla container over localhost.
+
+    sudo docker run --net=host -it marcschlichting/risk_assessment:0.1 bash
+    
+All communications and AST will be handelede from this container. 
+
+## Running AST for Pre-Compiled Containers
+In the terminal window that belongs to the AST Docker container (formally `risk_assessment`), the spectator position can be set to the area of interest using the command:
+
+    python3 /root/AutonomousRiskFramework/CARLAIntegration/util/config.py --map Town01 --port 2222 --spectator-loc 80.37 25.30 0.0 
+    
+This location is for the standard example of the T-intersection with the bicyclist that has been shown in previous demonstrations. To run the actual AST, we change the directory and execute the respective python script. Switching to a different scenario and route or agent is as easy changing the files provided by the tags.
+
+    cd /root/AutonomousRiskFramework/CARLAIntegration/scenario_runner/
+
+    python-jl scenario_runner_ast.py --route ./srunner/data/routes_ast.xml ./srunner/data/ast_scenarios.json --port 2222 --agent ./srunner/autoagents/ast_agent.py --record recordings
+
 ## Building the Docker Image from the Dockerfile
-The file to build the image, the `Dockerfile` is located in the `Docker` directory. Building the image can be done using the following command:
+This section is only intended if the image should be built from scratch and the outcome should be identical to the provided image on Dockerhub. However, we still provide the documentation in case it is of use to anybody. The file to build the image, the `Dockerfile` is located in the `Docker` directory. Building the image can be done using the following command:
 
     sudo docker build -t autonomous_risk_framework:0.1 /PATH_TO_AUTONOMOUSRISKFRAMEWORK/Docker
     
@@ -83,7 +119,7 @@ where `a182e68e7243` is the container ID. In the next step, the github repositor
    
 To install the necessary python packages, we install
 
-    pip3 install -r /home/carla/AutonomousRiskFramework/CARLAIntegration/scenario_runner/requirements.txt && pip3 install -r /home/carla//AutonomousRiskFramework/CARLAIntegration/scenario_runner/ephem_requirement.txt
+    pip3 install -r /root/AutonomousRiskFramework/CARLAIntegration/scenario_runner/requirements.txt && pip3 install -r /root/AutonomousRiskFramework/CARLAIntegration/scenario_runner/ephem_requirement.txt
 
 *Note: The required Julia packages have already been installed as part of the Dockerfile, in the future as soon as the repository is public, this can also easily be done for the Python packages.*
 
