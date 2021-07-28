@@ -51,7 +51,7 @@ This should create an output that looks approximately like the following:
 ## Using Pre-Built Docker Images
 For stability reasons, two separate Docker images are used: One image for the Carla server and one image for AST (including all the Python and Julia dependencies. For the Carla image, the offical Carla Docker image will be used. At the time of writing these instructions, the most current version of Carla is 0.9.11 and we will use this version. The image can be pulled using the following command:
 
-    sudo docker pull caralsim/carala:0.9.11
+    sudo docker pull caralsim/carla:0.9.11
     
 This should download and extract the official Carla Docker image. To create a Docker container (an instance of the image), the following command can be used:
 
