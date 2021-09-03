@@ -5,7 +5,7 @@ using POMDPStressTesting
 include("visualization.jl")
 include("risk_metrics.jl")
 
-path = raw"variables\record_2021_07_11_183731.jld2"
+path = raw"variables\record_2021_07_27_123844.jld2"
 name = path[end-21:end-5]
 
 tmp = load(path)
@@ -24,7 +24,7 @@ savefig(p_distance, raw"plots\miss_distance_distribution_"*name*".png")
 
 # Plot cost distribution.
 metrics = risk_assessment(𝒟, α)
-p_risk = plot_risk(metrics; mean_y=2.33, var_y=4.25, cvar_y=2.1, α_y=6.2)
+p_risk = plot_risk(metrics; mean_y=1.33, var_y=2.25, cvar_y=1.1, α_y=2.2)
 savefig(p_risk, raw"plots\risk_"*name*".png")
 
 # Polar plot of risk and failure metrics
@@ -32,3 +32,16 @@ w = ones(7);
 p_metrics = plot_polar_risk([𝒟], [tmp["metrics"]], ["Carla BaseAgent"]; weights=w, α=α)
 savefig(raw"plots\polar_risk_"*name*".png")
 
+###############################################################################################
+# Action plotting
+
+using NPZ
+using Plots
+
+actions = npzread(raw"C:\Users\shubh\Documents\AST_project\AutonomousRiskFramework\CARLAIntegration\scenario_runner\variables\actions_sac_10000_steps.npy");
+
+anim = @animate for i = 1:df:length(x)
+    plot(actions[1:i, 1, :], legend=false)
+end
+
+gif(anim, "plots/disturbances.gif", fps = 30))

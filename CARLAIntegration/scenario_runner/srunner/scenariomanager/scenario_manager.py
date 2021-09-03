@@ -13,6 +13,8 @@ It must not be modified and is for reference only!
 from __future__ import print_function
 import sys
 import time
+import uuid
+import copy
 
 import py_trees
 
@@ -64,6 +66,8 @@ class ScenarioManager(object):
         self.scenario_duration_game = 0.0
         self.start_system_time = None
         self.end_system_time = None
+
+        self.state_hash = {}
 
     def _reset(self):
         """
@@ -171,10 +175,29 @@ class ScenarioManager(object):
         if self.scenario_tree.status == py_trees.common.Status.FAILURE:
             print("ScenarioManager: Terminated due to failure")
     
+    def store_states(self):
+        world = CarlaDataProvider.get_world()
+        if world:
+            snapshot = world.get_snapshot()
+            if snapshot:
+                self.state_hash[uuid.uuid1()] = [snapshot, self.scenario_tree]
+
+    def load_states(self, id):
+        world = CarlaDataProvider.get_world()
+        if world:
+            snapshot, stree = self.state_hash[id]
+            for a_snapshot in snapshot:
+                actor = world.get_actor(a_snapshot.id)
+                actor.set_transform(a_snapshot.get_transform())
+                actor.set_target_velocity(a_snapshot.get_velocity())
+                actor.set_target_angular_velocity(a_snapshot.get_angular_velocity())
+            self.scenario_tree = stree
+
     def tick_scenario_ast(self, disturbance):
         """
         Progresses the scenario tick-by-tick for AST interface
         """
+        distance = 1000
         if self._running:
             timestamp = None
             world = CarlaDataProvider.get_world()
@@ -194,7 +217,6 @@ class ScenarioManager(object):
                 GameTime.on_carla_tick(timestamp)
                 CarlaDataProvider.on_carla_tick()
 
-                distance = 1000
                 if self._agent is not None:
                     self._agent._agent.set_disturbance(disturbance)
                     ego_action = self._agent()  # pylint: disable=not-callable

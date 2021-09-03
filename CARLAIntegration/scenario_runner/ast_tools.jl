@@ -4,7 +4,7 @@ using Distributions, Random
 using Statistics
 using Parameters
 using POMDPStressTesting
-using FFMPEG, Plots
+# using FFMPEG, Plots
 using FileIO
 using Dates
 # using RiskSimulator
@@ -14,16 +14,16 @@ Create Simulation
 """
 
 @with_kw struct CarlaParams
-    endtime::Int64 = 60 # Simulate end time
+    endtime::Int64 = 200 # Simulate end time
     episodic_rewards::Bool = false # decision making process with epsidic rewards
     give_intermediate_reward::Bool = false # give log-probability as reward during intermediate gen calls (used only if `episodic_rewards`)
-    reward_bonus::Float64 = episodic_rewards ? 100 : 100 # reward received when event is found, multiplicative when using `episodic_rewards`
+    reward_bonus::Float64 = episodic_rewards ? 100 : 200 # reward received when event is found, multiplicative when using `episodic_rewards`
     use_potential_based_shaping::Bool = false # apply potential-based reward shaping to speed up learning
     pass_seed_action::Bool = false # pass the selected RNG seed to the GrayBox.transition! and BlackBox.evaluate! functions
     discount::Float64 = 1.0 # discount factor (generally 1.0 to not discount later samples in the trajectory)
     debug::Bool = true
     collect_data::Bool = true # collect supervised data {(𝐱=rates, y=isevent), ...} 
-    resume::Bool = true
+    resume::Bool = false
     resume_path = raw"variables\record_2021_07_11_170347.jld2"
 end;
 
@@ -286,7 +286,7 @@ function run_CEM(step_fn, reset_fn, record_step_fn)
                                         N=50,
                                         #    min_elite_samples=planner.solver.min_elite_samples,
                                         #    max_elite_samples=planner.solver.max_elite_samples,
-                                        elite_thresh=280,
+                                        elite_thresh=800,
                                         #    weight_fn=planner.solver.weight_fn,
                                         #    add_entropy=planner.solver.add_entropy,
                                         verbose=false,

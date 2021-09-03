@@ -394,7 +394,7 @@ class RouteScenario(BasicScenario):
         Set other_actors to the superset of all scenario actors
         """
 
-        # # Modified to have no background activity (Shubh)
+        # Modified to have no background activity (Shubh)
 
         # # Create the background activity of the route
         # town_amount = {

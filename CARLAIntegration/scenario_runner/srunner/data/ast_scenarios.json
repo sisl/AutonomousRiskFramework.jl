@@ -36,6 +36,33 @@
                     ],
                     "scenario_type": "Scenario4"
                 }
+            ],
+            "Town03": [
+                {
+                    "available_event_configurations": [
+                        {
+                            "other_actors": {
+                                "front": [
+                                    {
+                                        "pitch": "0.0",
+                                        "x": "5.0",
+                                        "y": "0.0",
+                                        "yaw": "0.000031",
+                                        "z": "1.0"
+                                    }
+                                ]
+                            },
+                            "transform": {
+                                "pitch": "0.0",
+                                "x": "244.5",
+                                "y": "-100.6",
+                                "yaw": "271.39",
+                                "z": "0.0"
+                            }
+                        }
+                    ],
+                    "scenario_type": "Scenario2"
+                }
             ]
         }
     ]

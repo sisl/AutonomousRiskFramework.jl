@@ -159,13 +159,19 @@ class AstAgent(AutonomousAgent):
         ego_vehicle_location = self._agent._vehicle.get_location()
         ego_vehicle_waypoint = self._agent._map.get_waypoint(ego_vehicle_location)
 
+        veh_idx = -1
+
+        self.min_distance = 10000
+
         for target_vehicle in vehicle_list:
             # do not account for the ego vehicle
             if target_vehicle.id == self._agent._vehicle.id:
                 continue
+            
+            veh_idx += 1
 
             # Compute the noisy target vehicle position (TODO: update to take AST noise instead of fixed)
-            noise = carla.Location(x=self.disturbance['x'], y=self.disturbance['y'])
+            noise = carla.Location(x=self.disturbance['x'][veh_idx], y=self.disturbance['y'][veh_idx])
             
             noisy_target_tf = target_vehicle.get_transform()
 

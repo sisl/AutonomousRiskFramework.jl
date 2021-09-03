@@ -4,7 +4,7 @@ python config.py --map Town01 --port 2222 --spectator-loc 80.37 25.30 0.0 --no-r
 
 python scenario_runner.py --scenario OppositeVehicleRunningRedLight001 --configFile red_light_config.xml --trafficManagerPort 8001 --timeout 120 --port 2222
 
-python scenario_runner_ast.py --route .\srunner\data\routes_ast.xml .\srunner\data\ast_scenarios.json --port 2222 --agent .\srunner\autoagents\ast_agent.py --record recordings
+python scenario_runner_ast_gym.py --route .\srunner\data\routes_ast.xml .\srunner\data\ast_scenarios.json --port 2222 --agent .\srunner\autoagents\ast_agent.py --record recordings --timeout 60
 
 # %CARLA_ROOT% is the CARLA installation directory
 # %SCENARIO_RUNNER% is the ScenarioRunner installation directory
