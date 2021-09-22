@@ -35,13 +35,27 @@ savefig(raw"plots\polar_risk_"*name*".png")
 ###############################################################################################
 # Action plotting
 
-using NPZ
-using Plots
+# using NPZ
+# using Plots
 
-actions = npzread(raw"C:\Users\shubh\Documents\AST_project\AutonomousRiskFramework\CARLAIntegration\scenario_runner\variables\actions_sac_10000_steps.npy");
+# actions = npzread(raw"C:\Users\shubh\Documents\AST_project\AutonomousRiskFramework\CARLAIntegration\scenario_runner\variables\actions_sac_10000_steps.npy");
 
-anim = @animate for i = 1:df:length(x)
-    plot(actions[1:i, 1, :], legend=false)
-end
+# anim = @animate for i = 1:df:length(x)
+#     plot(actions[1:i, 1, :], legend=false)
+# end
 
-gif(anim, "plots/disturbances.gif", fps = 30))
+# gif(anim, "plots/disturbances.gif", fps = 30))
+
+###############################################################################################
+# Python pickle plotting
+
+using Pickle
+using FileIO
+using Dates
+using POMDPStressTesting
+
+include("visualization.jl")
+include("risk_metrics.jl")
+
+path = raw"variables\dataset_test.pkl"
+name = path[end-21:end-5]

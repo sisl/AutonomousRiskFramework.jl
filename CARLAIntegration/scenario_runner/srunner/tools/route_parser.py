@@ -16,8 +16,8 @@ from agents.navigation.local_planner import RoadOption
 from srunner.scenarioconfigs.route_scenario_configuration import RouteScenarioConfiguration
 
 # TODO  check this threshold, it could be a bit larger but not so large that we cluster scenarios.
-TRIGGER_THRESHOLD = 2.0  # Threshold to say if a trigger position is new or repeated, works for matching positions
-TRIGGER_ANGLE_THRESHOLD = 10  # Threshold to say if two angles can be considering matching when matching transforms.
+TRIGGER_THRESHOLD = 5.0  # Threshold to say if a trigger position is new or repeated, works for matching positions
+TRIGGER_ANGLE_THRESHOLD = 30  # Threshold to say if two angles can be considering matching when matching transforms.
 
 
 class RouteParser(object):
@@ -298,11 +298,13 @@ class RouteParser(object):
                         if 'other_actors' in event:
                             other_vehicles = event['other_actors']
                         else:
-                            other_vehicles = None
+                            other_vehicles = None     #Shubh: force to only select scenarios with other agents
+
                         scenario_subtype = RouteParser.get_scenario_type(scenario_name, match_position,
                                                                          trajectory)
-                        if scenario_subtype is None:
-                            continue
+                        # print("D0: ", scenario_subtype)                                                        
+                        # if scenario_subtype is None:
+                        #     continue
                         scenario_description = {
                             'name': scenario_name,
                             'other_actors': other_vehicles,
@@ -310,7 +312,10 @@ class RouteParser(object):
                             'scenario_type': scenario_subtype,  # some scenarios have route dependent configs
                         }
 
+                        # print("D1: ", scenario_description)
+                        # print("D2: ", waypoint, existent_triggers)
                         trigger_id = RouteParser.check_trigger_position(waypoint, existent_triggers)
+                        # print("D3: ", trigger_id)
                         if trigger_id is None:
                             # This trigger does not exist create a new reference on existent triggers
                             existent_triggers.update({latest_trigger_id: waypoint})

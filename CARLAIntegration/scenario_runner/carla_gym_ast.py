@@ -28,20 +28,29 @@ class CARLAEnv(gym.Env):
     self.reward_bonus = params['reward_bonus']
     self.discount = params['discount']
     self.max_past_step = params['max_past_step']
-    self.var_disturbance = np.array(params['var_disturbance'])
-    self.mean_disturbance = np.array(params['mean_disturbance'])
 
     # Functions
     self._step = step_fn
     self._reset = reset_fn
 
+    self.dataset = []
+
     obs = self.reset(retdict=True)
 
+    self.center = np.concatenate([v for v in obs.values()], axis=0)
+    self.center[4::5] = 0.0
+
     self.actor_keys = list(obs.keys())  # Ensure actor is matched to the right key for observations
+    print("No. of Actors: ", len(self.actor_keys))
+
+    self.var_disturbance = np.array(params['var_disturbance']*(len(self.actor_keys)-1))
+    self.mean_disturbance = np.array(params['mean_disturbance']*(len(self.actor_keys)-1))
 
     # action/observation spaces
     assert len(params['lower_disturbance']) == len(params['upper_disturbance'])
-    self.action_space = spaces.Box(np.array(params['lower_disturbance']), np.array(params['upper_disturbance']), dtype=np.float32)
+    self.action_space = spaces.Box(
+        np.array(params['lower_disturbance']*(len(self.actor_keys)-1)), 
+        np.array(params['upper_disturbance']*(len(self.actor_keys)-1)), dtype=np.float32)
 
     assert len(params['lower_actor_state']) == len(params['upper_actor_state'])
 
@@ -63,16 +72,22 @@ class CARLAEnv(gym.Env):
 
     # Execute one time step within the environment. 
     running, collision, distance = self._step(action)
-    
-    if running == 0 or collision:
-      self._done = True
+
+    self._rate = self._distances[-1] - distance
+
+    self._distances.append(distance)
 
     if collision:
       self._failed_scenario = True
 
     self._collision = collision
 
-    self._distances.append(distance)
+    if running == 0 or collision:
+      self._done = True
+      _y = self._failed_scenario
+      _x = (self._actions, min(self._distances), self._rate)
+      self.dataset.append((_x, _y))
+
 
     # Calculate the reward for this step
     self._reward = self._get_reward(self._action, self._done, self._failed_scenario, collision, self._distances)
@@ -96,7 +111,10 @@ class CARLAEnv(gym.Env):
     # Update timesteps
     self._timestep += 1
 
-    return (self._get_obs(), self._reward, self._done, copy.deepcopy(info))
+    self._observation = self._get_obs()
+    self._observations.append(self._observation)
+
+    return (self._observation, self._reward, self._done, copy.deepcopy(info))
 
   def _get_actor_polygons(self, filt):
     """Get the bounding box polygon of actors.
@@ -135,8 +153,11 @@ class CARLAEnv(gym.Env):
     self._timestep = 0
     self._action = None
     self._actions = []
+    self._observation = None
+    self._observations = []
     self._first_step = True
-    self._distances = []
+    self._distances = [10000]
+    self._rate = 0.0
     self._collision = False
     self._failed_scenario = False
 
@@ -148,7 +169,10 @@ class CARLAEnv(gym.Env):
     walker_poly_dict = self._get_actor_polygons('walker.*')
     self.walker_polygons.append(walker_poly_dict)
 
-    return self._get_obs(retdict=retdict)
+    self._observation = self._get_obs(retdict=retdict)
+    self._observations.append(self._observation)
+
+    return self._observation
   
   def _get_obs(self, retdict=False):
     obs = {}
@@ -174,12 +198,12 @@ class CARLAEnv(gym.Env):
     if retdict:
       return obs
 
-    return normalize_observations(np.concatenate([v for v in obs.values()], axis=0))
+    return normalize_observations(np.concatenate([v for v in obs.values()], axis=0), self.center)
 
   def _get_reward(self, action, done, failed_scenario, collision, distances):
     # TODO: scale to be reasonable sized (Within [-1, 1])
     # reward = -(self.mahalanobis_d(action)/self.mahalanobis_d([5, 5]) + np.clip(distances[-1], 0, 10)/10)
-    reward = -self.mahalanobis_d(action)/self.mahalanobis_d([10, 10])
+    reward = -self.mahalanobis_d(action)/self.mahalanobis_d(10*self.var_disturbance)
     if collision:
       reward += 100
 
@@ -207,10 +231,12 @@ class CARLAEnv(gym.Env):
     print("Timestep: ", self._timestep)
     print("Action: ", self._action)
     print("Reward: ", self._reward)
+    print("Observation: ", self._observation)
     print("Collision: ", self._collision)
     print("Failed: ", self._failed_scenario)
 
-def normalize_observations(obs):
-  mean = np.array([83.78031, 12.687019, 84.24346, 16.653917, 0.5, 64.62255, -2.442448, 64.96491, -3.9550319, 0.5])
-  std = np.array([13.913469, 14.930986, 10.969871, 15.964834, 0.5, 18.97383, 4.713275, 19.074358, 4.8009253, 0.5])
+def normalize_observations(obs, center):
+  mean = center
+  n_act = int(len(obs)/5)
+  std = np.array([20, 20, 20, 20, 1.0]*n_act)
   return np.divide(obs - mean, std)

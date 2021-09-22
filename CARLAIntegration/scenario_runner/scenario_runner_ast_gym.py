@@ -34,6 +34,7 @@ import numpy as np
 import carla_gym_ast as cg_ast 
 
 import carla
+import pickle
 
 from srunner.scenarioconfigs.openscenario_configuration import OpenScenarioConfiguration
 from srunner.scenariomanager.carla_data_provider import CarlaDataProvider
@@ -528,8 +529,7 @@ class ScenarioRunner(object):
             self.test_status = "INIT"
 
         def step_fn(values):
-            values = list(values)
-            disturbance = {'x': [values[0].astype(np.float64)], 'y': [values[1].astype(np.float64)]}
+            disturbance = {'x': values[::2].astype(np.float64), 'y': values[1::2].astype(np.float64)}
             # print("Disturbance: ", disturbance)
             for _ in range(block_size):
                 self.running, distance = self.manager.tick_scenario_ast(disturbance)
@@ -543,17 +543,34 @@ class ScenarioRunner(object):
         
 
         checkpoint_callback = CheckpointCallback(save_freq=1000, save_path='./checkpoints/',
-                                         name_prefix='sac_carla')
+                                         name_prefix='sac_carla_test')
 
         env = cg_ast.CARLAEnv(step_fn, reset_fn)
-        # model = sb3.SAC("MlpPolicy", env, verbose=1)
-        model = sb3.SAC.load(os.path.join(os.getcwd(), "checkpoints", "td3_carla_10000_steps"))
+        model = sb3.SAC("MlpPolicy", env, verbose=1)
+        # model = sb3.SAC.load(os.path.join(os.getcwd(), "checkpoints", "td3_carla_10000_steps"))
         model.set_env(env)
         
         # Turn off if only evaluating
-        # model.learn(total_timesteps=10000, log_interval=2, callback=checkpoint_callback)
+        model.learn(total_timesteps=10000, log_interval=2, callback=checkpoint_callback)
 
         # model.save(os.path.join(os.getcwd(), "variables", "td3_carla"))
+        dataset_save_path = os.path.join(os.getcwd(), "variables", "dataset_test")
+        if not os.path.exists(dataset_save_path):
+            os.makedirs(dataset_save_path)
+        
+        _samples =[]
+        _dists = []
+        _rates = []
+        _y = []
+        for data in env.dataset:
+            _y.append(data[1])
+            _samples.append(data[0][0])
+            _dists.append(data[0][1])
+            _rates.append(data[0][2])
+        pickle.dump( _y, open( os.path.join(dataset_save_path, "y.pkl"), "wb" ) )
+        pickle.dump( _samples, open( os.path.join(dataset_save_path, "samples.pkl"), "wb" ) )
+        pickle.dump( _rates, open( os.path.join(dataset_save_path, "rates.pkl"), "wb" ) )
+        pickle.dump( _dists, open( os.path.join(dataset_save_path, "dists.pkl"), "wb" ) )
         env = model.get_env()
 
 
@@ -562,11 +579,12 @@ class ScenarioRunner(object):
         observation = env.reset()
         # print(observation, env.observation_space)
         # raise
-        for t in range(100):
+        for t in range(200):
             # ls_obs.append(observation)
             action, _states = model.predict(observation, deterministic=True)
             ls_action.append(action)
             observation, reward, done, info = env.step(action)
+            # observation, reward, done, info = env.step(np.zeros_like(action))   # Zero noise for debugging
             env.render()
             if done:
                 print("Episode finished after {} timesteps".format(t+1))
