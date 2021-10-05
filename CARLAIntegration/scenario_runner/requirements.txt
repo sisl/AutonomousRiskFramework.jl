@@ -48,7 +48,6 @@ pandocfilters==1.4.3
 parso==0.8.2
 pickleshare==0.7.5
 Pillow==8.2.0
-pip==21.0.1
 plyfile==0.7.3
 prometheus-client==0.10.1
 prompt-toolkit==3.0.18
@@ -77,8 +76,8 @@ setuptools==52.0.0
 Shapely==1.7.1
 six==1.15.0
 sklearn==0.0
+stable_baselines3
 tabulate==0.8.9
-terminado==0.9.4
 testpath==0.4.4
 threadpoolctl==2.1.0
 tornado==6.1

@@ -31,7 +31,7 @@ import json
 # import pkg_resources
 import numpy as np
 # sys.path.append(os.getcwd())
-import carla_gym_ast as cg_ast 
+import srunner.carla_gym_ast as cg_ast
 
 import carla
 import pickle
