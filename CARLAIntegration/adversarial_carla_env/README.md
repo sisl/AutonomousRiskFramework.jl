@@ -22,7 +22,7 @@ Install Instructions
     ```
 
 1. Set up environment variables
-    - See `env_set.bat` (change these to Unix-style and put them somewhere permanent)
+    - See `env_set.txt`
 
 
 
@@ -33,7 +33,7 @@ Running Instructions
     CarlaUE4 -carla-rpc-port=2222 -windowed -ResX=320 -ResY=240 -benchmark -fps=10 -quality-level=Low
     ```
 
-1. Execute stress testing and record the final trajectory (requires setting environment variables, follow `env_set.bat`)
+1. Execute stress testing and record the final trajectory (requires setting environment variables, follow `env_set.txt`)
     ```
     python run.py
     ```
