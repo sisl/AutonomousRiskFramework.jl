@@ -28,12 +28,8 @@ Install Instructions
 
 Running Instructions
 ========================
-1. Launch CARLA server (from the folder containing `CarlaUE4.{exe|sh}`)
-    ```
-    CarlaUE4 -carla-rpc-port=2222 -windowed -ResX=320 -ResY=240 -benchmark -fps=10 -quality-level=Low
-    ```
 
-1. Execute stress testing and record the final trajectory (requires setting environment variables, follow `env_set.txt`)
+1. Execute stress testing and record the final trajectory (requires setting environment variables, follow `env_set.txt`). Note this launches the CARLA executable if not already open.
     ```
     python run.py
     ```

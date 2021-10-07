@@ -88,6 +88,7 @@ class AdversarialCARLAEnv(gym.Env):
     carla_map = "Town01"
     spectator_loc = [80.37, 25.30, 0.0]
     no_rendering = False # TODO: make this configurable
+    carla_running = False
 
     def __init__(self, *, route=route, scenario=scenario, agent=agent, port=port, record=record):
         """
@@ -129,9 +130,34 @@ class AdversarialCARLAEnv(gym.Env):
                                   waitForEgo=False)
 
         # Set CARLA configuration (see CARLA\PythonAPI\util\config.py)
-        client = carla.Client(args.host, args.port, worker_threads=1)
-        client.set_timeout(args.timeout)
-        client.load_world(self.carla_map)
+        def setup_carla(timeout=args.timeout):
+            client = carla.Client(args.host, args.port, worker_threads=1)
+            client.set_timeout(timeout)
+            client.load_world(self.carla_map)
+            return client
+
+        client = None
+        try:
+            print("Checking if CARLA is open, then setting up.")
+            client = setup_carla()
+            print("CARLA executable is already open.")
+        except Exception as e:
+            print("CARLA not open, now opening executable.")
+            CARLA_ROOT_NAME = "CARLA_ROOT"
+            if CARLA_ROOT_NAME not in os.environ:
+                raise Exception("Please set your " + CARLA_ROOT_NAME + " environment variable to the base directory where CarlaUE4.{exe|sh} lives.")
+            else:
+                CARLA_ROOT = os.environ[CARLA_ROOT_NAME]
+
+            if os.name == 'nt': # Windows
+                cmd_str = "start " + CARLA_ROOT + "\\CarlaUE4.exe -carla-rpc-port=2222 -windowed -ResX=320 -ResY=240 -benchmark -fps=10 -quality-level=Low"
+            else:
+                cmd_str = CARLA_ROOT + "/CarlaUE4.sh -carla-rpc-port=2222 -windowed -ResX=320 -ResY=240 -benchmark -fps=10 -quality-level=Low &"
+            os.system(cmd_str)
+            self.carla_running = True
+            time.sleep(10) # Delay while CARLA spins up
+            print("Configuring CARLA.")
+            client = setup_carla()
 
         world = client.get_world()
         assert(len(self.spectator_loc)==3)
