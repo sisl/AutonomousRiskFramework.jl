@@ -6,3 +6,4 @@ BIODS253/
 *.pkl
 *.npy
 __pycache__/
+scenario_runner/
