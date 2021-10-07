@@ -32,11 +32,8 @@ Running Instructions
     ```
     CarlaUE4 -carla-rpc-port=2222 -windowed -ResX=320 -ResY=240 -benchmark -fps=10 -quality-level=Low
     ```
-1. Load configs (**remove `--no-rendering` if needed/for debugging**)
-    ```
-    python ../util/config.py --map Town01 --port 2222 --spectator-loc 80.37 25.30 0.0 --no-rendering
-    ```
+
 1. Execute stress testing and record the final trajectory (requires setting environment variables, follow `env_set.bat`)
     ```
-    python adversarial_carla_env.py
+    python run.py
     ```

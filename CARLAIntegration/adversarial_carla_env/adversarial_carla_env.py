@@ -11,8 +11,6 @@ reformulate the problem as an adversarial MDP and to use
 adaptive stress testing (AST) to find likely failures.
 """
 
-from __future__ import print_function # TODO: Needed?
-
 import gym
 import numpy as np
 import random
@@ -27,6 +25,7 @@ import time
 
 import carla_gym_ast as cg_ast
 
+import carla
 import pickle
 import py_trees
 
@@ -74,6 +73,7 @@ class AdversarialCARLAEnv(gym.Env):
     route_id = 0 # TODO: Can we use this to control the background activity?
     route = [route_file, scenario_file, route_id]
     scenario = None # TODO?
+    scenario_config = None
 
     # Agent selections
     agent = "agents/ast_agent.py"
@@ -84,6 +84,10 @@ class AdversarialCARLAEnv(gym.Env):
     # Recoding parameters
     record = "recordings" # TODO: what are we recording here and is it needed?
 
+    # CARLA configuration parameters
+    carla_map = "Town01"
+    spectator_loc = [80.37, 25.30, 0.0]
+    no_rendering = False # TODO: make this configurable
 
     def __init__(self, *, route=route, scenario=scenario, agent=agent, port=port, record=record):
         """
@@ -123,6 +127,22 @@ class AdversarialCARLAEnv(gym.Env):
                                   randomize=False,
                                   repetitions=1,
                                   waitForEgo=False)
+
+        # Set CARLA configuration (see CARLA\PythonAPI\util\config.py)
+        client = carla.Client(args.host, args.port, worker_threads=1)
+        client.set_timeout(args.timeout)
+        client.load_world(self.carla_map)
+
+        world = client.get_world()
+        assert(len(self.spectator_loc)==3)
+        spectator = world.get_spectator()
+        new_location = carla.Location(x=float(self.spectator_loc[0]), y=float(self.spectator_loc[1]), z=50+float(self.spectator_loc[2]))
+        spectator.set_transform(carla.Transform(new_location, carla.Rotation(pitch=-90)))
+
+        settings = world.get_settings()
+        settings.no_rendering_mode = self.no_rendering
+
+        # Save scenario_runner arguments
         self._args = args
 
         # Create ScenarioRunner object to handle the core route/scenario parsing
@@ -132,9 +152,11 @@ class AdversarialCARLAEnv(gym.Env):
         # Monkey patching the core "_load_and_run_scenario" function of scenario_runner.py
         self.scenario_runner._load_and_run_scenario = self._ast_run_scenario
 
+        # Warm up the scenario_runner
+        self.scenario_runner.run()
 
-    def run(self):
-        return self.scenario_runner.run()
+        # TODO: change this.
+        self._gymenv = self.create_env()
 
 
     def destroy(self):
@@ -152,7 +174,9 @@ class AdversarialCARLAEnv(gym.Env):
         self.scenario_runner._signal_handler(signum, frame)
 
 
-    def create_env(self, config):
+    def create_env(self):
+        config = self.scenario_config
+
         self.scenario_runner._args.record = False
         self.scenario_runner.temp_scenario = {'count': 0, 'start_time': None,
                                               'recorder_name': None, 'scenario': None}
@@ -191,10 +215,14 @@ class AdversarialCARLAEnv(gym.Env):
         return env
 
 
-    def _ast_run_scenario(self, config, *, max_step=200):
+    def _ast_run_scenario(self, config):
         print("(AdversarialCARLAEnv) Monkey Patched: _ast_run_scenario")
+        self.scenario_config = config
+        # return self.run()
 
-        env = self.create_env(config)
+
+    def run(self, *, max_step=200):
+        env = self._gymenv
         model = sb3.SAC("MlpPolicy", env, verbose=1)
         # model = sb3.SAC.load(os.path.join(os.getcwd(), "checkpoints", "td3_carla_10000_steps"))
         model.set_env(env)
@@ -202,7 +230,7 @@ class AdversarialCARLAEnv(gym.Env):
         checkpoint_callback = CheckpointCallback(save_freq=1000, save_path='./checkpoints/',
                                                  name_prefix='sac_carla_test')
         # Turn off if only evaluating
-        n_episodes = 2
+        n_episodes = 1
         episode_length = 200 # TODO: ?
         total_timesteps = n_episodes*episode_length # 10000
         model.learn(total_timesteps=total_timesteps, log_interval=2, callback=checkpoint_callback)
