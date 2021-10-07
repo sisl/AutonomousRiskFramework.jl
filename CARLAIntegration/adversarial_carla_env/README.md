@@ -16,16 +16,14 @@ Install Instructions
     git checkout v0.9.11
     ```
 
+1. Get Python packages:
+    ```
+    pip install -r requirements.txt -r ..\adversarial_carla_env\requirements.txt
+    ```
+
 1. Set up environment variables
     - See `env_set.bat` (change these to Unix-style and put them somewhere permanent)
 
-1. Get Python packages (TODO: `adversarial_carla_env` requirements.txt):
-    ```
-    cd scenario_runner
-    pip install -r requirements.txt
-    cd ../adversarial_carla_env
-    pip install -r requirements.txt
-    ```
 
 
 Running Instructions
