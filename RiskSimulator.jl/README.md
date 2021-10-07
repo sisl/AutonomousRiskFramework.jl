@@ -10,6 +10,7 @@ julia
 ```
 then "develop" this package via:
 ```julia
+] registry add https://github.com/sisl/Registry
 ] dev .
 ```
 where `]` gets you into the Pkg-mode.

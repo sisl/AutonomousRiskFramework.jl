@@ -1,3 +1,0 @@
-[submodule "SpAutoDiff.jl"]
-	path = SpAutoDiff.jl
-	url = git@github.com:rdyro/SpAutoDiff.jl.git

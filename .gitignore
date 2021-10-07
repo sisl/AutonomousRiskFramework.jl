@@ -5,3 +5,4 @@ BIODS253/
 *.zip
 *.pkl
 *.npy
+__pycache__/

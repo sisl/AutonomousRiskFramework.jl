@@ -10,7 +10,7 @@ function rollout1(U, x0, f, fx, fu, X_prev, U_prev)
       f[:, i] +
       fx[:, :, i] * (x - X_prev[:, i]) +
       fu[:, :, i] * (U[:, i] - U_prev[:, i])
-    X[:, i + 1] = x
+    X[:, i+1] = x
   end
   return X
 end
@@ -56,7 +56,7 @@ function rollout4(U, x0, f, fx, fu, X_prev, U_prev)
       f[:, i] +
       fx[:, :, i] * (x - X_prev[:, i]) +
       fu[:, :, i] * (U[:, i] - U_prev[:, i])
-    x_list[i + 1] = x
+    x_list[i+1] = x
   end
   return reduce(hcat, copy(x_list))
 end
@@ -274,11 +274,154 @@ function unicycle_fu(
   return fu
 end
 ##$#############################################################################
+##^# lane lat/lon dynamics #####################################################
+function lane_f(
+  x::Vector{T},
+  u::Vector{T},
+  p::Vector{T},
+)::Vector{T} where {T<:Real}
+  @assert length(x) == 4 && length(u) == 2 && length(p) == 4
+  dt, u_scale, r = p[1], p[2:3], p[4]
+  u = copy(u)
+  eps = 1e-6
+
+  f = zeros(T, 4)
+  f[1] = (u[1] * u_scale[1] * dt^2 + 2 * x[2] * dt) / 2.0e+0 + x[1]
+  f[2] = u[1] * u_scale[1] * dt + x[2]
+  f[3] =
+    (
+      (
+        (6 * u[2] * u_scale[2] * dt^2 + 12 * x[4] * dt) * r +
+        u[1]^2 * u_scale[1]^2 * dt^4 +
+        4 * u[1] * u_scale[1] * x[2] * dt^3 +
+        6 * x[2]^2 * dt^2
+      ) / r
+    ) / 1.2e+1 + x[3]
+  f[4] =
+    (
+      (
+        3 * u[2] * u_scale[2] * dt * r +
+        u[1]^2 * u_scale[1]^2 * dt^3 +
+        3 * u[1] * u_scale[1] * x[2] * dt^2 +
+        3 * x[2]^2 * dt
+      ) / r
+    ) / 3.0e+0 + x[4]
+  return f
+end
+
+function lane_fx(
+  x::Vector{T},
+  u::Vector{T},
+  p::Vector{T},
+)::Matrix{T} where {T<:Real}
+  @assert length(x) == 4 && length(u) == 2 && length(p) == 4
+  dt, u_scale, r = p[1], p[2:3], p[4]
+  u = copy(u)
+
+  fx = zeros(T, 4, 4)
+  fx[1, 1] = 1
+  fx[1, 2] = dt
+  fx[1, 3] = 0
+  fx[1, 4] = 0
+  fx[2, 1] = 0
+  fx[2, 2] = 1
+  fx[2, 3] = 0
+  fx[2, 4] = 0
+  fx[3, 1] = 0
+  fx[3, 2] = ((4 * u[1] * u_scale[1] * dt^3 + 12 * x[2] * dt^2) / r) / 1.2e+1
+  fx[3, 3] = 1
+  fx[3, 4] = dt
+  fx[4, 1] = 0
+  fx[4, 2] = ((3 * u[1] * u_scale[1] * dt^2 + 6 * x[2] * dt) / r) / 3.0e+0
+  fx[4, 3] = 0
+  fx[4, 4] = 1
+  return fx
+end
+
+function lane_fu(
+  x::Vector{T},
+  u::Vector{T},
+  p::Vector{T},
+)::Matrix{T} where {T<:Real}
+  @assert length(x) == 4 && length(u) == 2 && length(p) == 4
+  dt, u_scale, r = p[1], p[2:3], p[4]
+  u = copy(u)
+
+  fu = zeros(T, 4, 2)
+  fu[1, 1] = (u_scale[1] * dt^2) / 2.0e+0
+  fu[1, 2] = 0
+  fu[2, 1] = u_scale[1] * dt
+  fu[2, 2] = 0
+  fu[3, 1] =
+    ((2 * u[1] * u_scale[1]^2 * dt^4 + 4 * u_scale[1] * x[2] * dt^3) / r) /
+    1.2e+1
+  fu[3, 2] = (u_scale[2] * dt^2) / 2.0e+0
+  fu[4, 1] =
+    ((2 * u[1] * u_scale[1]^2 * dt^3 + 3 * u_scale[1] * x[2] * dt^2) / r) /
+    3.0e+0
+  fu[4, 2] = u_scale[2] * dt
+  return fu
+end
+##$#############################################################################
+##^# lane lon dynamics #########################################################
+function lon_lane_f(
+  x::Vector{T},
+  u::Vector{T},
+  p::Vector{T},
+)::Vector{T} where {T<:Real}
+  @assert length(x) == 2 && length(u) == 1 && length(p) == 3
+  dt, u_scale, r = p[1], p[2], p[3]
+  u = copy(u)
+
+  f = zeros(T, 2)
+  f[1] = (u[1] * u_scale[1] * dt^2 + 2 * x[2] * dt) / 2.0e+0 + x[1]
+  f[2] = u[1] * u_scale[1] * dt + x[2]
+  return f
+end
+
+function lon_lane_fx(
+  x::Vector{T},
+  u::Vector{T},
+  p::Vector{T},
+)::Matrix{T} where {T<:Real}
+  @assert length(x) == 2 && length(u) == 1 && length(p) == 3
+  dt, u_scale, r = p[1], p[2], p[3]
+  u = copy(u)
+
+  fx = zeros(T, 2, 2)
+  fx[1, 1] = 1
+  fx[1, 2] = dt
+  fx[2, 1] = 0
+  fx[2, 2] = 1
+  return fx
+end
+
+function lon_lane_fu(
+  x::Vector{T},
+  u::Vector{T},
+  p::Vector{T},
+)::Matrix{T} where {T<:Real}
+  @assert length(x) == 2 && length(u) == 1 && length(p) == 3
+  dt, u_scale, r = p[1], p[2], p[3]
+  u = copy(u)
+
+  fu = zeros(T, 2, 1)
+  fu[1, 1] = (u_scale[1] * dt^2) / 2.0e+0
+  fu[2, 1] = u_scale[1] * dt
+  return fu
+end
+##$#############################################################################
 ##^# dynamics map ##############################################################
 DYNAMICS_FN_MAP = Dict{String,Tuple{Function,Function,Function}}(
   "unicycle" => (unicycle_f, unicycle_fx, unicycle_fu),
+  "lane" => (lane_f, lane_fx, lane_fu),
+  "lon_lane" => (lon_lane_f, lon_lane_fx, lon_lane_fu),
 )
-DYNAMICS_DIM_MAP = Dict{String,Tuple{Int,Int}}("unicycle" => (4, 2))
+DYNAMICS_DIM_MAP = Dict{String,Tuple{Int,Int}}(
+  "unicycle" => (4, 2),
+  "lane" => (4, 2),
+  "lon_lane" => (2, 1),
+)
 ##$#############################################################################
 ##^# create the SCP dynamics matrix ############################################
 function linearized_dynamics(
@@ -292,22 +435,17 @@ function linearized_dynamics(
   xdim, udim, N = size(fu)
   F = zeros(N * xdim, N * udim)
   for i in 1:N
-    for j in 1:(i - 1)
-      Fm1 = F[
-        ((i - 2) * xdim + 1):((i - 1) * xdim),
-        ((j - 1) * udim + 1):(j * udim),
-      ]
-      F[((i - 1) * xdim + 1):(i * xdim), ((j - 1) * udim + 1):(j * udim)] =
-        fx[:, :, i] * Fm1
+    for j in 1:(i-1)
+      Fm1 = F[((i-2)*xdim+1):((i-1)*xdim), ((j-1)*udim+1):(j*udim)]
+      F[((i-1)*xdim+1):(i*xdim), ((j-1)*udim+1):(j*udim)] = fx[:, :, i] * Fm1
     end
-    F[((i - 1) * xdim + 1):(i * xdim), ((i - 1) * udim + 1):(i * udim)] =
-      fu[:, :, i]
+    F[((i-1)*xdim+1):(i*xdim), ((i-1)*udim+1):(i*udim)] = fu[:, :, i]
   end
   f_ = zeros(xdim, N)
   f_[:, 1] = f[:, 1] - fu[:, :, 1] * U_prev[:, 1]
   for i in 2:N
     f_[:, i] =
-      f[:, i] + fx[:, :, i] * (f_[:, i - 1] - X_prev[:, i]) -
+      f[:, i] + fx[:, :, i] * (f_[:, i-1] - X_prev[:, i]) -
       fu[:, :, i] * U_prev[:, i]
   end
   return F, reshape(f_, :)
