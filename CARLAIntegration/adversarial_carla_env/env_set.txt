@@ -13,7 +13,7 @@ set PYTHONPATH=%PYTHONPATH%;%CARLA_ROOT%\PythonAPI\carla
 set PYTHONPATH=%PYTHONPATH%;%CARLA_ROOT%\PythonAPI
 
 ## Windows (easy): To make it easier, you can add the following string to your PYTHONPATH environment variable (permanently)
-%CARLA_ROOT%\PythonAPI\carla\dist\carla-0.9.11-py3.7-win-amd64.egg;%CARLA_ROOT%\PythonAPI\carla\agents;%CARLA_ROOT%\PythonAPI\carla;%CARLA_ROOT%\PythonAPI
+;%CARLA_ROOT%\PythonAPI\carla\dist\carla-0.9.11-py3.7-win-amd64.egg;%CARLA_ROOT%\PythonAPI\carla\agents;%CARLA_ROOT%\PythonAPI\carla;%CARLA_ROOT%\PythonAPI
 
 
 
