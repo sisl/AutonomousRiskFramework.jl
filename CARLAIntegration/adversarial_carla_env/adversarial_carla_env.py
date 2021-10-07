@@ -6,7 +6,7 @@
 # For a copy, see <https://opensource.org/licenses/MIT>.
 
 """
-This is the adversarial CARLA gym environment, designed to 
+This is the adversarial CARLA gym environment, designed to
 reformulate the problem as an adversarial MDP and to use
 adaptive stress testing (AST) to find likely failures.
 """
@@ -19,19 +19,14 @@ import random
 import copy
 from gym import spaces
 
-# TODO: import clean up!
-import glob
 import traceback
 import argparse
-import importlib
-import inspect
 import os
 import sys
 import time
 
 import carla_gym_ast as cg_ast
 
-import carla
 import pickle
 import py_trees
 
@@ -137,8 +132,9 @@ class AdversarialCARLAEnv(gym.Env):
         # Monkey patching the core "_load_and_run_scenario" function of scenario_runner.py
         self.scenario_runner._load_and_run_scenario = self._ast_run_scenario
 
-        # NOTE DEBUG: Testing.
-        self.scenario_runner.run()
+
+    def run(self):
+        return self.scenario_runner.run()
 
 
     def destroy(self):
@@ -156,14 +152,9 @@ class AdversarialCARLAEnv(gym.Env):
         self.scenario_runner._signal_handler(signum, frame)
 
 
-    def _ast_run_scenario(self, config):
-        print("(AdversarialCARLAEnv) Monkey Patched: _ast_run_scenario")
-
-        temp_record = self.scenario_runner._args.record
-
+    def create_env(self, config):
         self.scenario_runner._args.record = False
-
-        self.scenario_runner.temp_scenario = {'count': 0, 'start_time': None, 
+        self.scenario_runner.temp_scenario = {'count': 0, 'start_time': None,
                                               'recorder_name': None, 'scenario': None}
 
         block_size = 10
@@ -194,25 +185,33 @@ class AdversarialCARLAEnv(gym.Env):
                 result = self._stop_scenario(self.scenario_runner.temp_scenario['start_time'], self.scenario_runner.temp_scenario['recorder_name'], self.scenario_runner.temp_scenario['scenario'])
                 self.scenario_runner._cleanup()
             return self.scenario_runner.running, failures, distance
-        
-
-        checkpoint_callback = CheckpointCallback(save_freq=1000, save_path='./checkpoints/',
-                                         name_prefix='sac_carla_test')
 
         # TODO: Abstract this env outside this part of the code!
         env = cg_ast.CARLAEnv(step_fn, reset_fn)
+        return env
+
+
+    def _ast_run_scenario(self, config, *, max_step=200):
+        print("(AdversarialCARLAEnv) Monkey Patched: _ast_run_scenario")
+
+        env = self.create_env(config)
         model = sb3.SAC("MlpPolicy", env, verbose=1)
         # model = sb3.SAC.load(os.path.join(os.getcwd(), "checkpoints", "td3_carla_10000_steps"))
         model.set_env(env)
-        
+
+        checkpoint_callback = CheckpointCallback(save_freq=1000, save_path='./checkpoints/',
+                                                 name_prefix='sac_carla_test')
         # Turn off if only evaluating
-        model.learn(total_timesteps=10000, log_interval=2, callback=checkpoint_callback)
+        n_episodes = 2
+        episode_length = 200 # TODO: ?
+        total_timesteps = n_episodes*episode_length # 10000
+        model.learn(total_timesteps=total_timesteps, log_interval=2, callback=checkpoint_callback)
 
         # model.save(os.path.join(os.getcwd(), "variables", "td3_carla"))
         dataset_save_path = os.path.join(os.getcwd(), "variables", "dataset_test")
         if not os.path.exists(dataset_save_path):
             os.makedirs(dataset_save_path)
-        
+
         _samples =[]
         _dists = []
         _rates = []
@@ -235,7 +234,7 @@ class AdversarialCARLAEnv(gym.Env):
         observation = env.reset()
         # print(observation, env.observation_space)
         # raise
-        for t in range(200):
+        for t in range(max_step):
             # ls_obs.append(observation)
             action, _states = model.predict(observation, deterministic=True)
             ls_action.append(action)
@@ -250,15 +249,6 @@ class AdversarialCARLAEnv(gym.Env):
                 break
         env.close()
 
-        # TODO?
-        # print(failure_disturbance)
-        
-        # for config in route_configurations:
-        #     config.name = config.name[:-1] + "failure"
-        #     config.policy = {'x': failure_disturbance[0, :], 'y': failure_disturbance[1, :]}
-        #     result, _c = self._load_and_run_scenario(config)
-        #     self._cleanup()
-
         result = True
         return result
 
@@ -266,7 +256,7 @@ class AdversarialCARLAEnv(gym.Env):
     def _stop_scenario(self, start_time, recorder_name, scenario):
         try:
             self._clean_scenario_ast(start_time)
-            
+
             # Identify which criteria were met/not met
             # self.scenario_runner._analyze_scenario(config)
 
@@ -369,7 +359,7 @@ class AdversarialCARLAEnv(gym.Env):
             # Load scenario and run it
             self.scenario_runner.manager.load_scenario(scenario, self.scenario_runner.agent_instance)
             start_time = self._prep_scenario_ast()
-        
+
         except Exception as e:              # pylint: disable=broad-except
             traceback.print_exc()
             print(e)
@@ -459,7 +449,7 @@ class AdversarialCARLAEnv(gym.Env):
                 failure = False
         if failure:
             self.scenario_runner.test_status = "FAILURE"
-        
+
         return failure
 
 
@@ -472,24 +462,3 @@ def _initialize_actors(self, config):
     # Add all the actors of the specific scenarios to self.other_actors
     for scenario in self.list_scenarios:
         self.other_actors.extend(scenario.other_actors)
-
-
-def main():
-    """
-    main function
-    """
-    env = None
-    result = True
-    try:
-        env = AdversarialCARLAEnv()
-        # result = env.run()
-    finally:
-        if env is not None:
-            print("Destroying scenario runner.")
-            env.destroy()
-            del env
-    return not result
-
-
-if __name__ == "__main__":
-    sys.exit(main())
