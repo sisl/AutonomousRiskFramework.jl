@@ -35,8 +35,7 @@ import carla
 import pickle
 import py_trees
 
-# TODO: "scenario_runner" non-fresh
-sys.path.append("../scenario_runner_fresh") # Add scenario_runner package to import path
+sys.path.append("../scenario_runner") # Add scenario_runner package to import path
 
 from scenario_runner import ScenarioRunner
 from srunner.scenariomanager.carla_data_provider import CarlaDataProvider

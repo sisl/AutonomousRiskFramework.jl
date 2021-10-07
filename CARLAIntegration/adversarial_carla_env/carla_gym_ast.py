@@ -5,8 +5,7 @@ import random
 import sys
 from gym import spaces
 
-# TODO: "scenario_runner" non-fresh
-sys.path.append("../scenario_runner_fresh") # Add scenario_runner package to import path
+sys.path.append("../scenario_runner") # Add scenario_runner package to import path
 
 from srunner.scenariomanager.carla_data_provider import CarlaDataProvider
 
