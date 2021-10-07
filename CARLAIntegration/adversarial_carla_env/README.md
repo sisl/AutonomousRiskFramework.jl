@@ -6,7 +6,7 @@ Based on [ScenarioRunner](https://github.com/carla-simulator/scenario_runner), m
 
 Install Instructions
 ========================
-1. Download CARLA 0.9.11: https://carla.org/2020/12/22/release-0.9.11/
+1. Download CARLA 0.9.11: https://github.com/carla-simulator/carla/releases/tag/0.9.11
 
 1. Download `scenario_runner` 0.9.11
     > **NOTE: Make sure `scenario_runner` and `adversarial_carla_env` are in the same directory.**
