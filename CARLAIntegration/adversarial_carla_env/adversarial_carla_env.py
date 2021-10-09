@@ -142,8 +142,6 @@ class AdversarialCARLAEnv(gym.Env):
                                   repetitions=1,
                                   waitForEgo=False)
 
-        breakpoint()
-
         # Set CARLA configuration (see CARLA\PythonAPI\util\config.py)
         def setup_carla(timeout=args.timeout):
             client = carla.Client(args.host, args.port, worker_threads=1)
@@ -214,7 +212,7 @@ class AdversarialCARLAEnv(gym.Env):
         # action/observation spaces
         assert len(params['lower_disturbance']) == len(params['upper_disturbance'])
         self.action_space = spaces.Box(
-                np.array(params['lower_disturbance']*(len(self.actor_keys)-1)), 
+                np.array(params['lower_disturbance']*(len(self.actor_keys)-1)),
                 np.array(params['upper_disturbance']*(len(self.actor_keys)-1)), dtype=np.float32)
 
         assert len(params['lower_actor_state']) == len(params['upper_actor_state'])
@@ -222,13 +220,13 @@ class AdversarialCARLAEnv(gym.Env):
         # observation_space_dict = {}
         # for key in self.actor_keys:
         #   observation_space_dict[key] = spaces.Box(
-        #     np.array(params['lower_actor_state']), 
+        #     np.array(params['lower_actor_state']),
         #     np.array(params['upper_actor_state']), dtype=np.float32)
 
         # self.observation_space = spaces.Dict(observation_space_dict)
 
         self.observation_space = spaces.Box(
-                np.array(params['lower_actor_state']*len(self.actor_keys)), 
+                np.array(params['lower_actor_state']*len(self.actor_keys)),
                 np.array(params['upper_actor_state']*len(self.actor_keys)), dtype=np.float32)
 
 
@@ -249,6 +247,7 @@ class AdversarialCARLAEnv(gym.Env):
 
     def reset(self, retdict=False):
         self.scenario_runner.load_scenario()
+        self.world = CarlaDataProvider.get_world()
         self._prev_distance = 10000 # TODO...
         self._timestep = 0
         self._info = {'timestep': 0}
@@ -269,7 +268,7 @@ class AdversarialCARLAEnv(gym.Env):
         collision = self._check_failures()
 
         if not self.scenario_runner.running:
-            result = self._stop_scenario(self.scenario_runner.start_time, self.scenario_runner.recorder_name, self.scenario_runner.scenario)
+            result = self.scenario_runner._stop_scenario(self.scenario_runner.start_time, self.scenario_runner.recorder_name, self.scenario_runner.scenario)
             self.scenario_runner._cleanup()
 
         running = self.scenario_runner.running
@@ -279,8 +278,7 @@ class AdversarialCARLAEnv(gym.Env):
         # rate = self._distances[-1] - distance
         # self._distances.append(distance)
 
-        if collision:
-            self._failed_scenario = True
+        self._failed_scenario = collision
 
         if not running or collision:
             done = True
@@ -292,21 +290,19 @@ class AdversarialCARLAEnv(gym.Env):
         # self._observations.append(observation)
 
         # Update info
-        self._info['vehicles'] = self.vehicle_polygons
-        self._info['walkers'] = self.walker_polygon
         self._info['timestep'] += 1
         self._info['action'] = action
         self._info['observation'] = observation
         self._info['collision'] = collision
-        self._info['failed_scenario'] = failed_scenario
+        self._info['failed_scenario'] = self._failed_scenario
         self._info['distance'] = distance
         self._info['rate'] = rate
 
         # Calculate the reward for this step
-        reward = self._reward(info)
+        reward = self._reward(self._info)
         self._info['reward'] = reward
 
-        return (observation, reward, done, copy.deepcopy(info))
+        return (observation, reward, done, copy.deepcopy(self._info))
 
 
     def _reward(self, info):
@@ -329,7 +325,7 @@ class AdversarialCARLAEnv(gym.Env):
         # Get actors polygon list
         vehicle_poly_dict = self._get_actor_polygons('vehicle.*')
         walker_poly_dict = self._get_actor_polygons('walker.*')
-        
+
         if hasattr(self, 'actor_keys'):
             # Default values
             for key in self.actor_keys:
@@ -338,7 +334,7 @@ class AdversarialCARLAEnv(gym.Env):
         for i, (key, value) in enumerate(vehicle_poly_dict.items()):
             obs['veh_'+str(i)] = np.ones(5, dtype=np.float32)
             obs['veh_'+str(i)][:4] = value.flatten().astype(np.float32)
-        
+
         for i, (key, value) in enumerate(walker_poly_dict.items()):
             obs['walker_'+str(i)] = np.ones(5, dtype=np.float32)
             obs['walker_'+str(i)][:4] = value.flatten().astype(np.float32)
@@ -355,7 +351,7 @@ class AdversarialCARLAEnv(gym.Env):
 
         return utils.normalize_observations(o, mean, std)
 
- 
+
     def _get_actor_polygons(self, filt):
         """Get the bounding box polygon of actors.
         Args:
@@ -391,55 +387,17 @@ class AdversarialCARLAEnv(gym.Env):
         print("Failed: ", self._info['failed_scenario'])
 
 
-    def _stop_scenario(self, start_time, recorder_name, scenario):
-        try:
-            self._clean_scenario_ast(start_time)
-
-            # Identify which criteria were met/not met
-            # self.scenario_runner._analyze_scenario(config)
-
-            # Remove all actors, stop the recorder and save all criterias (if needed)
-            scenario.remove_all_actors()
-            if self.scenario_runner._args.record:
-                self.scenario_runner.client.stop_recorder()
-                self.scenario_runner._record_criteria(self.scenario_runner.manager.scenario.get_criteria(), recorder_name)
-            result = True
-
-        except Exception as e:              # pylint: disable=broad-except
-            traceback.print_exc()
-            print(e)
-            result = False
-
-        self.scenario_runner._cleanup()
-        return result
-
-
-    def _clean_scenario_ast(self, start_game_time):
-        self.scenario_runner.manager._watchdog.stop()
-
-        self.scenario_runner.manager.cleanup()
-
-        self.scenario_runner.manager.end_system_time = time.time()
-        end_game_time = GameTime.get_time()
-
-        self.scenario_runner.manager.scenario_duration_system = self.scenario_runner.manager.end_system_time - \
-            self.scenario_runner.manager.start_system_time
-        self.scenario_runner.manager.scenario_duration_game = end_game_time - start_game_time
-
-        if self.scenario_runner.manager.scenario_tree.status == py_trees.common.Status.FAILURE:
-            print("(AdversarialCARLAEnv) ScenarioManager: Terminated due to failure")
-
 
     def _tick_scenario_ast(self, disturbance):
         """
         Progresses the scenario tick-by-tick for AST interface
         """
-        distance = 1000
+        distance = 1000 # TODO. Parameterize? Larger?
         if self.scenario_runner.manager._running:
             timestamp = None
-            # world = CarlaDataProvider.get_world() # NOTE: Do we need to get_world() every time!?!?!?!
-            if self.world:
-                snapshot = self.world.get_snapshot()
+            world = CarlaDataProvider.get_world()
+            if world:
+                snapshot = world.get_snapshot()
                 if snapshot:
                     timestamp = snapshot.timestamp
             if self.scenario_runner.manager._timestamp_last_run < timestamp.elapsed_seconds:

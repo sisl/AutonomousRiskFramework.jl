@@ -2,6 +2,7 @@ import traceback
 import os
 import time
 import sys
+import py_trees
 
 sys.path.append("../scenario_runner") # Add scenario_runner package to import path
 
@@ -22,7 +23,7 @@ class ASTScenarioRunner(ScenarioRunner):
         self.start_time = None
         self.recorder_name = None
         self.scenario = None
-        self.first_load = True
+        self.running = False
 
 
     def _load_and_run_scenario(self, config):
@@ -33,10 +34,9 @@ class ASTScenarioRunner(ScenarioRunner):
         """
         Load and run the scenario given by config
         """
-        if not self.first_load:
+        if self.running:
             result = self._stop_scenario(self.start_time, self.recorder_name, self.scenario)
             self._cleanup()
-            self.first_load = False
 
         self.scenario_config.name = "RouteScenario_" + str(self.load_count)
 
@@ -111,8 +111,48 @@ class ASTScenarioRunner(ScenarioRunner):
 
         self.load_count += 1
         self.test_status = "INIT"
+        self.running = True
 
         return self.start_time, self.recorder_name, self.scenario
+
+
+    def _stop_scenario(self, start_time, recorder_name, scenario):
+        try:
+            self._clean_scenario_ast(start_time)
+
+            # Identify which criteria were met/not met
+            # self._analyze_scenario(config)
+
+            # Remove all actors, stop the recorder and save all criterias (if needed)
+            scenario.remove_all_actors()
+            if self._args.record:
+                self.client.stop_recorder()
+                self._record_criteria(self.manager.scenario.get_criteria(), recorder_name)
+            result = True
+
+        except Exception as e:              # pylint: disable=broad-except
+            traceback.print_exc()
+            print(e)
+            result = False
+
+        self._cleanup()
+        return result
+
+
+    def _clean_scenario_ast(self, start_game_time):
+        self.manager._watchdog.stop()
+
+        self.manager.cleanup()
+
+        self.manager.end_system_time = time.time()
+        end_game_time = GameTime.get_time()
+
+        self.manager.scenario_duration_system = self.manager.end_system_time - \
+            self.manager.start_system_time
+        self.manager.scenario_duration_game = end_game_time - start_game_time
+
+        if self.manager.scenario_tree.status == py_trees.common.Status.FAILURE:
+            print("(AdversarialCARLAEnv) ScenarioManager: Terminated due to failure")
 
 
     def parse_scenario(self):
