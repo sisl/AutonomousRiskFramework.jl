@@ -116,6 +116,23 @@ class ASTScenarioRunner(ScenarioRunner):
         return self.start_time, self.recorder_name, self.scenario
 
 
+    def _check_failures(self):
+        failure = False
+        for i, criterion in enumerate(self.manager.scenario.get_criteria()):
+            if i!=1:
+                continue
+            if (not criterion.optional and
+                    criterion.test_status == "FAILURE" and
+                        self.test_status != "FAILURE"):
+                failure = True
+            elif criterion.test_status == "ACCEPTABLE":
+                failure = False
+        if failure:
+            self.test_status = "FAILURE"
+
+        return failure
+
+
     def _stop_scenario(self, start_time, recorder_name, scenario):
         try:
             self._clean_scenario_ast(start_time)

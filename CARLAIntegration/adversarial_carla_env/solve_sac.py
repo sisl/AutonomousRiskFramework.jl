@@ -1,9 +1,11 @@
+import os
 import pickle
+import numpy as np
 import stable_baselines3 as sb3
 from stable_baselines3.common.callbacks import CheckpointCallback
 from adversarial_carla_env import AdversarialCARLAEnv
 
-max_step=200
+max_step = 200
 env = AdversarialCARLAEnv()
 model = sb3.SAC("MlpPolicy", env, verbose=1)
 # model = sb3.SAC.load(os.path.join(os.getcwd(), "checkpoints", "td3_carla_10000_steps"))
@@ -13,7 +15,7 @@ checkpoint_callback = CheckpointCallback(save_freq=1000, save_path='./checkpoint
                                          name_prefix='sac_carla_test')
 # Turn off if only evaluating
 n_episodes = 1
-episode_length = 200 # TODO: ?
+episode_length = 200
 total_timesteps = n_episodes*episode_length # 10000
 model.learn(total_timesteps=total_timesteps, log_interval=2, callback=checkpoint_callback)
 
@@ -22,23 +24,22 @@ dataset_save_path = os.path.join(os.getcwd(), "variables", "dataset_test")
 if not os.path.exists(dataset_save_path):
     os.makedirs(dataset_save_path)
 
-_samples =[]
-_dists = []
-_rates = []
-_y = []
-for data in env.dataset:
-    _y.append(data[1])
-    _samples.append(data[0][0])
-    _dists.append(data[0][1])
-    _rates.append(data[0][2])
-pickle.dump( _y, open( os.path.join(dataset_save_path, "y.pkl"), "wb" ) )
-pickle.dump( _samples, open( os.path.join(dataset_save_path, "samples.pkl"), "wb" ) )
-pickle.dump( _rates, open( os.path.join(dataset_save_path, "rates.pkl"), "wb" ) )
-pickle.dump( _dists, open( os.path.join(dataset_save_path, "dists.pkl"), "wb" ) )
+# _samples =[]
+# _dists = []
+# _rates = []
+# _y = []
+# for data in env.dataset:
+#     _y.append(data[1])
+#     _samples.append(data[0][0])
+#     _dists.append(data[0][1])
+#     _rates.append(data[0][2])
+# pickle.dump( _y, open( os.path.join(dataset_save_path, "y.pkl"), "wb" ) )
+# pickle.dump( _samples, open( os.path.join(dataset_save_path, "samples.pkl"), "wb" ) )
+# pickle.dump( _rates, open( os.path.join(dataset_save_path, "rates.pkl"), "wb" ) )
+# pickle.dump( _dists, open( os.path.join(dataset_save_path, "dists.pkl"), "wb" ) )
 env = model.get_env()
 
 
-# TODO: Move this OUTSIDE somewhere else!!!!
 # ls_obs = []
 ls_action = []
 observation = env.reset()

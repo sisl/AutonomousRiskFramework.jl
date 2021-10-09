@@ -10,5 +10,5 @@ while not done:
     action = np.array([2.868206, -4.096098])
     obs, reward, done, info = env.step(action)
     r += reward
-
+env.close()
 print("Reward: ", r)

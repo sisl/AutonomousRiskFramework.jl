@@ -20,6 +20,7 @@ from gym import spaces
 import traceback
 import argparse
 import os
+import signal
 import sys
 import time
 
@@ -142,35 +143,19 @@ class AdversarialCARLAEnv(gym.Env):
                                   repetitions=1,
                                   waitForEgo=False)
 
-        # Set CARLA configuration (see CARLA\PythonAPI\util\config.py)
-        def setup_carla(timeout=args.timeout):
-            client = carla.Client(args.host, args.port, worker_threads=1)
-            client.set_timeout(timeout)
-            client.load_world(self.carla_map)
-            return client
+        # Create signal handler for SIGINT
+        if sys.platform != 'win32':
+            signal.signal(signal.SIGHUP, self._signal_handler)
+        signal.signal(signal.SIGINT, self._signal_handler)
+        signal.signal(signal.SIGTERM, self._signal_handler)
 
-        # client = None
-        # try:
-        print("Checking if CARLA is open, then setting up.")
-        client = setup_carla()
-        print("CARLA executable is already open.")
-        # except Exception as e:
-        #     print("CARLA not open, now opening executable.")
-        #     CARLA_ROOT_NAME = "CARLA_ROOT"
-        #     if CARLA_ROOT_NAME not in os.environ:
-        #         raise Exception("Please set your " + CARLA_ROOT_NAME + " environment variable to the base directory where CarlaUE4.{exe|sh} lives.")
-        #     else:
-        #         CARLA_ROOT = os.environ[CARLA_ROOT_NAME]
+        # Save scenario_runner arguments
+        self._args = args
 
-        #     if os.name == 'nt': # Windows
-        #         cmd_str = "start " + CARLA_ROOT + "\\CarlaUE4.exe -carla-rpc-port=2222 -windowed -ResX=320 -ResY=240 -benchmark -fps=10 -quality-level=Low"
-        #     else:
-        #         cmd_str = CARLA_ROOT + "/CarlaUE4.sh -carla-rpc-port=2222 -windowed -ResX=320 -ResY=240 -benchmark -fps=10 -quality-level=Low &"
-        #     os.system(cmd_str)
-        #     self.carla_running = True
-        #     time.sleep(10) # Delay while CARLA spins up
-        #     print("Configuring CARLA.")
-        #     client = setup_carla()
+        # Open CARLA client
+        client = self.open_carla()
+        if client is None:
+            raise Exception("CARLA client failed to open!")
 
         self.world = client.get_world()
         assert(len(self.spectator_loc)==3)
@@ -180,9 +165,6 @@ class AdversarialCARLAEnv(gym.Env):
 
         settings = self.world.get_settings()
         settings.no_rendering_mode = self.no_rendering
-
-        # Save scenario_runner arguments
-        self._args = args
 
         # Create ScenarioRunner object to handle the core route/scenario parsing
         self.scenario_runner = ASTScenarioRunner(args)
@@ -230,12 +212,58 @@ class AdversarialCARLAEnv(gym.Env):
                 np.array(params['upper_actor_state']*len(self.actor_keys)), dtype=np.float32)
 
 
-    def destroy(self):
+    def open_carla(self):
+        # Set CARLA configuration (see CARLA\PythonAPI\util\config.py)
+        def setup_carla(timeout=self._args.timeout):
+            client = carla.Client(self._args.host, self._args.port, worker_threads=1)
+            client.set_timeout(timeout)
+            client.load_world(self.carla_map)
+            return client
+
+        client = None
+        try:
+            print("Checking if CARLA is open, then setting up.")
+            client = setup_carla()
+            print("CARLA executable is already open.")
+        except Exception as exception:
+            print("CARLA cannot be opened.")
+            traceback.print_exc()
+            print(exception)
+            self.close()
+            return None
+            # print("CARLA not open, now opening executable.")
+            # CARLA_ROOT_NAME = "CARLA_ROOT"
+            # if CARLA_ROOT_NAME not in os.environ:
+            #     raise Exception("Please set your " + CARLA_ROOT_NAME + " environment variable to the base directory where CarlaUE4.{exe|sh} lives.")
+            # else:
+            #     CARLA_ROOT = os.environ[CARLA_ROOT_NAME]
+
+            # if os.name == 'nt': # Windows
+            #     cmd_str = "start " + CARLA_ROOT + "\\CarlaUE4.exe -carla-rpc-port=2222 -windowed -ResX=320 -ResY=240 -benchmark -fps=10 -quality-level=Low"
+            # else:
+            #     cmd_str = CARLA_ROOT + "/CarlaUE4.sh -carla-rpc-port=2222 -windowed -ResX=320 -ResY=240 -benchmark -fps=10 -quality-level=Low &"
+            # os.system(cmd_str)
+            # self.carla_running = True
+            # time.sleep(10) # Delay while CARLA spins up
+            # print("Configuring CARLA.")
+            # client = setup_carla()
+        return client
+
+
+    def __del__(self):
+        self.close()
+
+
+    def close(self):
         """
         Cleanup and delete actors, ScenarioManager and CARLA world
         """
         print("(AdversarialCARLAEnv) Destroyed.")
-        del self.scenario_runner
+        if self.world is not None:
+            del self.world
+        if self.scenario_runner is not None:
+            self.scenario_runner.destroy()
+            del self.scenario_runner
 
 
     def _signal_handler(self, signum, frame):
@@ -243,6 +271,7 @@ class AdversarialCARLAEnv(gym.Env):
         Terminate scenario ticking when receiving a signal interrupt
         """
         self.scenario_runner._signal_handler(signum, frame)
+        self.close()
 
 
     def reset(self, retdict=False):
@@ -250,7 +279,10 @@ class AdversarialCARLAEnv(gym.Env):
         self.world = CarlaDataProvider.get_world()
         self._prev_distance = 10000 # TODO...
         self._timestep = 0
-        self._info = {'timestep': 0}
+        self._info = {
+            'timestep': 0,
+            'collision': None,
+            'failed_scenario': None}
 
         return self._observation(retdict)
 
@@ -265,7 +297,7 @@ class AdversarialCARLAEnv(gym.Env):
             if not self.scenario_runner.running:
                 break
 
-        collision = self._check_failures()
+        collision = self.scenario_runner._check_failures()
 
         if not self.scenario_runner.running:
             result = self.scenario_runner._stop_scenario(self.scenario_runner.start_time, self.scenario_runner.recorder_name, self.scenario_runner.scenario)
@@ -437,26 +469,3 @@ class AdversarialCARLAEnv(gym.Env):
 
         return self.scenario_runner.manager._running, distance
 
-
-    def _cleanup(self):
-        """
-        Remove and destroy everything
-        """
-        print("AdversarialCARLAEnv: C L E A N  U P?")
-
-
-    def _check_failures(self):
-        failure = False
-        for i, criterion in enumerate(self.scenario_runner.manager.scenario.get_criteria()):
-            if i!=1:
-                continue
-            if (not criterion.optional and
-                    criterion.test_status == "FAILURE" and
-                        self.scenario_runner.test_status != "FAILURE"):
-                failure = True
-            elif criterion.test_status == "ACCEPTABLE":
-                failure = False
-        if failure:
-            self.scenario_runner.test_status = "FAILURE"
-
-        return failure
