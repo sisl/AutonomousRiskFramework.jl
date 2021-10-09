@@ -23,27 +23,35 @@ import os
 import sys
 import time
 
-import carla_gym_ast as cg_ast
-
 import carla
-import pickle
 import py_trees
 
 sys.path.append("../scenario_runner") # Add scenario_runner package to import path
 
-from scenario_runner import ScenarioRunner
+from ast_scenario_runner import ASTScenarioRunner
 from srunner.scenariomanager.carla_data_provider import CarlaDataProvider
-from srunner.scenarios.open_scenario import OpenScenario
-from srunner.scenarios.route_scenario import RouteScenario
 from srunner.scenariomanager.timer import GameTime
-
-import stable_baselines3 as sb3
-from stable_baselines3.common.callbacks import CheckpointCallback
 
 from pdb import set_trace as breakpoint # DEBUG. TODO!
 
+import utils
+
 # Version of adversarial_carla_env (tied to CARLA and scenario_runner versions)
 VERSION = '0.9.11'
+
+DEFAULT_PARAMS = {
+    'endtime': 200,
+    'reward_bonus': 100,
+    'discount': 1.0,
+    'max_past_step': 3,
+    'lower_disturbance': [-10, -10],
+    'upper_disturbance': [10, 10],
+    'var_disturbance': [1, 1],
+    'mean_disturbance': [0, 0],
+    'lower_actor_state': [-100, -100, -100, -100, 0],   # x_topright, y_topright, x_bottomleft, y_bottomleft, status
+    'upper_actor_state': [100, 100, 100, 100, 1],
+}
+
 
 class AdversarialCARLAEnv(gym.Env):
 
@@ -66,6 +74,7 @@ class AdversarialCARLAEnv(gym.Env):
 
     # CARLA scenario handler
     scenario_runner = None
+    world = None
 
     # Scenario/route selections
     route_file = "data/routes_ast.xml" # TODO: None then configure as input to __init__
@@ -90,7 +99,11 @@ class AdversarialCARLAEnv(gym.Env):
     no_rendering = False # TODO: make this configurable
     carla_running = False
 
-    def __init__(self, *, route=route, scenario=scenario, agent=agent, port=port, record=record):
+    # Gym environment parameters
+    block_size = 10
+
+
+    def __init__(self, *, route=route, scenario=scenario, agent=agent, port=port, record=record, params=DEFAULT_PARAMS):
         """
         Setup ScenarioRunner
         """
@@ -99,7 +112,7 @@ class AdversarialCARLAEnv(gym.Env):
         # TODO: How to piggy-back on scenario_runner.py "main()" defaults?
         args = argparse.Namespace(host="127.0.0.1",
                                   port=port,
-                                  timeout=10.0,
+                                  timeout=20.0,
                                   trafficManagerPort=8000,
                                   trafficManagerSeed=0,
                                   sync=True,
@@ -129,6 +142,8 @@ class AdversarialCARLAEnv(gym.Env):
                                   repetitions=1,
                                   waitForEgo=False)
 
+        breakpoint()
+
         # Set CARLA configuration (see CARLA\PythonAPI\util\config.py)
         def setup_carla(timeout=args.timeout):
             client = carla.Client(args.host, args.port, worker_threads=1)
@@ -136,53 +151,85 @@ class AdversarialCARLAEnv(gym.Env):
             client.load_world(self.carla_map)
             return client
 
-        client = None
-        try:
-            print("Checking if CARLA is open, then setting up.")
-            client = setup_carla()
-            print("CARLA executable is already open.")
-        except Exception as e:
-            print("CARLA not open, now opening executable.")
-            CARLA_ROOT_NAME = "CARLA_ROOT"
-            if CARLA_ROOT_NAME not in os.environ:
-                raise Exception("Please set your " + CARLA_ROOT_NAME + " environment variable to the base directory where CarlaUE4.{exe|sh} lives.")
-            else:
-                CARLA_ROOT = os.environ[CARLA_ROOT_NAME]
+        # client = None
+        # try:
+        print("Checking if CARLA is open, then setting up.")
+        client = setup_carla()
+        print("CARLA executable is already open.")
+        # except Exception as e:
+        #     print("CARLA not open, now opening executable.")
+        #     CARLA_ROOT_NAME = "CARLA_ROOT"
+        #     if CARLA_ROOT_NAME not in os.environ:
+        #         raise Exception("Please set your " + CARLA_ROOT_NAME + " environment variable to the base directory where CarlaUE4.{exe|sh} lives.")
+        #     else:
+        #         CARLA_ROOT = os.environ[CARLA_ROOT_NAME]
 
-            if os.name == 'nt': # Windows
-                cmd_str = "start " + CARLA_ROOT + "\\CarlaUE4.exe -carla-rpc-port=2222 -windowed -ResX=320 -ResY=240 -benchmark -fps=10 -quality-level=Low"
-            else:
-                cmd_str = CARLA_ROOT + "/CarlaUE4.sh -carla-rpc-port=2222 -windowed -ResX=320 -ResY=240 -benchmark -fps=10 -quality-level=Low &"
-            os.system(cmd_str)
-            self.carla_running = True
-            time.sleep(10) # Delay while CARLA spins up
-            print("Configuring CARLA.")
-            client = setup_carla()
+        #     if os.name == 'nt': # Windows
+        #         cmd_str = "start " + CARLA_ROOT + "\\CarlaUE4.exe -carla-rpc-port=2222 -windowed -ResX=320 -ResY=240 -benchmark -fps=10 -quality-level=Low"
+        #     else:
+        #         cmd_str = CARLA_ROOT + "/CarlaUE4.sh -carla-rpc-port=2222 -windowed -ResX=320 -ResY=240 -benchmark -fps=10 -quality-level=Low &"
+        #     os.system(cmd_str)
+        #     self.carla_running = True
+        #     time.sleep(10) # Delay while CARLA spins up
+        #     print("Configuring CARLA.")
+        #     client = setup_carla()
 
-        world = client.get_world()
+        self.world = client.get_world()
         assert(len(self.spectator_loc)==3)
-        spectator = world.get_spectator()
+        spectator = self.world.get_spectator()
         new_location = carla.Location(x=float(self.spectator_loc[0]), y=float(self.spectator_loc[1]), z=50+float(self.spectator_loc[2]))
         spectator.set_transform(carla.Transform(new_location, carla.Rotation(pitch=-90)))
 
-        settings = world.get_settings()
+        settings = self.world.get_settings()
         settings.no_rendering_mode = self.no_rendering
 
         # Save scenario_runner arguments
         self._args = args
 
         # Create ScenarioRunner object to handle the core route/scenario parsing
-        self.scenario_runner = ScenarioRunner(args)
-        self.scenario_runner._args.reloadWorld = False # Force no-reload.
-
-        # Monkey patching the core "_load_and_run_scenario" function of scenario_runner.py
-        self.scenario_runner._load_and_run_scenario = self._ast_run_scenario
+        self.scenario_runner = ASTScenarioRunner(args)
 
         # Warm up the scenario_runner
-        self.scenario_runner.run()
+        self.scenario_runner.parse_scenario()
 
-        # TODO: change this.
-        self._gymenv = self.create_env()
+        # Environment parameters
+        self.endtime = params['endtime']
+        self.reward_bonus = params['reward_bonus']
+        self.discount = params['discount']
+        self.max_past_step = params['max_past_step']
+
+        # self.dataset = []
+
+        obs = self.reset(retdict=True)
+
+        self.center = np.concatenate([v for v in obs.values()], axis=0)
+        self.center[4::5] = 0.0
+
+        self.actor_keys = list(obs.keys())  # Ensure actor is matched to the right key for observations
+        print("No. of Actors: ", len(self.actor_keys))
+
+        self.var_disturbance = np.array(params['var_disturbance']*(len(self.actor_keys)-1))
+        self.mean_disturbance = np.array(params['mean_disturbance']*(len(self.actor_keys)-1))
+
+        # action/observation spaces
+        assert len(params['lower_disturbance']) == len(params['upper_disturbance'])
+        self.action_space = spaces.Box(
+                np.array(params['lower_disturbance']*(len(self.actor_keys)-1)), 
+                np.array(params['upper_disturbance']*(len(self.actor_keys)-1)), dtype=np.float32)
+
+        assert len(params['lower_actor_state']) == len(params['upper_actor_state'])
+
+        # observation_space_dict = {}
+        # for key in self.actor_keys:
+        #   observation_space_dict[key] = spaces.Box(
+        #     np.array(params['lower_actor_state']), 
+        #     np.array(params['upper_actor_state']), dtype=np.float32)
+
+        # self.observation_space = spaces.Dict(observation_space_dict)
+
+        self.observation_space = spaces.Box(
+                np.array(params['lower_actor_state']*len(self.actor_keys)), 
+                np.array(params['upper_actor_state']*len(self.actor_keys)), dtype=np.float32)
 
 
     def destroy(self):
@@ -200,111 +247,148 @@ class AdversarialCARLAEnv(gym.Env):
         self.scenario_runner._signal_handler(signum, frame)
 
 
-    def create_env(self):
-        config = self.scenario_config
+    def reset(self, retdict=False):
+        self.scenario_runner.load_scenario()
+        self._prev_distance = 10000 # TODO...
+        self._timestep = 0
+        self._info = {'timestep': 0}
 
-        self.scenario_runner._args.record = False
-        self.scenario_runner.temp_scenario = {'count': 0, 'start_time': None,
-                                              'recorder_name': None, 'scenario': None}
+        return self._observation(retdict)
 
-        block_size = 10
-        self.scenario_runner.running = False
 
-        def reset_fn():
-            if self.scenario_runner.running:
-                result = self._stop_scenario(self.scenario_runner.temp_scenario['start_time'], self.scenario_runner.temp_scenario['recorder_name'], self.scenario_runner.temp_scenario['scenario'])
-                self.scenario_runner._cleanup()
-            config.name = "RouteScenario_" + str(self.scenario_runner.temp_scenario['count'])
-            start_time, recorder_name, scenario = self._load_scenario(config)
-            self.scenario_runner.temp_scenario['start_time'] = start_time
-            self.scenario_runner.temp_scenario['recorder_name'] = recorder_name
-            self.scenario_runner.temp_scenario['scenario'] = scenario
-            self.scenario_runner.temp_scenario['count'] += 1
-            self.scenario_runner.running = True
-            self.scenario_runner.test_status = "INIT"
+    def step(self, action):
+        done = False
+        # self._actions.append(action)
 
-        def step_fn(values):
-            disturbance = {'x': values[::2].astype(np.float64), 'y': values[1::2].astype(np.float64)}
-            # print("Disturbance: ", disturbance)
-            for _ in range(block_size):
-                self.scenario_runner.running, distance = self._tick_scenario_ast(disturbance)
-                if not self.scenario_runner.running:
-                    break
-            failures = self._check_failures()
+        disturbance = {'x': action[::2].astype(np.float64), 'y': action[1::2].astype(np.float64)}
+        for _ in range(self.block_size):
+            self.scenario_runner.running, distance = self._tick_scenario_ast(disturbance)
             if not self.scenario_runner.running:
-                result = self._stop_scenario(self.scenario_runner.temp_scenario['start_time'], self.scenario_runner.temp_scenario['recorder_name'], self.scenario_runner.temp_scenario['scenario'])
-                self.scenario_runner._cleanup()
-            return self.scenario_runner.running, failures, distance
-
-        # TODO: Abstract this env outside this part of the code!
-        env = cg_ast.CARLAEnv(step_fn, reset_fn)
-        return env
-
-
-    def _ast_run_scenario(self, config):
-        print("(AdversarialCARLAEnv) Monkey Patched: _ast_run_scenario")
-        self.scenario_config = config
-        # return self.run()
-
-
-    def run(self, *, max_step=200):
-        env = self._gymenv
-        model = sb3.SAC("MlpPolicy", env, verbose=1)
-        # model = sb3.SAC.load(os.path.join(os.getcwd(), "checkpoints", "td3_carla_10000_steps"))
-        model.set_env(env)
-
-        checkpoint_callback = CheckpointCallback(save_freq=1000, save_path='./checkpoints/',
-                                                 name_prefix='sac_carla_test')
-        # Turn off if only evaluating
-        n_episodes = 1
-        episode_length = 200 # TODO: ?
-        total_timesteps = n_episodes*episode_length # 10000
-        model.learn(total_timesteps=total_timesteps, log_interval=2, callback=checkpoint_callback)
-
-        # model.save(os.path.join(os.getcwd(), "variables", "td3_carla"))
-        dataset_save_path = os.path.join(os.getcwd(), "variables", "dataset_test")
-        if not os.path.exists(dataset_save_path):
-            os.makedirs(dataset_save_path)
-
-        _samples =[]
-        _dists = []
-        _rates = []
-        _y = []
-        for data in env.dataset:
-            _y.append(data[1])
-            _samples.append(data[0][0])
-            _dists.append(data[0][1])
-            _rates.append(data[0][2])
-        pickle.dump( _y, open( os.path.join(dataset_save_path, "y.pkl"), "wb" ) )
-        pickle.dump( _samples, open( os.path.join(dataset_save_path, "samples.pkl"), "wb" ) )
-        pickle.dump( _rates, open( os.path.join(dataset_save_path, "rates.pkl"), "wb" ) )
-        pickle.dump( _dists, open( os.path.join(dataset_save_path, "dists.pkl"), "wb" ) )
-        env = model.get_env()
-
-
-        # TODO: Move this OUTSIDE somewhere else!!!!
-        # ls_obs = []
-        ls_action = []
-        observation = env.reset()
-        # print(observation, env.observation_space)
-        # raise
-        for t in range(max_step):
-            # ls_obs.append(observation)
-            action, _states = model.predict(observation, deterministic=True)
-            ls_action.append(action)
-            observation, reward, done, info = env.step(action)
-            # observation, reward, done, info = env.step(np.zeros_like(action))   # Zero noise for debugging
-            env.render()
-            if done:
-                print("Episode finished after {} timesteps".format(t+1))
-                np.save(os.path.join(os.getcwd(), "variables", "actions_sac_10000_steps"), np.stack(ls_action))
-                # ls_obs = np.stack(ls_obs)
-                # print(np.mean(ls_obs, axis=0), np.std(ls_obs, axis=0))
                 break
-        env.close()
 
-        result = True
-        return result
+        collision = self._check_failures()
+
+        if not self.scenario_runner.running:
+            result = self._stop_scenario(self.scenario_runner.start_time, self.scenario_runner.recorder_name, self.scenario_runner.scenario)
+            self.scenario_runner._cleanup()
+
+        running = self.scenario_runner.running
+
+        rate = self._prev_distance - distance
+        self._prev_distance = distance
+        # rate = self._distances[-1] - distance
+        # self._distances.append(distance)
+
+        if collision:
+            self._failed_scenario = True
+
+        if not running or collision:
+            done = True
+        #     _y = self._failed_scenario
+        #     _x = (self._actions, min(self._distances), rate)
+        #     self.dataset.append((_x, _y))
+
+        observation = self._observation()
+        # self._observations.append(observation)
+
+        # Update info
+        self._info['vehicles'] = self.vehicle_polygons
+        self._info['walkers'] = self.walker_polygon
+        self._info['timestep'] += 1
+        self._info['action'] = action
+        self._info['observation'] = observation
+        self._info['collision'] = collision
+        self._info['failed_scenario'] = failed_scenario
+        self._info['distance'] = distance
+        self._info['rate'] = rate
+
+        # Calculate the reward for this step
+        reward = self._reward(info)
+        self._info['reward'] = reward
+
+        return (observation, reward, done, copy.deepcopy(info))
+
+
+    def _reward(self, info):
+        action = info['action']
+        failed_scenario = info['failed_scenario']
+        collision = info['collision']
+        distance = info['distance']
+
+        # TODO: scale to be reasonable sized (Within [-1, 1])
+        reward = -utils.mahalanobis_d(action, self.mean_disturbance, self.var_disturbance)/utils.mahalanobis_d(10*self.var_disturbance, self.mean_disturbance, self.var_disturbance)
+        if collision:
+            reward += 100
+
+        return reward
+
+
+    def _observation(self, retdict=False):
+        obs = {}
+
+        # Get actors polygon list
+        vehicle_poly_dict = self._get_actor_polygons('vehicle.*')
+        walker_poly_dict = self._get_actor_polygons('walker.*')
+        
+        if hasattr(self, 'actor_keys'):
+            # Default values
+            for key in self.actor_keys:
+                obs[key] = np.zeros(5, dtype=np.float32)
+
+        for i, (key, value) in enumerate(vehicle_poly_dict.items()):
+            obs['veh_'+str(i)] = np.ones(5, dtype=np.float32)
+            obs['veh_'+str(i)][:4] = value.flatten().astype(np.float32)
+        
+        for i, (key, value) in enumerate(walker_poly_dict.items()):
+            obs['walker_'+str(i)] = np.ones(5, dtype=np.float32)
+            obs['walker_'+str(i)][:4] = value.flatten().astype(np.float32)
+
+        if retdict:
+            return obs
+
+        o = np.concatenate([v for v in obs.values()], axis=0)
+
+        # TODO: turn into parameterized values in the gym env.
+        mean = self.center
+        n_act = int(len(o)/5)
+        std = np.array([20, 20, 20, 20, 1.0]*n_act)
+
+        return utils.normalize_observations(o, mean, std)
+
+ 
+    def _get_actor_polygons(self, filt):
+        """Get the bounding box polygon of actors.
+        Args:
+            filt: the filter indicating what type of actors we'll look at.
+        Returns:
+            actor_poly_dict: a dictionary containing the bounding boxes of specific actors.
+        """
+        actor_poly_dict = {}
+        for actor in self.world.get_actors().filter(filt):
+            # Get x, y and yaw of the actor
+            trans = actor.get_transform()
+            x = trans.location.x
+            y = trans.location.y
+            yaw = trans.rotation.yaw/180*np.pi
+            # Get length and width
+            bb = actor.bounding_box
+            l = bb.extent.x
+            w = bb.extent.y
+            # Get bounding box polygon in the actor's local coordinate
+            poly_local = np.array([[l,w],[-l,-w]]).transpose()
+            # Get rotation matrix to transform to global coordinate
+            R = np.array([[np.cos(yaw),-np.sin(yaw)],[np.sin(yaw),np.cos(yaw)]])
+            # Get global bounding box polygon
+            poly = np.matmul(R,poly_local).transpose()+np.repeat([[x,y]],2,axis=0)
+            actor_poly_dict[actor.id] = poly
+        return actor_poly_dict
+
+
+    def render(self, mode='human', close=False):
+        # Render the environment to the screen
+        print("Timestep: ", self._info['timestep'])
+        print("Collision: ", self._info['collision'])
+        print("Failed: ", self._info['failed_scenario'])
 
 
     def _stop_scenario(self, start_time, recorder_name, scenario):
@@ -346,93 +430,6 @@ class AdversarialCARLAEnv(gym.Env):
             print("(AdversarialCARLAEnv) ScenarioManager: Terminated due to failure")
 
 
-    def _load_scenario(self, config):
-        """
-        Load and run the scenario given by config
-        NOTE: Copied and modified from scenario_runner.py _load_and_run_scenario()
-        """
-        start_time = -1000
-        recorder_name = None
-        scenario = None
-        if not self.scenario_runner._load_and_wait_for_world(config.town, config.ego_vehicles):
-            self.scenario_runner._cleanup()
-            return start_time, recorder_name, scenario
-
-        if self.scenario_runner._args.agent:
-            agent_class_name = self.scenario_runner.module_agent.__name__.title().replace('_', '')
-            try:
-                self.scenario_runner.agent_instance = getattr(self.scenario_runner.module_agent, agent_class_name)(self.scenario_runner._args.agentConfig)
-                config.agent = self.scenario_runner.agent_instance
-            except Exception as e:          # pylint: disable=broad-except
-                traceback.print_exc()
-                print("Could not setup required agent due to {}".format(e))
-                self.scenario_runner._cleanup()
-                return start_time, recorder_name, scenario
-
-        # Prepare scenario
-        print("Preparing scenario: " + config.name)
-
-        RouteScenario._initialize_actors = _initialize_actors # Monkey patching to avoid background actors
-
-        try:
-            self.scenario_runner._prepare_ego_vehicles(config.ego_vehicles)
-            if self.scenario_runner._args.openscenario:
-                scenario = OpenScenario(world=self.scenario_runner.world,
-                                        ego_vehicles=self.scenario_runner.ego_vehicles,
-                                        config=config,
-                                        config_file=self.scenario_runner._args.openscenario,
-                                        timeout=100000)
-            elif self.scenario_runner._args.route:
-                scenario = RouteScenario(world=self.scenario_runner.world,
-                                         config=config,
-                                         debug_mode=self.scenario_runner._args.debug)
-            else:
-                scenario_class = self.scenario_runner._get_scenario_class_or_fail(config.type)
-                scenario = scenario_class(self.scenario_runner.world,
-                                          self.scenario_runner.ego_vehicles,
-                                          config,
-                                          self.scenario_runner._args.randomize,
-                                          self.scenario_runner._args.debug)
-        except Exception as exception:                  # pylint: disable=broad-except
-            print("The scenario cannot be loaded")
-            traceback.print_exc()
-            print(exception)
-            self.scenario_runner._cleanup()
-            return start_time, recorder_name, scenario
-
-        # Change max trigger distance between route and scenario # TODO: Needed?
-        # scenario.scenario.behavior.children[0].children[0].children[0]._distance = 5.5 # was 1.5 in route_scenario.py: _create_behavior()
-
-        try:
-            if self.scenario_runner._args.record:
-                recorder_name = "{}/{}/{}.log".format(
-                    os.getenv('SCENARIO_RUNNER_ROOT', "./"), self.scenario_runner._args.record, config.name)
-                print(recorder_name)
-                self.scenario_runner.client.start_recorder(recorder_name, True)
-
-            # Load scenario and run it
-            self.scenario_runner.manager.load_scenario(scenario, self.scenario_runner.agent_instance)
-            start_time = self._prep_scenario_ast()
-
-        except Exception as e:              # pylint: disable=broad-except
-            traceback.print_exc()
-            print(e)
-            result = False
-
-        return start_time, recorder_name, scenario
-
-
-    def _prep_scenario_ast(self):
-        print("(AdversarialCARLAEnv) ScenarioManager: Running scenario {}".format(self.scenario_runner.manager.scenario_tree.name))
-        self.scenario_runner.manager.start_system_time = time.time()
-        start_game_time = GameTime.get_time()
-
-        self.scenario_runner.manager._watchdog.start()
-        self.scenario_runner.manager._running = True
-
-        return start_game_time
-
-
     def _tick_scenario_ast(self, disturbance):
         """
         Progresses the scenario tick-by-tick for AST interface
@@ -440,9 +437,9 @@ class AdversarialCARLAEnv(gym.Env):
         distance = 1000
         if self.scenario_runner.manager._running:
             timestamp = None
-            world = CarlaDataProvider.get_world()
-            if world:
-                snapshot = world.get_snapshot()
+            # world = CarlaDataProvider.get_world() # NOTE: Do we need to get_world() every time!?!?!?!
+            if self.world:
+                snapshot = self.world.get_snapshot()
                 if snapshot:
                     timestamp = snapshot.timestamp
             if self.scenario_runner.manager._timestamp_last_run < timestamp.elapsed_seconds:
@@ -505,14 +502,3 @@ class AdversarialCARLAEnv(gym.Env):
             self.scenario_runner.test_status = "FAILURE"
 
         return failure
-
-
-def _initialize_actors(self, config):
-    """
-    Set other_actors to the superset of all scenario actors
-    NOTE: monkey patching _initialize_actors from route_scenario.py
-    """
-
-    # Add all the actors of the specific scenarios to self.other_actors
-    for scenario in self.list_scenarios:
-        self.other_actors.extend(scenario.other_actors)
