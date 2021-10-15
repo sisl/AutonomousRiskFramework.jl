@@ -11,7 +11,7 @@ model = sb3.SAC("MlpPolicy", env, verbose=1)
 # model = sb3.SAC.load(os.path.join(os.getcwd(), "checkpoints", "td3_carla_10000_steps"))
 model.set_env(env)
 
-checkpoint_callback = CheckpointCallback(save_freq=1000, save_path='./checkpoints/',
+checkpoint_callback = CheckpointCallback(save_freq=1000, save_path='./outputs/checkpoints/',
                                          name_prefix='sac_carla_test')
 # Turn off if only evaluating
 n_episodes = 1
@@ -20,7 +20,7 @@ total_timesteps = n_episodes*episode_length # 10000
 model.learn(total_timesteps=total_timesteps, log_interval=2, callback=checkpoint_callback)
 
 # model.save(os.path.join(os.getcwd(), "variables", "td3_carla"))
-dataset_save_path = os.path.join(os.getcwd(), "variables", "dataset_test")
+dataset_save_path = os.path.join(os.getcwd(), "outputs", "variables", "dataset_test")
 if not os.path.exists(dataset_save_path):
     os.makedirs(dataset_save_path)
 

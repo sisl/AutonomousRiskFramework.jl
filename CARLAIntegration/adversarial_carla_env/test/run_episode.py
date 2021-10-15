@@ -1,7 +1,8 @@
 import numpy as np
-from adversarial_carla_env import AdversarialCARLAEnv
+import gym
+import adv_carla
 
-env = AdversarialCARLAEnv()
+env = gym.make('adv-carla-v0') # AdversarialCARLAEnv()
 obs = env.reset()
 t = r = 0
 done = False

@@ -27,15 +27,18 @@ import time
 import carla
 import py_trees
 
-sys.path.append("../scenario_runner") # Add scenario_runner package to import path
+if 'SCENARIO_RUNNER_ROOT' not in os.environ:
+    raise Exception("Please add 'SCENARIO_RUNNER_ROOT' to your environment variables.")
+else:
+    sys.path.append(os.getenv('SCENARIO_RUNNER_ROOT')) # Add scenario_runner package to import path
 
-from ast_scenario_runner import ASTScenarioRunner
+from ..ast_scenario_runner import ASTScenarioRunner
 from srunner.scenariomanager.carla_data_provider import CarlaDataProvider
 from srunner.scenariomanager.timer import GameTime
 
 from pdb import set_trace as breakpoint # DEBUG. TODO!
 
-import utils
+from . import utils
 
 # Version of adversarial_carla_env (tied to CARLA and scenario_runner versions)
 VERSION = '0.9.11'
@@ -78,15 +81,16 @@ class AdversarialCARLAEnv(gym.Env):
     world = None
 
     # Scenario/route selections
-    route_file = "data/routes_ast.xml" # TODO: None then configure as input to __init__
-    scenario_file = "data/ast_scenarios.json" # TODO?
+    dirname = os.path.dirname(__file__)
+    route_file = os.path.join(dirname, "../data/routes_ast.xml") # TODO: None then configure as input to __init__
+    scenario_file = os.path.join(dirname, "../data/ast_scenarios.json") # TODO?
     route_id = 0 # TODO: Can we use this to control the background activity?
     route = [route_file, scenario_file, route_id]
     scenario = None # TODO?
     scenario_config = None
 
     # Agent selections
-    agent = "agents/ast_agent.py"
+    agent = os.path.join(dirname, "../agents/ast_agent.py")
 
     # CARLA configuration parameters
     port = 2222
@@ -142,12 +146,6 @@ class AdversarialCARLAEnv(gym.Env):
                                   randomize=False,
                                   repetitions=1,
                                   waitForEgo=False)
-
-        # Create signal handler for SIGINT
-        if sys.platform != 'win32':
-            signal.signal(signal.SIGHUP, self._signal_handler)
-        signal.signal(signal.SIGINT, self._signal_handler)
-        signal.signal(signal.SIGTERM, self._signal_handler)
 
         # Save scenario_runner arguments
         self._args = args
@@ -226,27 +224,31 @@ class AdversarialCARLAEnv(gym.Env):
             client = setup_carla()
             print("CARLA executable is already open.")
         except Exception as exception:
-            print("CARLA cannot be opened.")
             traceback.print_exc()
             print(exception)
             self.close()
-            return None
-            # print("CARLA not open, now opening executable.")
-            # CARLA_ROOT_NAME = "CARLA_ROOT"
-            # if CARLA_ROOT_NAME not in os.environ:
-            #     raise Exception("Please set your " + CARLA_ROOT_NAME + " environment variable to the base directory where CarlaUE4.{exe|sh} lives.")
-            # else:
-            #     CARLA_ROOT = os.environ[CARLA_ROOT_NAME]
-
-            # if os.name == 'nt': # Windows
-            #     cmd_str = "start " + CARLA_ROOT + "\\CarlaUE4.exe -carla-rpc-port=2222 -windowed -ResX=320 -ResY=240 -benchmark -fps=10 -quality-level=Low"
-            # else:
-            #     cmd_str = CARLA_ROOT + "/CarlaUE4.sh -carla-rpc-port=2222 -windowed -ResX=320 -ResY=240 -benchmark -fps=10 -quality-level=Low &"
-            # os.system(cmd_str)
-            # self.carla_running = True
-            # time.sleep(10) # Delay while CARLA spins up
-            # print("Configuring CARLA.")
-            # client = setup_carla()
+            # try:
+            #     print("CARLA not open, now opening executable.")
+            #     CARLA_ROOT_NAME = "CARLA_ROOT"
+            #     if CARLA_ROOT_NAME not in os.environ:
+            #         raise Exception("Please set your " + CARLA_ROOT_NAME + " environment variable to the base directory where CarlaUE4.{exe|sh} lives.")
+            #     else:
+            #         CARLA_ROOT = os.environ[CARLA_ROOT_NAME]
+            #     if os.name == 'nt': # Windows
+            #         cmd_str = "start " + CARLA_ROOT + "\\CarlaUE4.exe -carla-rpc-port=2222 -windowed -ResX=320 -ResY=240 -benchmark -fps=10 -quality-level=Low"
+            #     else:
+            #         cmd_str = CARLA_ROOT + "/CarlaUE4.sh -carla-rpc-port=2222 -windowed -ResX=320 -ResY=240 -benchmark -fps=10 -quality-level=Low &"
+            #     os.system(cmd_str)
+            #     self.carla_running = True
+            #     time.sleep(self._args.timeout) # Delay while CARLA spins up
+            #     print("Configuring CARLA.")
+            #     client = setup_carla()
+            # except Exception as next_exception:
+            #     print("CARLA cannot be opened.")
+            #     traceback.print_exc()
+            #     print(next_exception)
+            #     self.close()
+            #     return None
         return client
 
 
@@ -266,14 +268,6 @@ class AdversarialCARLAEnv(gym.Env):
             del self.scenario_runner
 
 
-    def _signal_handler(self, signum, frame):
-        """
-        Terminate scenario ticking when receiving a signal interrupt
-        """
-        self.scenario_runner._signal_handler(signum, frame)
-        self.close()
-
-
     def reset(self, retdict=False):
         self.scenario_runner.load_scenario()
         self.world = CarlaDataProvider.get_world()
@@ -291,7 +285,10 @@ class AdversarialCARLAEnv(gym.Env):
         done = False
         # self._actions.append(action)
 
-        disturbance = {'x': action[::2].astype(np.float64), 'y': action[1::2].astype(np.float64)}
+        if isinstance(action, np.ndarray):
+            disturbance = {'x': action[::2].astype(np.float64), 'y': action[1::2].astype(np.float64)}
+        else:
+            disturbance = {'x': action[::2], 'y': action[1::2]}
         for _ in range(self.block_size):
             self.scenario_runner.running, distance = self._tick_scenario_ast(disturbance)
             if not self.scenario_runner.running:
