@@ -2,4 +2,8 @@ ast_obs/
 .vscode/
 BIODS253/
 .ipynb_checkpoints/
+*.zip
+*.pkl
+*.npy
 __pycache__/
+scenario_runner/

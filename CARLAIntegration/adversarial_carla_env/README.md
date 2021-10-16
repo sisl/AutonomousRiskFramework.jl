@@ -1,0 +1,87 @@
+Adversarial CARLA Gym Environment
+========================
+Based on [ScenarioRunner](https://github.com/carla-simulator/scenario_runner), modified for _adaptive stress testing_ (AST).
+
+> **⚠ WORK IN PROGRESS ⚠**
+
+Install Instructions
+========================
+1. Download CARLA 0.9.11: https://github.com/carla-simulator/carla/releases/tag/0.9.11
+
+1. Download `scenario_runner` 0.9.11
+    > **NOTE: Make sure `scenario_runner` is placed in the `<CARLA_ROOT>/PythonAPI/` directory.**
+    ```
+    git clone https://github.com/carla-simulator/scenario_runner
+    cd scenario_runner
+    git checkout v0.9.11
+    ```
+
+    - Install `scenario_runner` Python packages:
+        ```
+        pip install -r requirements.txt
+        ```
+
+1. Install `adversarial_carla_env` Python packages:
+    ```
+    cd <PATH_TO>/adversarial_carla_env
+    pip install -r requirements.txt
+     ```
+
+     - Install `adv-carla-v0` gym environment:
+    ```
+    pip install -e .
+    ```
+
+1. Set up environment variables
+    - For Windows, either do this every time:
+    ```batch
+    :: %CARLA_ROOT% is the CARLA installation directory
+    :: %SCENARIO_RUNNER% is the ScenarioRunner installation directory
+    :: In a build from source, the .egg files may be in: ${CARLA_ROOT}/PythonAPI/dist/ instead of ${CARLA_ROOT}/PythonAPI
+
+    :: <<<<CHANGE THIS TO YOUR CARLA_ROOT, EVERYTHING ELSE IS UNCHANGED!>>>>
+    set CARLA_ROOT=<YOUR_PATH_TO>\CARLA_0.9.11
+
+    set SCENARIO_RUNNER_ROOT=%CARLA_ROOT%\PythonAPI\scenario_runner
+    set PYTHONPATH=%PYTHONPATH%;%CARLA_ROOT%\PythonAPI\carla\dist\carla-0.9.11-py3.7-win-amd64.egg
+    set PYTHONPATH=%PYTHONPATH%;%CARLA_ROOT%\PythonAPI\carla\agents
+    set PYTHONPATH=%PYTHONPATH%;%CARLA_ROOT%\PythonAPI\carla
+    set PYTHONPATH=%PYTHONPATH%;%CARLA_ROOT%\PythonAPI
+
+    ```
+
+    - (Windows) Or, add these to your permanent environment variables:
+        - `CARLA_ROOT`
+
+            - `<YOUR_PATH_TO>\CARLA_0.9.11`
+        - `SCENARIO_RUNNER_ROOT`
+
+            - `%CARLA_ROOT%\PythonAPI\scenario_runner`
+        - `PYTHONPATH` (append this):
+        
+            ```batch
+            ;%CARLA_ROOT%\PythonAPI\carla\dist\carla-0.9.11-py3.7-win-amd64.egg;%CARLA_ROOT%\PythonAPI\carla\agents;%CARLA_ROOT%\PythonAPI\carla;%CARLA_ROOT%\PythonAPI
+            ```
+
+    - For Linux:
+    ```bash
+
+    # <<<<CHANGE THIS TO YOUR CARLA_ROOT, EVERYTHING ELSE IS UNCHANGED!>>>>
+    export CARLA_ROOT=/path/to/CARLA_0.9.11
+
+    export SCENARIO_RUNNER_ROOT=$CARLA_ROOT/PythonAPI/scenario_runner
+    export PYTHONPATH=$PYTHONPATH:$CARLA_ROOT/PythonAPI/carla/dist/carla-0.9.11-py3.7-win-amd64.egg
+    export PYTHONPATH=$PYTHONPATH:$CARLA_ROOT/PythonAPI/carla/agents
+    export PYTHONPATH=$PYTHONPATH:$CARLA_ROOT/PythonAPI/carla
+    export PYTHONPATH=$PYTHONPATH:$CARLA_ROOT/PythonAPI
+    ```
+
+
+
+Running Instructions
+========================
+
+1. Execute stress testing and record the final trajectory (requires setting environment variables, see above). Note this launches the CARLA executable if not already open.
+    ```
+    python test/run_episode.py
+    ```
