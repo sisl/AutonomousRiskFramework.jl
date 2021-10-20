@@ -45,12 +45,12 @@ jobs:
 
       # build the depencies, run the tests, and upload coverage results
       - uses: julia-actions/julia-buildpkg@latest
-        prefix: 'cd RiskSimulator.jl &&' # test from the perspective of the RiskSimulator.jl package (TODO)
       - run: |
           git config --global user.name Tester
           git config --global user.email te@st.er
       - name: Run Tests
         uses: julia-actions/julia-runtest@latest
+        prefix: 'cd RiskSimulator.jl &&' # test from the perspective of the RiskSimulator.jl package (TODO)
       # run coverage (TODO)
       # - uses: julia-actions/julia-processcoverage@v1
       # - uses: codecov/codecov-action@v1
