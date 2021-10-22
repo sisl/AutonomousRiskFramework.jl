@@ -52,13 +52,13 @@ function merging_roadway(; r=5.0, w=DEFAULT_LANE_WIDTH, l=50.0, n=2)
 end
 
 
-function hw_straight(; roadway::Roadway, noise::Noise=Noise(), id::Int64=1, s::Float64=3.0, v::Float64=8.0, goals::Vector=[1], blinker::Bool=false)
+function hw_straight(; roadway::Roadway, id::Int64=1, noise::Noise=Noise(), s::Float64=3.0, v::Float64=8.0, goals::Vector=[1], blinker::Bool=false)
     vehicle = BlinkerVehicle(id=id, roadway=roadway, lane=1, s=s, v=v, goals=goals, blinker=blinker, noise=noise)
     return (rng::AbstractRNG=Random.GLOBAL_RNG) -> vehicle
 end
 
 
-function hw_merging(; roadway::Roadway, noise::Noise=Noise(), id::Int64=1, s::Float64=9.0, v::Float64=8.0, goals::Vector=[1], blinker::Bool=false)
+function hw_merging(; roadway::Roadway, id::Int64=1, noise::Noise=Noise(), s::Float64=9.0, v::Float64=8.0, goals::Vector=[1], blinker::Bool=false)
     vehicle = BlinkerVehicle(id=id, roadway=roadway, lane=3, s=s, v=v, goals=goals, blinker=blinker, noise=noise)
     return (rng::AbstractRNG=Random.GLOBAL_RNG) -> vehicle
 end
@@ -93,7 +93,8 @@ end
 
 # TODO: (kwargs...) for `t_intersection`
 # TODO: UrbanIDM???
-function scenario_hw_merging(; init_noise_1=Noise(), init_noise_2=Noise())
+function scenario_hw_merging(; init_noise_1::Noise=Noise(), init_noise_2::Noise=Noise(),
+                             s_sut::Float64=3.0, s_adv::Float64=3.0, v_sut::Float64=8.0, v_adv::Float64=8.0)
     roadway = merging_roadway()
 
     # sut_model = UrbanIDM(idm=IntelligentDriverModel(v_des=15.0), noisy_observations=true, ignore_idm=!params.ignore_sensors)
@@ -102,7 +103,7 @@ function scenario_hw_merging(; init_noise_1=Noise(), init_noise_2=Noise())
     sut_model.noisy_observations = true # TODO. Flip who is SUT/adversary?
     sut_model.goals[3] = [3]
     map(k->delete!(sut_model.goals, k), 4:7)
-    sut = BlinkerVehicleAgent(hw_straight(id=1, noise=init_noise_1, roadway=roadway), sut_model);
+    sut = BlinkerVehicleAgent(hw_straight(id=1, noise=init_noise_1, roadway=roadway, s=s_sut, v=v_sut), sut_model)
 
     # adversary_model = UrbanIDM(idm=IntelligentDriverModel(v_des=15.0), noisy_observations=false)
     adversary_model = TIDM(get_XIDM_template())
@@ -110,7 +111,7 @@ function scenario_hw_merging(; init_noise_1=Noise(), init_noise_2=Noise())
     adversary_model.noisy_observations = true # TODO: important?
     adversary_model.goals[3] = [3]
     map(k->delete!(adversary_model.goals, k), 4:7)
-    adversary = BlinkerVehicleAgent(hw_merging(id=2, noise=init_noise_2, roadway=roadway), adversary_model)
+    adversary = BlinkerVehicleAgent(hw_merging(id=2, noise=init_noise_2, roadway=roadway, s=s_adv, v=v_adv), adversary_model)
 
     return Scenario(roadway, sut, adversary)
 end

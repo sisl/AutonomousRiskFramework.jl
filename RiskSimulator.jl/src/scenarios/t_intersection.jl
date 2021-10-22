@@ -78,19 +78,19 @@ function t_intersection(; r=5.0, w=DEFAULT_LANE_WIDTH, l=25)
 end
 
 
-function t_left_to_right(; roadway::Roadway, noise::Noise=Noise(), id::Int64=1, s::Float64=4.0, v::Float64=8.0, goals::Vector=[1], blinker::Bool=false)
+function t_left_to_right(; roadway::Roadway, id::Int64=1, noise::Noise=Noise(), s::Float64=4.0, v::Float64=8.0, goals::Vector=[1], blinker::Bool=false)
     vehicle = BlinkerVehicle(id=id, roadway=roadway, lane=2, s=s, v=v, goals=goals, blinker=blinker, noise=noise)
     return (rng::AbstractRNG=Random.GLOBAL_RNG) -> vehicle
 end
 
 
-function t_right_to_turn(; roadway::Roadway, noise::Noise=Noise(), id::Int64=1, s::Float64=8.0, v::Float64=8.0, goals::Vector=[1], blinker::Bool=false)
+function t_right_to_turn(; roadway::Roadway, id::Int64=1, noise::Noise=Noise(), s::Float64=8.0, v::Float64=8.0, goals::Vector=[1], blinker::Bool=false)
     vehicle = BlinkerVehicle(id=id, roadway=roadway, lane=4, s=s, v=v, goals=goals, blinker=blinker, noise=noise)
     return (rng::AbstractRNG=Random.GLOBAL_RNG) -> vehicle
 end
 
 
-function t_bottom_to_turn_left(; roadway::Roadway, noise::Noise=Noise(), id::Int64=1, s::Float64=8.0, v::Float64=8.0, goals::Vector=[1], blinker::Bool=false)
+function t_bottom_to_turn_left(; roadway::Roadway, id::Int64=1, noise::Noise=Noise(), s::Float64=8.0, v::Float64=8.0, goals::Vector=[1], blinker::Bool=false)
     vehicle = BlinkerVehicle(id=id, roadway=roadway, lane=6, s=s, v=v, goals=goals, blinker=blinker, noise=noise)
     return (rng::AbstractRNG=Random.GLOBAL_RNG) -> vehicle
 end
@@ -98,20 +98,21 @@ end
 
 # TODO: (kwargs...) for `t_intersection`
 # TODO: UrbanIDM???
-function scenario_t_head_on_turn(; init_noise_1=Noise(), init_noise_2=Noise())
+function scenario_t_head_on_turn(; init_noise_1::Noise=Noise(), init_noise_2::Noise=Noise(),
+                                 s_sut::Float64=4.0, s_adv::Float64=8.0, v_sut::Float64=8.0, v_adv::Float64=8.0)
     roadway = t_intersection()
 
     # sut_model = UrbanIDM(idm=IntelligentDriverModel(v_des=15.0), noisy_observations=true, ignore_idm=!params.ignore_sensors)
     sut_model = TIDM(get_XIDM_template())
     sut_model.idm.v_des = 15
     sut_model.noisy_observations = true # TODO. Flip who is SUT/adversary?
-    sut = BlinkerVehicleAgent(t_left_to_right(id=1, noise=init_noise_1, roadway=roadway), sut_model);
+    sut = BlinkerVehicleAgent(t_left_to_right(id=1, noise=init_noise_1, roadway=roadway, s=s_sut, v=v_sut), sut_model)
 
     # adversary_model = UrbanIDM(idm=IntelligentDriverModel(v_des=15.0), noisy_observations=false)
     adversary_model = TIDM(get_XIDM_template())
     adversary_model.idm.v_des = 15
     adversary_model.noisy_observations = true # TODO: important?
-    adversary = BlinkerVehicleAgent(t_right_to_turn(id=2, noise=init_noise_2, roadway=roadway), adversary_model)
+    adversary = BlinkerVehicleAgent(t_right_to_turn(id=2, noise=init_noise_2, roadway=roadway, s=s_adv, v=v_adv), adversary_model)
 
     return Scenario(roadway, sut, adversary)
 end
@@ -119,20 +120,21 @@ end
 
 # TODO: (kwargs...) for `t_intersection`
 # TODO: UrbanIDM???
-function scenario_t_left_turn(; init_noise_1=Noise(), init_noise_2=Noise())
+function scenario_t_left_turn(; init_noise_1::Noise=Noise(), init_noise_2::Noise=Noise(),
+                              s_sut::Float64=4.0, s_adv::Float64=8.0, v_sut::Float64=8.0, v_adv::Float64=8.0)
     roadway = t_intersection()
 
     # sut_model = UrbanIDM(idm=IntelligentDriverModel(v_des=15.0), noisy_observations=true, ignore_idm=!params.ignore_sensors)
     sut_model = TIDM(get_XIDM_template())
     sut_model.idm.v_des = 15
     sut_model.noisy_observations = true # TODO. Flip who is SUT/adversary?
-    sut = BlinkerVehicleAgent(t_left_to_right(id=1, noise=init_noise_1, roadway=roadway), sut_model);
+    sut = BlinkerVehicleAgent(t_left_to_right(id=1, noise=init_noise_1, roadway=roadway, s=s_sut, v=v_sut), sut_model)
 
     # adversary_model = UrbanIDM(idm=IntelligentDriverModel(v_des=15.0), noisy_observations=false)
     adversary_model = TIDM(get_XIDM_template())
     adversary_model.idm.v_des = 15
     adversary_model.noisy_observations = true # TODO: important?
-    adversary = BlinkerVehicleAgent(t_bottom_to_turn_left(id=2, noise=init_noise_2, roadway=roadway), adversary_model)
+    adversary = BlinkerVehicleAgent(t_bottom_to_turn_left(id=2, noise=init_noise_2, roadway=roadway, s=s_adv, v=v_adv), adversary_model)
 
     return Scenario(roadway, sut, adversary)
 end
