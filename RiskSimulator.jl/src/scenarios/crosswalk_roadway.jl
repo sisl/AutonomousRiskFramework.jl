@@ -6,13 +6,13 @@ function crosswalk_roadway()
 end
 
 
-function cw_left_to_right(; id::Int64=1, noise::Noise=Noise(), roadway::Roadway, s::Float64=0.0, v::Float64=12.0, goals::Vector=[1], blinker::Bool=false)
+function cw_left_to_right(; roadway::Roadway, id::Int64=1, noise::Noise=Noise(), s::Float64=0.0, v::Float64=12.0, goals::Vector=[1], blinker::Bool=false)
     vehicle = BlinkerVehicle(id=id, roadway=roadway, lane=1, s=s, v=v, goals=goals, blinker=blinker, noise=noise)
     return (rng::AbstractRNG=Random.GLOBAL_RNG) -> vehicle
 end
 
 
-function cw_pedestrian_walking_up(; id::Int64=1, noise::Noise=Noise(), roadway::Roadway, s::Float64=8.0, v::Float64=2.0)
+function cw_pedestrian_walking_up(; roadway::Roadway, id::Int64=1, noise::Noise=Noise(), s::Float64=8.0, v::Float64=2.0)
     pedestrain = NoisyPedestrian(id=id, roadway=roadway, lane=2, s=s, v=v, noise=noise)
     return (rng::AbstractRNG=Random.GLOBAL_RNG) -> pedestrain
 end

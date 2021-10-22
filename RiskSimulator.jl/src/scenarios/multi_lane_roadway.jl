@@ -10,13 +10,13 @@ function multi_lane_roadway(; w=DEFAULT_LANE_WIDTH, l=50.0, n=3, origin=VecSE2(0
 end
 
 
-function hw_behind(; id::Int64=1, noise::Noise=Noise(), roadway::Roadway, s::Float64=2.0, v::Float64=15.0, goals::Vector=Int[], blinker::Bool=false)
+function hw_behind(; roadway::Roadway, id::Int64=1, noise::Noise=Noise(), s::Float64=2.0, v::Float64=15.0, goals::Vector=Int[], blinker::Bool=false)
     vehicle = BlinkerVehicle(id=id, roadway=roadway, lane=1, s=s, v=v, goals=goals, blinker=blinker, noise=noise)
     return (rng::AbstractRNG=Random.GLOBAL_RNG) -> vehicle
 end
 
 
-function hw_stopping(; id::Int64=1, noise::Noise=Noise(), roadway::Roadway, s::Float64=20.0, v::Float64=2.0, goals::Vector=Int[], blinker::Bool=false)
+function hw_stopping(; roadway::Roadway, id::Int64=1, noise::Noise=Noise(), s::Float64=20.0, v::Float64=2.0, goals::Vector=Int[], blinker::Bool=false)
     vehicle = BlinkerVehicle(id=id, roadway=roadway, lane=1, s=s, v=v, goals=goals, blinker=blinker, noise=noise)
     return (rng::AbstractRNG=Random.GLOBAL_RNG) -> vehicle
 end

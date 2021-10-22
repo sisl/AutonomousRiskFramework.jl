@@ -52,13 +52,13 @@ function merging_roadway(; r=5.0, w=DEFAULT_LANE_WIDTH, l=50.0, n=2)
 end
 
 
-function hw_straight(; id::Int64=1, noise::Noise=Noise(), roadway::Roadway, s::Float64=3.0, v::Float64=8.0, goals::Vector=[1], blinker::Bool=false)
+function hw_straight(; roadway::Roadway, id::Int64=1, noise::Noise=Noise(), s::Float64=3.0, v::Float64=8.0, goals::Vector=[1], blinker::Bool=false)
     vehicle = BlinkerVehicle(id=id, roadway=roadway, lane=1, s=s, v=v, goals=goals, blinker=blinker, noise=noise)
     return (rng::AbstractRNG=Random.GLOBAL_RNG) -> vehicle
 end
 
 
-function hw_merging(; id::Int64=1, noise::Noise=Noise(), roadway::Roadway, s::Float64=9.0, v::Float64=8.0, goals::Vector=[1], blinker::Bool=false)
+function hw_merging(; roadway::Roadway, id::Int64=1, noise::Noise=Noise(), s::Float64=9.0, v::Float64=8.0, goals::Vector=[1], blinker::Bool=false)
     vehicle = BlinkerVehicle(id=id, roadway=roadway, lane=3, s=s, v=v, goals=goals, blinker=blinker, noise=noise)
     return (rng::AbstractRNG=Random.GLOBAL_RNG) -> vehicle
 end

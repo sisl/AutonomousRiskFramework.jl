@@ -72,13 +72,13 @@ function get_XIDM_template()
 end
 
 
-function cross_left_to_right(; id::Int64=1, noise::Noise=Noise(), roadway::Roadway, s::Float64=4.0, v::Float64=8.0, goals::Vector=[1], blinker::Bool=false)
+function cross_left_to_right(; roadway::Roadway, id::Int64=1, noise::Noise=Noise(), s::Float64=4.0, v::Float64=8.0, goals::Vector=[1], blinker::Bool=false)
     vehicle = BlinkerVehicle(id=id, roadway=roadway, lane=2, s=s, v=v, goals=goals, blinker=blinker, noise=noise)
     return (rng::AbstractRNG=Random.GLOBAL_RNG) -> vehicle
 end
 
 
-function cross_bottom_to_top(; id::Int64=1, noise::Noise=Noise(), roadway::Roadway, s::Float64=4.0, v::Float64=8.0, goals::Vector=[1], blinker::Bool=false)
+function cross_bottom_to_top(; roadway::Roadway, id::Int64=1, noise::Noise=Noise(), s::Float64=4.0, v::Float64=8.0, goals::Vector=[1], blinker::Bool=false)
     vehicle = BlinkerVehicle(id=id, roadway=roadway, lane=7, s=s, v=v, goals=goals, blinker=blinker, noise=noise)
     return (rng::AbstractRNG=Random.GLOBAL_RNG) -> vehicle
 end

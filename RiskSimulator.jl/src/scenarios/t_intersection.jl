@@ -78,19 +78,19 @@ function t_intersection(; r=5.0, w=DEFAULT_LANE_WIDTH, l=25)
 end
 
 
-function t_left_to_right(; id::Int64=1, noise::Noise=Noise(), roadway::Roadway, s::Float64=4.0, v::Float64=8.0, goals::Vector=[1], blinker::Bool=false)
+function t_left_to_right(; roadway::Roadway, id::Int64=1, noise::Noise=Noise(), s::Float64=4.0, v::Float64=8.0, goals::Vector=[1], blinker::Bool=false)
     vehicle = BlinkerVehicle(id=id, roadway=roadway, lane=2, s=s, v=v, goals=goals, blinker=blinker, noise=noise)
     return (rng::AbstractRNG=Random.GLOBAL_RNG) -> vehicle
 end
 
 
-function t_right_to_turn(; id::Int64=1, noise::Noise=Noise(), roadway::Roadway, s::Float64=8.0, v::Float64=8.0, goals::Vector=[1], blinker::Bool=false)
+function t_right_to_turn(; roadway::Roadway, id::Int64=1, noise::Noise=Noise(), s::Float64=8.0, v::Float64=8.0, goals::Vector=[1], blinker::Bool=false)
     vehicle = BlinkerVehicle(id=id, roadway=roadway, lane=4, s=s, v=v, goals=goals, blinker=blinker, noise=noise)
     return (rng::AbstractRNG=Random.GLOBAL_RNG) -> vehicle
 end
 
 
-function t_bottom_to_turn_left(; id::Int64=1, noise::Noise=Noise(), roadway::Roadway, s::Float64=8.0, v::Float64=8.0, goals::Vector=[1], blinker::Bool=false)
+function t_bottom_to_turn_left(; roadway::Roadway, id::Int64=1, noise::Noise=Noise(), s::Float64=8.0, v::Float64=8.0, goals::Vector=[1], blinker::Bool=false)
     vehicle = BlinkerVehicle(id=id, roadway=roadway, lane=6, s=s, v=v, goals=goals, blinker=blinker, noise=noise)
     return (rng::AbstractRNG=Random.GLOBAL_RNG) -> vehicle
 end
