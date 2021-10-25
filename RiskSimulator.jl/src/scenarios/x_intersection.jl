@@ -72,13 +72,13 @@ function get_XIDM_template()
 end
 
 
-function cross_left_to_right(; roadway::Roadway, noise::Noise=Noise(), id::Int64=1, s::Float64=4.0, v::Float64=8.0, goals::Vector=[1], blinker::Bool=false)
+function cross_left_to_right(; roadway::Roadway, id::Int64=1, noise::Noise=Noise(), s::Float64=4.0, v::Float64=8.0, goals::Vector=[1], blinker::Bool=false)
     vehicle = BlinkerVehicle(id=id, roadway=roadway, lane=2, s=s, v=v, goals=goals, blinker=blinker, noise=noise)
     return (rng::AbstractRNG=Random.GLOBAL_RNG) -> vehicle
 end
 
 
-function cross_bottom_to_top(; roadway::Roadway, noise::Noise=Noise(), id::Int64=1, s::Float64=4.0, v::Float64=8.0, goals::Vector=[1], blinker::Bool=false)
+function cross_bottom_to_top(; roadway::Roadway, id::Int64=1, noise::Noise=Noise(), s::Float64=4.0, v::Float64=8.0, goals::Vector=[1], blinker::Bool=false)
     vehicle = BlinkerVehicle(id=id, roadway=roadway, lane=7, s=s, v=v, goals=goals, blinker=blinker, noise=noise)
     return (rng::AbstractRNG=Random.GLOBAL_RNG) -> vehicle
 end
@@ -86,20 +86,21 @@ end
 
 # TODO: (kwargs...) for `x_intersection`
 # TODO: UrbanIDM???
-function scenario_crossing(; init_noise_1=Noise(), init_noise_2=Noise())
+function scenario_crossing(; init_noise_1::Noise=Noise(), init_noise_2::Noise=Noise(),
+                           s_sut::Float64=4.0, s_adv::Float64=4.0, v_sut::Float64=8.0, v_adv::Float64=8.0)
     roadway = x_intersection()
 
     # sut_model = UrbanIDM(idm=IntelligentDriverModel(v_des=15.0), noisy_observations=true, ignore_idm=!params.ignore_sensors)
     sut_model = TIDM(get_XIDM_template())
     sut_model.idm.v_des = 15
     sut_model.noisy_observations = true # TODO. Flip who is SUT/adversary?
-    sut = BlinkerVehicleAgent(cross_left_to_right(id=1, noise=init_noise_1, roadway=roadway), sut_model);
+    sut = BlinkerVehicleAgent(cross_left_to_right(id=1, noise=init_noise_1, roadway=roadway, s=s_sut, v=v_sut), sut_model)
 
     # adversary_model = UrbanIDM(idm=IntelligentDriverModel(v_des=15.0), noisy_observations=false)
     adversary_model = TIDM(get_XIDM_template())
     adversary_model.idm.v_des = 15
     adversary_model.noisy_observations = true # TODO: important?
-    adversary = BlinkerVehicleAgent(cross_bottom_to_top(id=2, noise=init_noise_2, roadway=roadway), adversary_model)
+    adversary = BlinkerVehicleAgent(cross_bottom_to_top(id=2, noise=init_noise_2, roadway=roadway, s=s_adv, v=v_adv), adversary_model)
 
     return Scenario(roadway, sut, adversary)
 end

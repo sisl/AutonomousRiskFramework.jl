@@ -1,5 +1,7 @@
 # Autonomous Vehicle Risk Assessment Framework
 
+[![Build Status](https://github.com/sisl/AutonomousRiskFramework/actions/workflows/CI.yml/badge.svg)](https://github.com/sisl/AutonomousRiskFramework/actions/workflows/CI.yml)
+
 **Note:** Julia v1.5+ is recommended for AutomotiveSimulator and POMDPStressTesting.
 
 Change directory to each ".jl" folder, then within `julia` run:
@@ -17,6 +19,23 @@ Pkg.develop(PackageSpec(url="<PATH_TO_DIR>/AutonomousRiskFramework/STLCG.jl"))
 ## Code style
 
 See: https://github.com/invenia/BlueStyle
+
+## Example
+
+```julia
+using RiskSimulator
+
+system = IntelligentDriverModel()
+scenario = get_scenario(MERGING)
+planner = setup_ast(sut=system, scenario=scenario)
+
+search!(planner)
+
+fail_metrics = failure_metrics(planner)
+α = 0.2 # risk tolerance
+risk_metrics = risk_assessment(planner, α)
+risk = overall_area(planner, α=α)
+```
 
 ## Notebooks
 [![Woring problem](https://img.shields.io/badge/pluto-running%20example-8c1515)](./notebooks/ast_notebook.jl)
@@ -88,8 +107,8 @@ Open Julia, install Pluto via `] add Pluto` (where `]` gets to the package manag
 ## Contacts
 - Stanford Intelligent Systems Laboratory (SISL)
     - Robert Moss: [mossr](https://github.com/mossr)
+- Navigation and Autonomous Vehicles Laboratory (NAV Lab)
+    - Shubh Gupta: [shubhg1996](https://github.com/shubhg1996)
 - Stanford Autonomous Systems Laboratory (ASL)
     - Karen Leung: [karenl7](https://github.com/karenl7)
     - Robert Dyro: [rdyro](https://github.com/rdyro)
-- Navigation and Autonomous Vehicles Laboratory (NAV Lab)
-    - Shubh Gupta: [shubhg1996](https://github.com/shubhg1996)

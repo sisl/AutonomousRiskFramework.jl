@@ -4,7 +4,10 @@ import time
 import sys
 import py_trees
 
-sys.path.append("../scenario_runner") # Add scenario_runner package to import path
+if 'SCENARIO_RUNNER_ROOT' not in os.environ:
+    raise Exception("Please add 'SCENARIO_RUNNER_ROOT' to your environment variables.")
+else:
+    sys.path.append(os.getenv('SCENARIO_RUNNER_ROOT')) # Add scenario_runner package to import path
 
 from scenario_runner import ScenarioRunner
 from srunner.scenarios.open_scenario import OpenScenario

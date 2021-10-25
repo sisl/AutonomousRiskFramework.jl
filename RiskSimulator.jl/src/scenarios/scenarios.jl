@@ -29,19 +29,37 @@ include("traffic_circle_roadway.jl")
 end
 
 
-function get_scenario(scenario_enum::SCENARIO)
+function get_scenario(scenario_enum::SCENARIO; kwargs...)
     if scenario_enum == T_HEAD_ON
-        return scenario_t_head_on_turn()
+        return scenario_t_head_on_turn(; kwargs...)
     elseif scenario_enum == T_LEFT
-        return scenario_t_left_turn()
+        return scenario_t_left_turn(; kwargs...)
     elseif scenario_enum == STOPPING
-        return scenario_hw_stopping()
+        return scenario_hw_stopping(; kwargs...)
     elseif scenario_enum == CROSSING
-        return scenario_crossing()
+        return scenario_crossing(; kwargs...)
     elseif scenario_enum == MERGING
-        return scenario_hw_merging()
+        return scenario_hw_merging(; kwargs...)
     elseif scenario_enum == CROSSWALK
-        return scenario_pedestrian_crosswalk()
+        return scenario_pedestrian_crosswalk(; kwargs...)
+    end
+end
+
+
+# Ranges computed based on manual rendering and visual inspection.
+function get_scenario_options(scenario_enum::SCENARIO)
+    if scenario_enum == T_HEAD_ON
+        return Dict("s_sut" => [2.0, 60.0], "s_adv" => [2.0, 60.0], "v_sut" => [1.0, 60.0], "v_adv" =>[1.0, 60.0])
+    elseif scenario_enum == T_LEFT
+        return Dict("s_sut" => [2.0, 60.0], "s_adv" => [2.0, 60.0], "v_sut" => [1.0, 60.0], "v_adv" =>[1.0, 60.0])
+    elseif scenario_enum == STOPPING
+        return Dict("s_sut" => [2.0, 40.0], "s_adv" => [7.0, 45.0], "v_sut" => [1.0, 40.0], "v_adv" =>[1.0, 45.0])
+    elseif scenario_enum == CROSSING
+        return Dict("s_sut" => [2.0, 40.0], "s_adv" => [2.0, 40.0], "v_sut" => [1.0, 40.0], "v_adv" =>[1.0, 40.0])
+    elseif scenario_enum == MERGING
+        return Dict("s_sut" => [2.0, 45.0], "s_adv" => [2.0, 45.0], "v_sut" => [1.0, 45.0], "v_adv" =>[1.0, 45.0])
+    elseif scenario_enum == CROSSWALK
+        return Dict("s_sut" => [2.0, 30.0], "s_adv" => [1.0, 15.0], "v_sut" => [1.0, 30.0], "v_adv" =>[1.0, 15.0])
     end
 end
 
