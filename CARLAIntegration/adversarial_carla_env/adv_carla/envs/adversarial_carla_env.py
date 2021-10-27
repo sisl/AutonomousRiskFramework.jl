@@ -35,6 +35,7 @@ else:
 from ..ast_scenario_runner import ASTScenarioRunner
 from srunner.scenariomanager.carla_data_provider import CarlaDataProvider
 from srunner.scenariomanager.timer import GameTime
+from srunner.autoagents.sensor_interface import CallBack
 
 from pdb import set_trace as breakpoint # DEBUG. TODO!
 
@@ -89,7 +90,7 @@ class AdversarialCARLAEnv(gym.Env):
     scenario_config = None
 
     # Agent selections
-    agent = os.path.join(dirname, "../agents/ast_agent.py")
+    agent = os.path.join(dirname, "../agents/better_ast_agent.py")
 
     # CARLA configuration parameters
     port = 2222
@@ -105,6 +106,9 @@ class AdversarialCARLAEnv(gym.Env):
 
     # Gym environment parameters
     block_size = 10
+
+    adv_gnss_callback = None
+    adv_obstacle_callback = None
 
 
     def __init__(self, *, route=route, scenario=scenario, agent=agent, port=port, record=record, params=DEFAULT_PARAMS):
@@ -283,6 +287,24 @@ class AdversarialCARLAEnv(gym.Env):
     def reset(self, retdict=False):
         try:
             self.scenario_runner.load_scenario()
+            # self.scenario_runner.manager._agent # AgentWrapper
+            for sensor in self.scenario_runner.manager._agent._sensors_list:
+                if sensor is not None:
+                    sensor_interface = self.scenario_runner.manager._agent._agent.sensor_interface
+                    if sensor.type_id == 'sensor.other.gnss':
+                        tag = 'GPS' # TODO: attach from input config 'id' mapping.
+                        del sensor_interface._sensors_objects[tag]
+                        sensor.stop()
+                        self.adv_gnss_callback = AdvGNSSCallBack(tag, sensor, sensor_interface)
+                        sensor.listen(self.adv_gnss_callback)
+                    elif sensor.type_id == 'sensor.other.obstacle':
+                        tag = 'Obstacle' # TODO: attach from input config 'id' mapping.
+                        del sensor_interface._sensors_objects[tag]
+                        sensor.stop()
+                        self.adv_obstacle_callback = AdvObstacleCallBack(tag, sensor, sensor_interface)
+                        sensor.listen(self.adv_obstacle_callback)
+
+            # self.scenario_runner.manager._agent._sensors_list
             self._prev_distance = 10000 # TODO...
             self._timestep = 0
             self._info = {
@@ -345,28 +367,13 @@ class AdversarialCARLAEnv(gym.Env):
             self._info['distance'] = distance
             self._info['rate'] = rate
             if agent is None:
-                self._info['ego_sensor'] = None
-                self._info['ego_sensor_xy'] = None
-                self._info['ego_truth_xy'] = None
-                self._info['target_sensor_xy'] = []
-                self._info['target_truth_xy'] = []
+                self._info['ego_sensor_location'] = None
+                self._info['ego_truth_location'] = None
             else:
-                if agent.ego_sensor is not None:
-                    self._info['ego_sensor'] = agent.ego_sensor.get_observation()
-                    ego_vehicle_sensor_location = agent.ego_sensor.get_location()
-                    self._info['ego_sensor_xy'] = (ego_vehicle_sensor_location.x, ego_vehicle_sensor_location.y)
-
-                ego_vehicle_location = agent._agent._vehicle.get_location()
-                self._info['ego_truth_xy'] = (ego_vehicle_location.x, ego_vehicle_location.y)
-
-                num_targets = len(agent.target_sensor_obs)
-                self._info['target_sensor_xy'] = [None]*num_targets
-                self._info['target_truth_xy'] = [None]*num_targets
-                for veh_idx in range(num_targets):
-                    target_obs = agent.target_sensor_obs[veh_idx]
-                    target_truth = agent.target_truths[veh_idx]
-                    self._info['target_sensor_xy'][veh_idx] = target_obs
-                    self._info['target_truth_xy'][veh_idx] = target_truth
+                if agent.ego_truth_location is not None:
+                    self._info['ego_truth_location'] = (agent.ego_truth_location.x, agent.ego_truth_location.y)
+                if agent.ego_sensor_location is not None:
+                    self._info['ego_sensor_location'] = (agent.ego_sensor_location.x, agent.ego_sensor_location.y)
 
             # Calculate the reward for this step
             reward = self._reward(self._info)
@@ -464,12 +471,8 @@ class AdversarialCARLAEnv(gym.Env):
         print("Reward:", self._info['reward'])
         print("Collision:", self._info['collision'])
         print("Failed:", self._info['failed_scenario'])
-        print("Ego sensor obs:", self._info['ego_sensor'])
-        print("Ego sensor (x,y):", self._info['ego_sensor_xy'])
-        print("Ego truth (x,y):", self._info['ego_truth_xy'])
-        for veh_idx in range(len(self._info['target_sensor_xy'])):
-            print("Target " + str(veh_idx) + " sensor (x,y):", self._info['target_sensor_xy'][veh_idx])
-            print("Target " + str(veh_idx) + " truth (x,y):", self._info['target_truth_xy'][veh_idx])
+        print("Ego sensor (x,y):", self._info['ego_sensor_location'])
+        print("Ego truth (x,y):", self._info['ego_truth_location'])
         print("="*50)
 
 
@@ -488,6 +491,9 @@ class AdversarialCARLAEnv(gym.Env):
             if self.scenario_runner.manager._timestamp_last_run < timestamp.elapsed_seconds:
                 self.scenario_runner.manager._timestamp_last_run = timestamp.elapsed_seconds
 
+                disturbance = [disturbance['x'][0], disturbance['y'][0], 0] # TODO: what form is this in?
+                self.adv_gnss_callback.set_disturbance(disturbance)
+
                 self.scenario_runner.manager._watchdog.update()
 
                 if self.scenario_runner.manager._debug_mode:
@@ -499,7 +505,6 @@ class AdversarialCARLAEnv(gym.Env):
 
                 # AST: Apply disturbance
                 if self.scenario_runner.manager._agent is not None:
-                    self.scenario_runner.manager._agent._agent.set_disturbance(disturbance)
                     ego_action = self.scenario_runner.manager._agent()  # pylint: disable=not-callable
                     distance = self.scenario_runner.manager._agent._agent.min_distance
 
@@ -522,3 +527,84 @@ class AdversarialCARLAEnv(gym.Env):
 
         return self.scenario_runner.manager._running, distance
 
+
+
+
+class AdvGNSSCallBack(CallBack):
+
+    """
+    Class the sensors listen to in order to receive their data each frame
+    """
+
+    def __init__(self, tag, sensor, data_provider):
+        """
+        Initializes the call back
+        """
+        super().__init__(tag, sensor, data_provider)
+        self.noise_lat = 0
+        self.noise_lon = 0
+        self.noise_alt = 0
+        self.dims = 3
+
+
+    def __call__(self, data):
+        """
+        call function
+        """
+        assert isinstance(data, carla.GnssMeasurement)
+        array = np.array([data.latitude,
+                          data.longitude,
+                          data.altitude], dtype=np.float64)
+
+        noise = np.array([self.noise_lat, self.noise_lon, self.noise_alt])
+        array += noise
+
+        self._data_provider.update_sensor(self._tag, array, data.frame)
+
+
+    def set_disturbance(self, disturbance):
+        self.noise_lat = disturbance[0]
+        self.noise_lon = disturbance[1]
+        self.noise_alt = disturbance[2]
+
+
+
+class AdvObstacleCallBack(CallBack):
+
+    """
+    Class the sensors listen to in order to receive their data each frame
+    """
+
+    def __init__(self, tag, sensor, data_provider):
+        """
+        Initializes the call back
+        """
+        super().__init__(tag, sensor, data_provider)
+        self.noise_distance = 0
+        self.dims = 1
+
+
+    def __call__(self, data):
+        """
+        call function
+        """
+        # assert isinstance(data, carla.GnssMeasurement)
+        # array = np.array([data.latitude,
+        #                   data.longitude,
+        #                   data.altitude], dtype=np.float64)
+
+        # noise = np.array([self.noise_lat, self.noise_lon, self.noise_alt])
+        # array += noise
+
+        # breakpoint()
+        print("Obstacle data:", data)
+        print("Obstacle data.distance:", data.distance)
+        # print("Obstacle properties:", dir(data))
+
+        array = np.array([0])
+        self._data_provider.update_sensor(self._tag, array, data.frame)
+        print(self._data_provider._new_data_buffers)
+
+
+    def set_disturbance(self, disturbance):
+        self.noise_distance = disturbance[0]

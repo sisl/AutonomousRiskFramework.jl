@@ -20,12 +20,13 @@ from srunner.autoagents.autonomous_agent import AutonomousAgent
 from srunner.scenariomanager.carla_data_provider import CarlaDataProvider
 from srunner.scenariomanager.timer import GameTime
 from ast_sensor_wrapper import ASTSensorWrapper
+from ast_sensor_wrapper import GnssSensor
 
 from pdb import set_trace as breakpoint # DEBUG. TODO!
 
 repetitions = 0
 
-class AstAgent(AutonomousAgent):
+class BetterAstAgent(AutonomousAgent):
 
     """
     Autonomous agent to control the ego vehicle for Adaptive Stress Testing
@@ -45,16 +46,10 @@ class AstAgent(AutonomousAgent):
         self.time = 0
         self.min_distance = 100000
         repetitions += 1
-        self.disturbance = None # dict of 'x' and 'y' disturbances per target
-        self.ego_sensor = None
-        self.target_sensors = []
-        self.target_sensor_obs = []
-        self.target_truths = []
         self.use_ego_truth = True
 
-
-    def set_disturbance(self, disturbance):
-        self.disturbance = disturbance
+        self.ego_truth_location = None
+        self.ego_sensor_location = None
 
 
     def sensors(self):  # pylint: disable=no-self-use
@@ -76,7 +71,8 @@ class AstAgent(AutonomousAgent):
 
         """
         sensors = [
-            {'type': 'sensor.other.gnss', 'x': 0.7, 'y': 0.0, 'z': 1.60, 'yaw': 0.0, 'pitch': 0.0, 'roll': 0.0, 'id': 'GPS', }
+            {'type': 'sensor.other.gnss', 'x': 0.0, 'y': 0.0, 'z': 0.0, 'yaw': 0.0, 'pitch': 0.0, 'roll': 0.0, 'id': 'GPS'},
+            {'type': 'sensor.other.obstacle', 'x': 0.0, 'y': 0.0, 'z': 0.0, 'yaw': 0.0, 'pitch': 0.0, 'roll': 0.0, 'id': 'Obstacle'}
         ]
 
         return sensors
@@ -86,12 +82,13 @@ class AstAgent(AutonomousAgent):
         """
         Execute one step of navigation.
         """
-        print(input_data)
         control = carla.VehicleControl()
         control.steer = 0.0
         control.throttle = 0.0
         control.brake = 0.0
         control.hand_brake = False
+        gnss_data = input_data['GPS'][1]
+        # breakpoint()
 
         if not self._agent:
             hero_actor = None
@@ -101,7 +98,6 @@ class AstAgent(AutonomousAgent):
                     break
             if hero_actor:
                 self._agent = BasicAgent(hero_actor, target_speed=25)
-                self.ego_sensor = ASTSensorWrapper(hero_actor, 'gnss') # TODO: pass in `sensor_type` and `sensor_params`
 
             return control
 
@@ -116,7 +112,7 @@ class AstAgent(AutonomousAgent):
                 self._agent._local_planner.set_global_plan(plan)  # pylint: disable=protected-access
                 self._route_assigned = True
         else:
-            if self.detect_hazard():
+            if self.detect_hazard(gnss_data):
                 control = self._agent.emergency_stop()
             else:
                 self.update_agent_state(AgentState.NAVIGATING)
@@ -148,7 +144,7 @@ class AstAgent(AutonomousAgent):
         self._agent._state = state
 
 
-    def detect_hazard(self, debug=False):
+    def detect_hazard(self, gnss_data, debug=False):
         # is there an obstacle in front of us?
         hazard_detected = False
 
@@ -159,7 +155,7 @@ class AstAgent(AutonomousAgent):
         lights_list = actor_list.filter("*traffic_light*")
 
         # check possible obstacles
-        vehicle_state, vehicle = self._is_vehicle_hazard(vehicle_list)
+        vehicle_state, vehicle = self._is_vehicle_hazard(vehicle_list, gnss_data)
         if vehicle_state:
             if debug:
                 print('!!! VEHICLE BLOCKING AHEAD [{}])'.format(vehicle.id))
@@ -179,7 +175,7 @@ class AstAgent(AutonomousAgent):
         return hazard_detected
 
 
-    def _is_vehicle_hazard(self, vehicle_list):
+    def _is_vehicle_hazard(self, vehicle_list, gnss_data):
         """
         :param vehicle_list: list of potential obstacle to check
         :return: a tuple given by (bool_flag, vehicle), where
@@ -189,22 +185,21 @@ class AstAgent(AutonomousAgent):
         """
         global repetitions
 
-        if self.use_ego_truth:
-            ego_vehicle_location = self._agent._vehicle.get_location()
-        else:
-            # use sensor observation for ego location
-            ego_vehicle_location = self.ego_sensor.get_location()
+
+        # record for `render`
+        self.ego_truth_location = self._agent._vehicle.get_location() # Truth
+
+        (x, y, z) = GnssSensor.gps_to_location(gnss_data[0], gnss_data[1], gnss_data[2])
+        ego_vehicle_location = carla.Location(x=x, y=y, z=z)
+
+        # record for `render`
+        self.ego_sensor_location = ego_vehicle_location
 
         ego_vehicle_waypoint = self._agent._map.get_waypoint(ego_vehicle_location)
 
         veh_idx = -1
 
         self.min_distance = 10000
-
-        if len(vehicle_list) == 1: # i.e., only the ego
-            # empty out stale info
-            self.target_truths = []
-            self.target_sensor_obs = []
 
         for target_vehicle in vehicle_list:
             # do not account for the ego vehicle
@@ -213,38 +208,13 @@ class AstAgent(AutonomousAgent):
 
             veh_idx += 1
 
-            # add sensor to every non-ego vehicle (if not done so already)
-            if len(self.target_sensors) != veh_idx + 1:
-                self.target_sensors.append(ASTSensorWrapper(target_vehicle, 'gnss')) # TODO: pass in target_sensor_type of 'gnss'
-                self.target_sensor_obs.append(None)
-                self.target_truths.append(None)
-
-            target_sensor = self.target_sensors[veh_idx]
-
             target_tf = target_vehicle.get_transform()
             truth_target_location = target_tf.location
 
             # Save minimum distance for AST rewards
             self.min_distance = min(self.min_distance, compute_distance(truth_target_location, self._agent._vehicle.get_location()))
 
-            # record truth value (for rendering)
-            self.target_truths[veh_idx] = (truth_target_location.x, truth_target_location.y)
-
-            # Compute the noisy target vehicle position
-            if self.disturbance is None:
-                x_noise = 0
-                y_noise = 0
-            else:
-                x_noise = self.disturbance['x'][veh_idx]
-                y_noise = self.disturbance['y'][veh_idx]
-
-            # apply sensor noise disturbance
-            target_tf.location = target_sensor.apply_disturbance({'x': x_noise, 'y': y_noise})
-
-            # record sensor observation (for rendering)
-            self.target_sensor_obs[veh_idx] = (target_tf.location.x, target_tf.location.y)
-
-            target_vehicle_waypoint = self._agent._map.get_waypoint(target_tf.location) # Noise added
+            target_vehicle_waypoint = self._agent._map.get_waypoint(target_tf.location)
             if target_vehicle_waypoint.road_id != ego_vehicle_waypoint.road_id or \
                     target_vehicle_waypoint.lane_id != ego_vehicle_waypoint.lane_id:
                 continue
@@ -255,13 +225,3 @@ class AstAgent(AutonomousAgent):
                 return (True, target_vehicle)
 
         return (False, None)
-
-
-    def destroy(self):
-        sensors = [
-            self.ego_sensor
-        ]
-        sensors += self.target_sensors
-        for sensor in sensors:
-            if sensor is not None:
-                sensor.destroy()
