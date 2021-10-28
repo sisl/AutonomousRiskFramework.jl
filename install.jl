@@ -10,7 +10,7 @@ packages = [
     PackageSpec(url=joinpath(@__DIR__, "STLCG.jl")),
 
     # [deps] IntelligentDriving.jl
-    PackageSpec(url="https://github.com/mossr/SpAutoDiff.jl"), # TODO: change to rdyro once PR is accepted
+    PackageSpec(url="https://github.com/rdyro/SpAutoDiff.jl"),
     PackageSpec(url=joinpath(@__DIR__, "IntelligentDriving.jl")),
 
     # [deps] RiskSimulator.jl
