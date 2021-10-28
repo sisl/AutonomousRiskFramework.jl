@@ -363,10 +363,6 @@ function localarea(m::Vector)
 end
 
 
-
-
-
-
 """
 Plot rate vs. distance with fitted multivariate Gaussians, and separete univariate Gaussians.
 - `gdatype`: :lda or :qda

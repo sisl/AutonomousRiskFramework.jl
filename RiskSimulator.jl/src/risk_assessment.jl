@@ -26,6 +26,8 @@ end
 
 
 function RiskMetrics(Z,α)
+    # If no failures, no cost distribution.
+    Z = length(Z) == 0 ? [Inf] : Z
     𝒫 = ecdf(Z)
     𝒞 = conditional_distr(𝒫, Z, α)
     𝔼 = mean(Z)
@@ -59,13 +61,7 @@ CVaR(𝒞) = mean(𝒞)
 risk_assessment(planner, α=0.2) = risk_assessment(planner.mdp.dataset, α)
 function risk_assessment(𝒟::Vector, α=0.2)
     Z = cost_data(𝒟)
-    if length(Z) == 0
-        # No failures, no cost distribution.
-        return RiskMetrics([Inf], α)
-    else
-        metrics = RiskMetrics(Z, α)
-        return metrics
-    end
+    return RiskMetrics(Z, α)
 end
 
 

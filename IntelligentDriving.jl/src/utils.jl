@@ -3,6 +3,10 @@ pushfirst!(
   PyVector(pyimport("sys")."path"),
   joinpath(@__DIR__, "../resources/python"),
 )
+# install python dependencies
+pyimport_conda("matplotlib", "matplotlib")
+pyimport_conda("numpy", "numpy")
+pyimport_conda("torch", "pytorch")
 py_dynamics = pyimport("dynamics")
 ##$#############################################################################
 ##^# defining constants without redefinition error #############################
