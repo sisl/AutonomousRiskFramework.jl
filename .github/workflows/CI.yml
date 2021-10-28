@@ -29,6 +29,8 @@ jobs:
         with:
           version: ${{ matrix.version }}
           arch: ${{ matrix.arch }}
+      - run: julia install.jl # install AutonomousRiskFramework.jl dependencies
+        shell: bash
 
       # using a cache can speed up execution times
       - uses: actions/cache@v2
