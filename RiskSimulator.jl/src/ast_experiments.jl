@@ -5,7 +5,6 @@ using CrossEntropyVariants
 using Crux
 using Distributions
 using Flux
-using Latexify
 using Parameters
 using PlutoUI
 using POMDPPolicies

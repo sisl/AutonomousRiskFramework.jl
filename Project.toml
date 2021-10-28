@@ -1,0 +1,19 @@
+name = "AutonomousRiskFramework"
+uuid = "f30adb48-4635-49e6-94b7-3d00f44da48a"
+authors = ["Robert Moss <rmoss92@gmail.com>"]
+version = "0.1.0"
+
+[deps]
+AdversarialDriving = "0f7eb3e9-d51f-47f4-b915-6157e1c8ce29"
+IntelligentDriving = "7d69903b-b3bd-4fe8-821b-47e97f7f1652"
+ObservationModels = "36e58220-4bbe-4dfe-b3a4-5a64030e6065"
+RiskSimulator = "d80ce8e1-c758-40bc-a0e7-b6008fb95ad7"
+STLCG = "6ababdf7-4701-4f28-b3b2-5630f64e3c98"
+SpAutoDiff = "2746dd70-a8ae-4e63-b982-e2745bcfee82"
+Vec = "44eeaf0b-fee4-471f-9310-ed6585cb3142"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]

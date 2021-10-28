@@ -1,24 +1,13 @@
 # Autonomous Vehicle Risk Assessment Framework
 
+[![Report](https://img.shields.io/badge/research-report-2d716f.svg)](http://web.stanford.edu/~mossr/pdf/Autonomous_Vehicle_Risk_Assessment.pdf)
 [![Build Status](https://github.com/sisl/AutonomousRiskFramework/actions/workflows/CI.yml/badge.svg)](https://github.com/sisl/AutonomousRiskFramework/actions/workflows/CI.yml)
 
 **Note:** Julia v1.5+ is recommended for AutomotiveSimulator and POMDPStressTesting.
 
-Change directory to each ".jl" folder, then within `julia` run:
 ```julia
-] dev .
+julia install.jl
 ```
-
-Without cloning the entire repository, each sub-package can be added via:
-```julia
-using Pkg
-Pkg.develop(PackageSpec(url="<PATH_TO_DIR>/AutonomousRiskFramework/RiskSimulator.jl"))
-Pkg.develop(PackageSpec(url="<PATH_TO_DIR>/AutonomousRiskFramework/STLCG.jl"))
-```
-
-## Code style
-
-See: https://github.com/invenia/BlueStyle
 
 ## Example
 
@@ -36,11 +25,6 @@ fail_metrics = failure_metrics(planner)
 risk_metrics = risk_assessment(planner, α)
 risk = overall_area(planner, α=α)
 ```
-
-## Notebooks
-[![Woring problem](https://img.shields.io/badge/pluto-running%20example-8c1515)](./notebooks/ast_notebook.jl)
-
-Open Julia, install Pluto via `] add Pluto` (where `]` gets to the package manager). Then from the Julia prompt, run `using Pluto; Pluto.run()` and open the notebook located in `notebooks/`. 
 
 
 ## Related packages
@@ -61,52 +45,25 @@ Open Julia, install Pluto via `] add Pluto` (where `]` gets to the package manag
 - **POMDPs framework**:
     - https://github.com/JuliaPOMDP/POMDPs.jl
 
-## Related publications
-- **Adaptive stress testing (AST)**:
-    - **AST formulation**:
-        - [M. Koren, A. Corso, M. J. Kochenderfer, "The Adaptive Stress Testing Formulation"](https://arxiv.org/abs/2004.04293) (Quick 2-pager)
 
-        - [R. Lee, O. J. Mengshoel, A. Saksena, R. Gardner, D. Genin, J. Silbermann, M. Owen, M. J. Kochenderfer, "Adaptive Stress Testing: Finding Likely Failure Events with Reinforcement Learning", Arxiv, 2020](https://arxiv.org/abs/1811.02188)
+## Publications
 
-    - **AST applications**:
-        - [M. Koren, S. Alsaif, R. Lee, M. J. Kochenderfer, "Adaptive Stress Testing for Autonomous Vehicles", IEEE Intelligent Vehicles Symposium (IV), 2018](https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=8500400)
-
-        - [A. Corso, P. Du, K. Driggs-Campbell, M. J. Kochenderfer, "Adaptive Stress Testing with Reward Augmentation for Autonomous Vehicle Validation", IEEE Intelligent Transportation Systems Conference, 2019](https://arxiv.org/abs/1908.01046)
-
-        - [R. Lee, M. Kochenderfer, O. Mengshoel, G. Brat, and M. Owen, "Adaptive stress testing of airborne collision avoidance systems", Digital Avionics Systems Conference (DASC), 2015](https://ieeexplore.ieee.org/document/7311613)
-    - **AST tools**:
-        - [R. J. Moss, "POMDPStressTesting.jl: Adaptive Stress Testing for Black-Box Systems", JOSS, 2020.](https://github.com/sisl/POMDPStressTesting.jl/blob/master/joss/paper.pdf)
-
-- **Interpretability**:
-    - [A. Corso, M. J. Kochenderfer, "Interpretable Safety Validation for Autonomous Vehicles", Arxiv, 2020](https://arxiv.org/abs/2004.06805)
-
-- **STL with computation graphs (stlcg)**:
-    - [K. Leung, N. Aréchiga, and M. Pavone, "Back-propagation through STL specifications: Infusing logical structure into gradient-based methods," in Workshop on Algorithmic Foundations of Robotics, Oulu, Finland, 2020.](https://arxiv.org/abs/2008.00097)
-
-    - [J. DeCastro, K. Leung, N. Aréchiga, and M. Pavone, "Interpretable Policies from Formally-Specified Temporal Properties,"" in Proc. IEEE Int. Conf. on Intelligent Transportation Systems, Rhodes, Greece, 2020.](http://asl.stanford.edu/wp-content/papercite-data/pdf/DeCastro.Leung.ea.ITSC20.pdf)
-
-    - [K. Leung, N. Arechiga, and M. Pavone, "Backpropagation for Parametric STL," in IEEE Intelligent Vehicles Symposium: Workshop on Unsupervised Learning for Automated Driving, Paris, France, 2019.](http://asl.stanford.edu/wp-content/papercite-data/pdf/Leung.Arechiga.ea.ULAD19.pdf)
-
-- **Surveys**:
-    - [A. Corso, R. J. Moss, M. Koren, R. Lee, M. J. Kochenderfer, "A Survey of Algorithms for Black-Box Safety Validation", Submitted to JAIR, Arxiv, 2020](https://arxiv.org/abs/2005.02979)
+- See [PUBLICATIONS.md](https://github.com/sisl/AutonomousRiskFramework/blob/master/PUBLICATIONS.md)
 
 
 ## CARLA Installation
 
-- Download CARLA binaries here: https://github.com/carla-simulator/carla/releases
-- On Windows, install the `carla` Python 3.7 API using: `python -m easy_install PythonAPI\carla\dist\carla-0.9.11-py3.7-win-amd64.egg`
-- `cd` to `PythonAPI/carla` and run: `pip install -r requirements.txt`
-- `cd` to `PythonAPI/util` and run: `pip install -r requirements.txt`
+- See [CARLAIntegration](https://github.com/sisl/AutonomousRiskFramework/tree/master/CARLAIntegration/adversarial_carla_env).
 
-#### CARLA Example
-> See the CARLA documentation for more examples: https://carla.readthedocs.io/
+## Code style
 
-- Open the `CarlaUE4.exe` client 
-- From a terminal, `cd` to `PythonAPI/examples` and run: `python spawn_npc.py`
+- See: https://github.com/invenia/BlueStyle
+
 
 ## Contacts
 - Stanford Intelligent Systems Laboratory (SISL)
     - Robert Moss: [mossr](https://github.com/mossr)
+    - Kyu-Young Kim: [kykim0](https://github.com/kykim0)
 - Navigation and Autonomous Vehicles Laboratory (NAV Lab)
     - Shubh Gupta: [shubhg1996](https://github.com/shubhg1996)
 - Stanford Autonomous Systems Laboratory (ASL)
