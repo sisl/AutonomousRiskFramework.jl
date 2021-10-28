@@ -20,4 +20,8 @@ packages = [
     PackageSpec(url=joinpath(@__DIR__)),
 ]
 
+if haskey(ENV, "CI") && ENV["CI"] == "true"
+    pop!(packages) # remove "own" package when on CI
+end
+
 Pkg.develop(packages)
