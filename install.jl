@@ -20,13 +20,21 @@ packages = [
     PackageSpec(url=joinpath(@__DIR__)),
 ]
 
-if haskey(ENV, "CI") && ENV["CI"] == "true"
-    pop!(packages) # remove "own" package when on CI
+ci = haskey(ENV, "CI") && ENV["CI"] == "true"
+    
+if ci
+    # remove "own" package when on CI
+    pop!(packages)
+end
 
+# Run dev altogether
+# This is important that it's run together so there
+# are no "expected pacakge X to be registered" errors.
+Pkg.develop(packages)
+
+if ci
     # pytorth does not work with 3.9
     pkg"add Conda"
     using Conda
     Conda.add("python=3.6.5")
 end
-
-Pkg.develop(packages)
