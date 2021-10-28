@@ -33,7 +33,7 @@ end
 Pkg.develop(packages)
 
 if ci
-    # pytorth does not work with 3.9
+    # pytorch does not work with 3.9
     pkg"add Conda"
     using Conda
     Conda.add("python=3.7.5")
