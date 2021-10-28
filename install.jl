@@ -22,6 +22,11 @@ packages = [
 
 if haskey(ENV, "CI") && ENV["CI"] == "true"
     pop!(packages) # remove "own" package when on CI
+
+    # pytorth does not work with 3.9
+    pkg"add Conda"
+    using Conda
+    Conda.add("python=3.6.5")
 end
 
 Pkg.develop(packages)
