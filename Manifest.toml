@@ -945,7 +945,7 @@ version = "0.4.0"
 
 [[ObservationModels]]
 deps = ["AdversarialDriving", "AutomotiveSimulator", "AutomotiveVisualization", "Blink", "CUDA", "Cairo", "CrossEntropyMethod", "Distances", "Distributed", "Distributions", "Documenter", "Flux", "LinearAlgebra", "Parameters", "Plots", "Printf", "Random", "Statistics", "Test", "Vec", "Zygote"]
-path = "ObservationModels"
+path = "ObservationModels.jl"
 uuid = "36e58220-4bbe-4dfe-b3a4-5a64030e6065"
 version = "0.1.0"
 

@@ -14,23 +14,28 @@ using CrossEntropyMethod
 using Distributions
 using Parameters
 using MCTS
+using RiskSimulator
+using Distributions
 
 #####################################################################################
 # Bayes Net representation of the scenario decision making problem
 #####################################################################################
-bn = BayesNet(); 
-push!(bn, StaticCPD(:a, Categorical(5)));
+scenario_types = [T_HEAD_ON, T_LEFT, STOPPING, CROSSING, MERGING, CROSSWALK];
 
 function get_actions(parent, value)
     if parent === nothing
-		return Categorical(5)
+		return Distributions.Categorical(length(scenario_types))
     elseif parent == :a
         # @show parent, value
-		return Normal(0, value)
+		options = get_scenario_options(scenario_types[value])
+        actions = [Distributions.Uniform(_range[1], _range[2]) for (key, _range) in options]
+        return product_distribution(actions)
 	end
 end
 
-push!(bn, CategoricalCPD(:b, [:a], [5], [get_actions(:a, x) for x in 1:5]));
+bn = BayesNet(); 
+push!(bn, StaticCPD(:a, get_actions(nothing, nothing)));
+push!(bn, CategoricalCPD(:b, [:a], [5], [get_actions(:a, x) for x in 1:length(scenario_types)]));
 
 rand(bn)
 
@@ -53,22 +58,30 @@ rand(bn)
 #     exp(logpdf(bn, :a=>a, :b=>b) - logpdf(d, s))
 # end
 
-
-
 #####################################################################################
 # MDP definition from Bayes Net
 #####################################################################################
 struct DecisionState 
     type::Any # scenario type
-    pos::Any # Initial position
+    init_cond::Vector{Any} # Initial conditions
     done::Bool
 end
 
 # initial state constructor
-DecisionState() = DecisionState(nothing,nothing, false)
+DecisionState() = DecisionState(nothing,[nothing], false)
+
+function eval_AST(s::DecisionState)
+    system = IntelligentDriverModel()
+    scenario = get_scenario(scenario_types[s.type]; s_sut=Float64(s.init_cond[1]), s_adv=Float64(s.init_cond[3]), v_sut=Float64(s.init_cond[2]), v_adv=Float64(s.init_cond[4]))
+    planner = setup_ast(sut=system, scenario=scenario, nnobs=false)
+    search!(planner)    
+    α = 0.2 # risk tolerance
+    risk = overall_area(planner, α=α)
+    return risk
+end
 
 # the scenario decision mdp type
-mutable struct ScenarioSearch <: MDP{DecisionState, Union{Int64, Float64, Nothing}}
+mutable struct ScenarioSearch <: MDP{DecisionState, Union{Int64, Vector{Any}, Nothing}}
     discount_factor::Float64 # disocunt factor
 end
 
@@ -78,7 +91,7 @@ function POMDPs.reward(mdp::ScenarioSearch, state::DecisionState, action)
     if state.type===nothing || state.pos===nothing
         r = 0
     else
-        r = abs(state.pos)
+        r = eval_AST(state)
     end
     return r
 end
@@ -93,11 +106,11 @@ end
 function POMDPs.gen(m::ScenarioSearch, s::DecisionState, a, rng)
     # transition model
     if s.type === nothing
-        sp = DecisionState(a, nothing, false)
-    elseif s.pos === nothing
+        sp = DecisionState(a, [nothing], false)
+    elseif s.init_cond[1] === nothing
         sp =  DecisionState(s.type, a, false)
     else
-        sp = DecisionState(s.type, s.pos, true)
+        sp = DecisionState(s.type, s.init_cond, true)
     end
     r = POMDPs.reward(m, s, a)
     return (sp=sp, r=r)
@@ -112,20 +125,20 @@ POMDPs.discount(mdp::ScenarioSearch) = mdp.discount_factor
 function POMDPs.actions(mdp::ScenarioSearch, s::DecisionState)
     if s.type===nothing
         return get_actions(nothing, nothing)
-    elseif s.pos===nothing
+    elseif s.init_cond[1] === nothing
         return get_actions(:a, s.type)
     else
-        return Normal(0, 1)
+        return Product(Distributions.Uniform.(rand(4), 1))   # TODO: Replace with a better placeholder
     end
 end
 
 function POMDPs.action(policy::RandomPolicy, s::DecisionState)
     if s.type===nothing
         return rand(get_actions(nothing, nothing))
-    elseif s.pos===nothing
+    elseif s.init_cond[1] === nothing
         return rand(get_actions(:a, s.type))
     else
-        return nothing
+        return [nothing]
     end
 end
 
