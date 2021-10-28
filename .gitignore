@@ -7,3 +7,6 @@ BIODS253/
 *.npy
 __pycache__/
 scenario_runner/
+*.egg-info/
+Manifest.toml
+log/

@@ -5,10 +5,12 @@ pyimport("adv_carla")
 
 mdp = GymPOMDP(Symbol("adv-carla"))
 env = mdp.env
-obs = reset!(env)
+# initial_obs = reset!(env) # rest already called during the GymPOMDP constructor
+σ = 12 # noise variance
 while !env.done
-    action = rand(2) # [0, 0]
+    action = σ*rand(2)
     reward, obs, info = step!(env, action)
+    render(env)
 end
 close(env)
 println("Total reward of $(env.total_reward)")

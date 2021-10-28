@@ -35,6 +35,7 @@ else:
 from ..ast_scenario_runner import ASTScenarioRunner
 from srunner.scenariomanager.carla_data_provider import CarlaDataProvider
 from srunner.scenariomanager.timer import GameTime
+from srunner.autoagents.sensor_interface import CallBack
 
 from pdb import set_trace as breakpoint # DEBUG. TODO!
 
@@ -48,12 +49,12 @@ DEFAULT_PARAMS = {
     'reward_bonus': 100,
     'discount': 1.0,
     'max_past_step': 3,
-    'lower_disturbance': [-10, -10],
-    'upper_disturbance': [10, 10],
-    'var_disturbance': [1, 1],
-    'mean_disturbance': [0, 0],
-    'lower_actor_state': [-100, -100, -100, -100, 0],   # x_topright, y_topright, x_bottomleft, y_bottomleft, status
-    'upper_actor_state': [100, 100, 100, 100, 1],
+    'lower_disturbance': np.float32(np.array([-10, -10])),
+    'upper_disturbance': np.float32(np.array([10, 10])),
+    'var_disturbance': np.array([1, 1]),
+    'mean_disturbance': np.array([0, 0]),
+    'lower_actor_state': np.float32(np.array([-100, -100, -100, -100, 0])),   # x_topright, y_topright, x_bottomleft, y_bottomleft, status
+    'upper_actor_state': np.float32(np.array([100, 100, 100, 100, 1])),
 }
 
 
@@ -78,7 +79,6 @@ class AdversarialCARLAEnv(gym.Env):
 
     # CARLA scenario handler
     scenario_runner = None
-    world = None
 
     # Scenario/route selections
     dirname = os.path.dirname(__file__)
@@ -90,7 +90,7 @@ class AdversarialCARLAEnv(gym.Env):
     scenario_config = None
 
     # Agent selections
-    agent = os.path.join(dirname, "../agents/ast_agent.py")
+    agent = os.path.join(dirname, "../agents/better_ast_agent.py")
 
     # CARLA configuration parameters
     port = 2222
@@ -107,6 +107,9 @@ class AdversarialCARLAEnv(gym.Env):
     # Gym environment parameters
     block_size = 10
 
+    adv_gnss_callback = None
+    adv_obstacle_callback = None
+
 
     def __init__(self, *, route=route, scenario=scenario, agent=agent, port=port, record=record, params=DEFAULT_PARAMS):
         """
@@ -117,7 +120,7 @@ class AdversarialCARLAEnv(gym.Env):
         # TODO: How to piggy-back on scenario_runner.py "main()" defaults?
         args = argparse.Namespace(host="127.0.0.1",
                                   port=port,
-                                  timeout=20.0,
+                                  timeout=1000.0, # for both ScenarioRunner and Watchdog (with in ScenarioManager)
                                   trafficManagerPort=8000,
                                   trafficManagerSeed=0,
                                   sync=True,
@@ -147,6 +150,12 @@ class AdversarialCARLAEnv(gym.Env):
                                   repetitions=1,
                                   waitForEgo=False)
 
+        # Create signal handler for SIGINT
+        if sys.platform != 'win32':
+            signal.signal(signal.SIGHUP, self._signal_handler)
+        signal.signal(signal.SIGINT, self._signal_handler)
+        signal.signal(signal.SIGTERM, self._signal_handler)
+
         # Save scenario_runner arguments
         self._args = args
 
@@ -155,13 +164,13 @@ class AdversarialCARLAEnv(gym.Env):
         if client is None:
             raise Exception("CARLA client failed to open!")
 
-        self.world = client.get_world()
+        world = client.get_world()
         assert(len(self.spectator_loc)==3)
-        spectator = self.world.get_spectator()
+        spectator = world.get_spectator()
         new_location = carla.Location(x=float(self.spectator_loc[0]), y=float(self.spectator_loc[1]), z=50+float(self.spectator_loc[2]))
         spectator.set_transform(carla.Transform(new_location, carla.Rotation(pitch=-90)))
 
-        settings = self.world.get_settings()
+        settings = world.get_settings()
         settings.no_rendering_mode = self.no_rendering
 
         # Create ScenarioRunner object to handle the core route/scenario parsing
@@ -186,8 +195,8 @@ class AdversarialCARLAEnv(gym.Env):
         self.actor_keys = list(obs.keys())  # Ensure actor is matched to the right key for observations
         print("No. of Actors: ", len(self.actor_keys))
 
-        self.var_disturbance = np.array(params['var_disturbance']*(len(self.actor_keys)-1))
-        self.mean_disturbance = np.array(params['mean_disturbance']*(len(self.actor_keys)-1))
+        self.var_disturbance = params['var_disturbance']*(len(self.actor_keys)-1)
+        self.mean_disturbance = params['mean_disturbance']*(len(self.actor_keys)-1)
 
         # action/observation spaces
         assert len(params['lower_disturbance']) == len(params['upper_disturbance'])
@@ -252,7 +261,16 @@ class AdversarialCARLAEnv(gym.Env):
         return client
 
 
-    def __del__(self):
+    def _signal_handler(self, signum, frame):
+        """
+        Terminate scenario ticking when receiving a signal interrupt
+        """
+        if self.scenario_runner is not None:
+            self.scenario_runner._signal_handler(signum, frame)
+            self.close()
+
+
+    def destroy(self):
         self.close()
 
 
@@ -261,77 +279,112 @@ class AdversarialCARLAEnv(gym.Env):
         Cleanup and delete actors, ScenarioManager and CARLA world
         """
         print("(AdversarialCARLAEnv) Destroyed.")
-        if self.world is not None:
-            del self.world
         if self.scenario_runner is not None:
             self.scenario_runner.destroy()
             del self.scenario_runner
 
 
     def reset(self, retdict=False):
-        self.scenario_runner.load_scenario()
-        self.world = CarlaDataProvider.get_world()
-        self._prev_distance = 10000 # TODO...
-        self._timestep = 0
-        self._info = {
-            'timestep': 0,
-            'collision': None,
-            'failed_scenario': None}
+        try:
+            self.scenario_runner.load_scenario()
+            # self.scenario_runner.manager._agent # AgentWrapper
+            for sensor in self.scenario_runner.manager._agent._sensors_list:
+                if sensor is not None:
+                    sensor_interface = self.scenario_runner.manager._agent._agent.sensor_interface
+                    if sensor.type_id == 'sensor.other.gnss':
+                        tag = 'GPS' # TODO: attach from input config 'id' mapping.
+                        del sensor_interface._sensors_objects[tag]
+                        sensor.stop()
+                        self.adv_gnss_callback = AdvGNSSCallBack(tag, sensor, sensor_interface)
+                        sensor.listen(self.adv_gnss_callback)
+                    elif sensor.type_id == 'sensor.other.obstacle':
+                        tag = 'Obstacle' # TODO: attach from input config 'id' mapping.
+                        del sensor_interface._sensors_objects[tag]
+                        sensor.stop()
+                        self.adv_obstacle_callback = AdvObstacleCallBack(tag, sensor, sensor_interface)
+                        sensor.listen(self.adv_obstacle_callback)
 
-        return self._observation(retdict)
+            # self.scenario_runner.manager._agent._sensors_list
+            self._prev_distance = 10000 # TODO...
+            self._timestep = 0
+            self._info = {
+                'timestep': 0,
+                'collision': None,
+                'failed_scenario': None}
+            return self._observation(retdict)
+        except Exception as e:
+            traceback.print_exc()
+            print("Could not reset env due to {}".format(e))
+            self.scenario_runner._cleanup()
+            exit(-1)
 
 
     def step(self, action):
-        done = False
-        # self._actions.append(action)
+        try:
+            done = False
+            # self._actions.append(action)
 
-        if isinstance(action, np.ndarray):
-            disturbance = {'x': action[::2].astype(np.float64), 'y': action[1::2].astype(np.float64)}
-        else:
-            disturbance = {'x': action[::2], 'y': action[1::2]}
-        for _ in range(self.block_size):
-            self.scenario_runner.running, distance = self._tick_scenario_ast(disturbance)
+            if isinstance(action, np.ndarray):
+                disturbance = {'x': action[::2].astype(np.float64), 'y': action[1::2].astype(np.float64)}
+            else:
+                disturbance = {'x': action[::2], 'y': action[1::2]}
+            for _ in range(self.block_size):
+                self.scenario_runner.running, distance = self._tick_scenario_ast(disturbance)
+                if not self.scenario_runner.running:
+                    break
+
+            collision = self.scenario_runner._check_failures()
+
+            observation = self._observation() # done before cleanup
+            # self._observations.append(observation)
+
             if not self.scenario_runner.running:
-                break
+                result = self.scenario_runner._stop_scenario(self.scenario_runner.start_time, self.scenario_runner.recorder_name, self.scenario_runner.scenario)
+                self.scenario_runner._cleanup()
 
-        collision = self.scenario_runner._check_failures()
+            running = self.scenario_runner.running
 
-        if not self.scenario_runner.running:
-            result = self.scenario_runner._stop_scenario(self.scenario_runner.start_time, self.scenario_runner.recorder_name, self.scenario_runner.scenario)
+            rate = self._prev_distance - distance
+            self._prev_distance = distance
+            # rate = self._distances[-1] - distance
+            # self._distances.append(distance)
+
+            self._failed_scenario = collision
+
+            if not running or collision:
+                done = True
+            #     _y = self._failed_scenario
+            #     _x = (self._actions, min(self._distances), rate)
+            #     self.dataset.append((_x, _y))
+
+            # Update info
+            agent = self.scenario_runner.agent_instance
+            self._info['timestep'] += 1
+            self._info['action'] = action
+            self._info['observation'] = observation
+            self._info['collision'] = collision
+            self._info['failed_scenario'] = self._failed_scenario
+            self._info['distance'] = distance
+            self._info['rate'] = rate
+            if agent is None:
+                self._info['ego_sensor_location'] = None
+                self._info['ego_truth_location'] = None
+            else:
+                if agent.ego_truth_location is not None:
+                    self._info['ego_truth_location'] = (agent.ego_truth_location.x, agent.ego_truth_location.y)
+                if agent.ego_sensor_location is not None:
+                    self._info['ego_sensor_location'] = (agent.ego_sensor_location.x, agent.ego_sensor_location.y)
+
+            # Calculate the reward for this step
+            reward = self._reward(self._info)
+            self._info['reward'] = reward
+
+            return (observation, reward, done, copy.deepcopy(self._info))
+        except Exception as e:
+            traceback.print_exc()
+            print("Could not step env due to {}".format(e))
             self.scenario_runner._cleanup()
-
-        running = self.scenario_runner.running
-
-        rate = self._prev_distance - distance
-        self._prev_distance = distance
-        # rate = self._distances[-1] - distance
-        # self._distances.append(distance)
-
-        self._failed_scenario = collision
-
-        if not running or collision:
-            done = True
-        #     _y = self._failed_scenario
-        #     _x = (self._actions, min(self._distances), rate)
-        #     self.dataset.append((_x, _y))
-
-        observation = self._observation()
-        # self._observations.append(observation)
-
-        # Update info
-        self._info['timestep'] += 1
-        self._info['action'] = action
-        self._info['observation'] = observation
-        self._info['collision'] = collision
-        self._info['failed_scenario'] = self._failed_scenario
-        self._info['distance'] = distance
-        self._info['rate'] = rate
-
-        # Calculate the reward for this step
-        reward = self._reward(self._info)
-        self._info['reward'] = reward
-
-        return (observation, reward, done, copy.deepcopy(self._info))
+            exit(-1)
 
 
     def _reward(self, info):
@@ -389,7 +442,9 @@ class AdversarialCARLAEnv(gym.Env):
             actor_poly_dict: a dictionary containing the bounding boxes of specific actors.
         """
         actor_poly_dict = {}
-        for actor in self.world.get_actors().filter(filt):
+        world = CarlaDataProvider.get_world()
+        actors = world.get_actors()
+        for actor in actors.filter(filt):
             # Get x, y and yaw of the actor
             trans = actor.get_transform()
             x = trans.location.x
@@ -411,10 +466,14 @@ class AdversarialCARLAEnv(gym.Env):
 
     def render(self, mode='human', close=False):
         # Render the environment to the screen
-        print("Timestep: ", self._info['timestep'])
-        print("Collision: ", self._info['collision'])
-        print("Failed: ", self._info['failed_scenario'])
-
+        print("Timestep:", self._info['timestep'])
+        print("Action:", self._info['action'])
+        print("Reward:", self._info['reward'])
+        print("Collision:", self._info['collision'])
+        print("Failed:", self._info['failed_scenario'])
+        print("Ego sensor (x,y):", self._info['ego_sensor_location'])
+        print("Ego truth (x,y):", self._info['ego_truth_location'])
+        print("="*50)
 
 
     def _tick_scenario_ast(self, disturbance):
@@ -432,6 +491,9 @@ class AdversarialCARLAEnv(gym.Env):
             if self.scenario_runner.manager._timestamp_last_run < timestamp.elapsed_seconds:
                 self.scenario_runner.manager._timestamp_last_run = timestamp.elapsed_seconds
 
+                disturbance = [disturbance['x'][0], disturbance['y'][0], 0] # TODO: what form is this in?
+                self.adv_gnss_callback.set_disturbance(disturbance)
+
                 self.scenario_runner.manager._watchdog.update()
 
                 if self.scenario_runner.manager._debug_mode:
@@ -443,7 +505,6 @@ class AdversarialCARLAEnv(gym.Env):
 
                 # AST: Apply disturbance
                 if self.scenario_runner.manager._agent is not None:
-                    self.scenario_runner.manager._agent._agent.set_disturbance(disturbance)
                     ego_action = self.scenario_runner.manager._agent()  # pylint: disable=not-callable
                     distance = self.scenario_runner.manager._agent._agent.min_distance
 
@@ -466,3 +527,84 @@ class AdversarialCARLAEnv(gym.Env):
 
         return self.scenario_runner.manager._running, distance
 
+
+
+
+class AdvGNSSCallBack(CallBack):
+
+    """
+    Class the sensors listen to in order to receive their data each frame
+    """
+
+    def __init__(self, tag, sensor, data_provider):
+        """
+        Initializes the call back
+        """
+        super().__init__(tag, sensor, data_provider)
+        self.noise_lat = 0
+        self.noise_lon = 0
+        self.noise_alt = 0
+        self.dims = 3
+
+
+    def __call__(self, data):
+        """
+        call function
+        """
+        assert isinstance(data, carla.GnssMeasurement)
+        array = np.array([data.latitude,
+                          data.longitude,
+                          data.altitude], dtype=np.float64)
+
+        noise = np.array([self.noise_lat, self.noise_lon, self.noise_alt])
+        array += noise
+
+        self._data_provider.update_sensor(self._tag, array, data.frame)
+
+
+    def set_disturbance(self, disturbance):
+        self.noise_lat = disturbance[0]
+        self.noise_lon = disturbance[1]
+        self.noise_alt = disturbance[2]
+
+
+
+class AdvObstacleCallBack(CallBack):
+
+    """
+    Class the sensors listen to in order to receive their data each frame
+    """
+
+    def __init__(self, tag, sensor, data_provider):
+        """
+        Initializes the call back
+        """
+        super().__init__(tag, sensor, data_provider)
+        self.noise_distance = 0
+        self.dims = 1
+
+
+    def __call__(self, data):
+        """
+        call function
+        """
+        # assert isinstance(data, carla.GnssMeasurement)
+        # array = np.array([data.latitude,
+        #                   data.longitude,
+        #                   data.altitude], dtype=np.float64)
+
+        # noise = np.array([self.noise_lat, self.noise_lon, self.noise_alt])
+        # array += noise
+
+        # breakpoint()
+        print("Obstacle data:", data)
+        print("Obstacle data.distance:", data.distance)
+        # print("Obstacle properties:", dir(data))
+
+        array = np.array([0])
+        self._data_provider.update_sensor(self._tag, array, data.frame)
+        print(self._data_provider._new_data_buffers)
+
+
+    def set_disturbance(self, disturbance):
+        self.noise_distance = disturbance[0]
