@@ -21,7 +21,7 @@ packages = [
 ]
 
 ci = haskey(ENV, "CI") && ENV["CI"] == "true"
-    
+
 if ci
     # remove "own" package when on CI
     pop!(packages)
@@ -36,5 +36,5 @@ if ci
     # pytorth does not work with 3.9
     pkg"add Conda"
     using Conda
-    Conda.add("python=3.6.5")
+    Conda.add("python=3.7.5")
 end
