@@ -3,11 +3,26 @@
 [![Report](https://img.shields.io/badge/research-report-2d716f.svg)](http://web.stanford.edu/~mossr/pdf/Autonomous_Vehicle_Risk_Assessment.pdf)
 [![Build Status](https://github.com/sisl/AutonomousRiskFramework/actions/workflows/CI.yml/badge.svg)](https://github.com/sisl/AutonomousRiskFramework/actions/workflows/CI.yml)
 
+## Installation
 **Note:** Julia v1.5+ is recommended for AutomotiveSimulator and POMDPStressTesting.
 
 ```julia
 julia install.jl
 ```
+
+### Known issues
+
+#### INTEL MKL ERROR: Library not loaded: @rpath/libiomp5.dylib
+This error was observed on MacOS and appears to be related to Conda.
+One solution that worked was to run
+
+```julia
+using Conda
+Conda.rm("mkl")
+Conda.add("nomkl")
+```
+See https://github.com/JuliaPy/PyPlot.jl/issues/315 for relevant discussions.
+
 
 ## Example
 
