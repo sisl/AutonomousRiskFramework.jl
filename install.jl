@@ -15,9 +15,6 @@ packages = [
 
     # [deps] RiskSimulator.jl
     PackageSpec(url=joinpath(@__DIR__, "RiskSimulator.jl")),
-
-    # [deps] AutonomousRiskFramework.jl
-    PackageSpec(url=joinpath(@__DIR__)),
 ]
 
 ci = haskey(ENV, "CI") && ENV["CI"] == "true"
