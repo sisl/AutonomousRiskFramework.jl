@@ -20,7 +20,9 @@ using Distributions
 #####################################################################################
 # Bayes Net representation of the scenario decision making problem
 #####################################################################################
-scenario_types = [T_HEAD_ON, T_LEFT, STOPPING, CROSSING, MERGING, CROSSWALK];
+# scenario_types = [T_HEAD_ON, T_LEFT, STOPPING, CROSSING, MERGING, CROSSWALK];
+scenario_types = [T_LEFT, STOPPING, CROSSING, MERGING, CROSSWALK];
+
 
 function get_actions(parent, value)
     if parent === nothing
@@ -35,7 +37,7 @@ end
 
 bn = BayesNet(); 
 push!(bn, StaticCPD(:a, get_actions(nothing, nothing)));
-push!(bn, CategoricalCPD(:b, [:a], [5], [get_actions(:a, x) for x in 1:length(scenario_types)]));
+push!(bn, CategoricalCPD(:b, [:a], [length(scenario_types)], [get_actions(:a, x) for x in 1:length(scenario_types)]));
 
 rand(bn)
 
@@ -59,7 +61,7 @@ rand(bn)
 # end
 
 #####################################################################################
-# MDP definition from Bayes Net
+# Scenario state and evaluation
 #####################################################################################
 struct DecisionState 
     type::Any # scenario type
@@ -70,28 +72,59 @@ end
 # initial state constructor
 DecisionState() = DecisionState(nothing,[nothing], false)
 
+# Define the system to test
+system = IntelligentDriverModel()    
+
+# Evaluates a scenario using AST
+# Returns: scalar risk if failures were discovered, 0 if not, -10.0 if an error occured during search
+
 function eval_AST(s::DecisionState)
-    system = IntelligentDriverModel()
-    scenario = get_scenario(scenario_types[s.type]; s_sut=Float64(s.init_cond[1]), s_adv=Float64(s.init_cond[3]), v_sut=Float64(s.init_cond[2]), v_adv=Float64(s.init_cond[4]))
-    planner = setup_ast(sut=system, scenario=scenario, nnobs=false)
-    search!(planner)    
-    α = 0.2 # risk tolerance
-    risk = overall_area(planner, α=α)
-    return risk
+    try
+        scenario = get_scenario(scenario_types[s.type]; s_sut=Float64(s.init_cond[1]), s_adv=Float64(s.init_cond[3]), v_sut=Float64(s.init_cond[2]), v_adv=Float64(s.init_cond[4]))
+        planner = setup_ast(sut=system, scenario=scenario, nnobs=false)
+        search!(planner)    
+        α = 0.2 # risk tolerance
+        risk = overall_area(planner, α=α)[1]
+        if isnan(risk)
+            return 0.0
+        end
+        return risk
+    catch
+        # TODO: Write to log file
+        return -10.0
+    end
 end
 
-# the scenario decision mdp type
-mutable struct ScenarioSearch <: MDP{DecisionState, Union{Int64, Vector{Any}, Nothing}}
+#####################################################################################
+# Baseline Evaluation
+#####################################################################################
+
+function random_baseline()
+    tmp_sample = rand(bn)
+    @show tmp_sample
+    tmp_s = DecisionState(tmp_sample[:a],tmp_sample[:b], true)
+    return eval_AST(tmp_s)
+end
+
+risks = [random_baseline() for i=1:10];
+
+#####################################################################################
+# MDP definition from Bayes Net
+#####################################################################################
+
+# The scenario decision mdp type
+mutable struct ScenarioSearch <: MDP{DecisionState, Any}
     discount_factor::Float64 # disocunt factor
 end
 
 mdp = ScenarioSearch(1)
 
 function POMDPs.reward(mdp::ScenarioSearch, state::DecisionState, action)
-    if state.type===nothing || state.pos===nothing
+    if state.type===nothing || state.init_cond[1]===nothing
         r = 0
     else
         r = eval_AST(state)
+        # r = sum(state.init_cond)
     end
     return r
 end
@@ -163,13 +196,13 @@ solver = MCTS.DPWSolver(;   estimate_value=rollout, # required.
 
 planner = solve(solver, mdp)
 
-a = action(planner, DecisionState())
+# a = action(planner, DecisionState())
 
 function MCTS.node_tag(s::DecisionState) 
     if s.done
         return "done"
     else
-        return "[$(s.type),$(s.pos)]"
+        return "[$(s.type),$(s.init_cond)]"
     end
 end
 
