@@ -24,6 +24,36 @@ Conda.add("nomkl")
 See https://github.com/JuliaPy/PyPlot.jl/issues/315 for relevant discussions.
 
 
+#### Python version conflicts
+Some versions of Python e.g., 3.9 are incompatible with the framework as they do not support packages such as `pytorch` that are needed.
+It is possible to switch to a working version of Python as follows:
+```julia
+using Conda
+Conda.add("python=3.7.5")
+```
+However, note that if you were using an incompatible of Python before, you might have installed Python packages of versions
+that can conflict with the new compatible version of Python as the packages remain under the Conda directory.
+You may see error messages like the following if this is the case:
+```
+Package enum34 conflicts for:
+pyopenssl -> cryptography[version='>=2.8'] -> enum34
+cryptography -> enum34
+brotlipy -> enum34
+urllib3 -> brotlipy[version='>=0.6.0'] -> enum34
+pyqt -> enum34
+```
+If so, you may need to remove the Conda directory to remove the packages and resintall them *after* setting Conda to use a correct version of Python i.e.,
+```shell
+rm -R ~/.julia/conda/  # Make sure this is okay to do in your case
+```
+then,
+```julia
+using Conda
+Conda.add("python=3.7.5")
+using RiskSimulator
+```
+
+
 ## Example
 
 ```julia
