@@ -43,13 +43,13 @@ end;
     prev_distance::Real = -1e10 # Used when agent goes out of frame
 
     # Noise distributions and disturbances (consistent with output variables in _logpdf)
-    xposition_noise_veh::Distribution = Normal(0, 3) # Gaussian noise (notice larger σ)
-    yposition_noise_veh::Distribution = Normal(0, 3) # Gaussian noise
-    velocity_noise_veh::Distribution = Normal(0, 1e-4) # Gaussian noise
+    xposition_noise_veh::Distribution = Normal(0, 5) # Gaussian noise (notice larger σ)
+    yposition_noise_veh::Distribution = Normal(0, 5) # Gaussian noise
+    velocity_noise_veh::Distribution = Normal(0, 1) # Gaussian noise
 
-    xposition_noise_sut::Distribution = Normal(0, 3) # Gaussian noise (notice larger σ)
-    yposition_noise_sut::Distribution = Normal(0, 3) # Gaussian noise
-    velocity_noise_sut::Distribution = Normal(0, 1e-4) # Gaussian noise
+    xposition_noise_sut::Distribution = Normal(0, 5) # Gaussian noise (notice larger σ)
+    yposition_noise_sut::Distribution = Normal(0, 5) # Gaussian noise
+    velocity_noise_sut::Distribution = Normal(0, 1) # Gaussian noise
 
     disturbances = scenario.disturbances # Initial 0-noise disturbance
 
@@ -65,6 +65,13 @@ Change the SUT for the ego vehicle.
     - PrincetonDriver(v_des=10.0) # Princeton driver model with selected speed
     - TODO: Robert Dyro's behavior agent.
 """
+function AutoRiskSim(system, scenario, noise_distribution)
+    sim = AutoRiskSim(scenario=scenario)
+    sim.sut.model.idm = system
+    sim.noise = noise_distribution
+    return sim
+end
+
 function AutoRiskSim(system, scenario)
     sim = AutoRiskSim(scenario=scenario)
     sim.sut.model.idm = system

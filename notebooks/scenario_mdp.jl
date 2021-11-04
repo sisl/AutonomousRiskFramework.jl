@@ -17,29 +17,50 @@ using MCTS
 using RiskSimulator
 using Distributions
 
+Random.seed!(1234)
 #####################################################################################
 # Bayes Net representation of the scenario decision making problem
 #####################################################################################
 # scenario_types = [T_HEAD_ON, T_LEFT, STOPPING, CROSSING, MERGING, CROSSWALK];
-scenario_types = [T_LEFT, STOPPING, CROSSING, MERGING, CROSSWALK];
+scenario_types = [STOPPING];
 
 
 function get_actions(parent, value)
     if parent === nothing
 		return Distributions.Categorical(length(scenario_types))
-    elseif parent == :a
+    elseif parent == :type
         # @show parent, value
 		options = get_scenario_options(scenario_types[value])
-        actions = [Distributions.Uniform(_range[1], _range[2]) for (key, _range) in options]
+        range_s_sut = options["s_sut"]
+        range_v_sut = options["v_sut"]
+        actions = [
+            Distributions.Uniform(range_s_sut[1], range_s_sut[2]),
+            Distributions.Uniform(range_v_sut[1], range_v_sut[2]) 
+                ]
+        return product_distribution(actions)
+    elseif parent == :sut
+        # @show parent, value
+		options = get_scenario_options(scenario_types[value])
+        range_s_adv = options["s_adv"]
+        range_v_adv = options["v_adv"]
+        actions = [
+            Distributions.Uniform(range_s_adv[1], range_s_adv[2]),
+            Distributions.Uniform(range_v_adv[1], range_v_adv[2]) 
+                ]
         return product_distribution(actions)
 	end
 end
 
-bn = BayesNet(); 
-push!(bn, StaticCPD(:a, get_actions(nothing, nothing)));
-push!(bn, CategoricalCPD(:b, [:a], [length(scenario_types)], [get_actions(:a, x) for x in 1:length(scenario_types)]));
+function create_bayesnet()
+    bn = BayesNet(); 
+    push!(bn, StaticCPD(:type, get_actions(nothing, nothing)));
+    push!(bn, CategoricalCPD(:sut, [:type], [length(scenario_types)], [get_actions(:type, x) for x in 1:length(scenario_types)]));
+    push!(bn, CategoricalCPD(:adv, [:type], [length(scenario_types)], [get_actions(:sut, x) for x in 1:length(scenario_types)]));
+    # @show rand(bn)
+    return bn
+end
 
-rand(bn)
+bn = create_bayesnet();
 
 # #####################################################################################
 # # Cross Entropy from Bayes Net
@@ -65,12 +86,13 @@ rand(bn)
 #####################################################################################
 struct DecisionState 
     type::Any # scenario type
-    init_cond::Vector{Any} # Initial conditions
+    init_sut::Vector{Any} # Initial conditions SUT
+    init_adv::Vector{Any} # Initial conditions Adversary
     done::Bool
 end
 
 # initial state constructor
-DecisionState() = DecisionState(nothing,[nothing], false)
+DecisionState() = DecisionState(nothing,[nothing],[nothing], false)
 
 # Define the system to test
 system = IntelligentDriverModel()    
@@ -80,17 +102,19 @@ system = IntelligentDriverModel()
 
 function eval_AST(s::DecisionState)
     try
-        scenario = get_scenario(scenario_types[s.type]; s_sut=Float64(s.init_cond[1]), s_adv=Float64(s.init_cond[3]), v_sut=Float64(s.init_cond[2]), v_adv=Float64(s.init_cond[4]))
+        scenario = get_scenario(scenario_types[s.type]; s_sut=Float64(s.init_sut[1]), s_adv=Float64(s.init_adv[1]), v_sut=Float64(s.init_sut[2]), v_adv=Float64(s.init_adv[2]))
         planner = setup_ast(sut=system, scenario=scenario, nnobs=false)
+        planner.solver.show_progress = false
         search!(planner)    
         α = 0.2 # risk tolerance
-        risk = overall_area(planner, α=α)[1]
+        risk = overall_area(planner,weights=[0, 0, 1, 0, 0, 0, 0], α=α)[1]
         if isnan(risk)
             return 0.0
         end
         return risk
-    catch
+    catch err
         # TODO: Write to log file
+        @warn err
         return -10.0
     end
 end
@@ -101,8 +125,8 @@ end
 
 function random_baseline()
     tmp_sample = rand(bn)
-    @show tmp_sample
-    tmp_s = DecisionState(tmp_sample[:a],tmp_sample[:b], true)
+    # @show tmp_sample
+    tmp_s = DecisionState(tmp_sample[:type],tmp_sample[:sut],tmp_sample[:adv], true)
     return eval_AST(tmp_s)
 end
 
@@ -120,7 +144,7 @@ end
 mdp = ScenarioSearch(1)
 
 function POMDPs.reward(mdp::ScenarioSearch, state::DecisionState, action)
-    if state.type===nothing || state.init_cond[1]===nothing
+    if state.type===nothing || state.init_sut[1]===nothing || state.init_adv[1]===nothing
         r = 0
     else
         r = eval_AST(state)
@@ -139,11 +163,13 @@ end
 function POMDPs.gen(m::ScenarioSearch, s::DecisionState, a, rng)
     # transition model
     if s.type === nothing
-        sp = DecisionState(a, [nothing], false)
-    elseif s.init_cond[1] === nothing
-        sp =  DecisionState(s.type, a, false)
+        sp = DecisionState(a, [nothing], [nothing], false)
+    elseif s.init_sut[1] === nothing
+        sp =  DecisionState(s.type, a, [nothing], false)
+    elseif s.init_adv[1] === nothing
+        sp =  DecisionState(s.type, s.init_sut, a, false)
     else
-        sp = DecisionState(s.type, s.init_cond, true)
+        sp = DecisionState(s.type, s.init_sut, s.init_adv, true)
     end
     r = POMDPs.reward(m, s, a)
     return (sp=sp, r=r)
@@ -158,20 +184,24 @@ POMDPs.discount(mdp::ScenarioSearch) = mdp.discount_factor
 function POMDPs.actions(mdp::ScenarioSearch, s::DecisionState)
     if s.type===nothing
         return get_actions(nothing, nothing)
-    elseif s.init_cond[1] === nothing
-        return get_actions(:a, s.type)
+    elseif s.init_sut[1] === nothing
+        return get_actions(:type, s.type)
+    elseif s.init_adv[1] === nothing
+        return get_actions(:sut, s.type)
     else
-        return Product(Distributions.Uniform.(rand(4), 1))   # TODO: Replace with a better placeholder
+        return Distributions.Uniform(0, 1)   # TODO: Replace with a better placeholder
     end
 end
 
 function POMDPs.action(policy::RandomPolicy, s::DecisionState)
     if s.type===nothing
         return rand(get_actions(nothing, nothing))
-    elseif s.init_cond[1] === nothing
-        return rand(get_actions(:a, s.type))
+    elseif s.init_sut[1] === nothing
+        return rand(get_actions(:type, s.type))
+    elseif s.init_adv[1] === nothing
+        return rand(get_actions(:sut, s.type))
     else
-        return [nothing]
+        return nothing
     end
 end
 
@@ -202,7 +232,7 @@ function MCTS.node_tag(s::DecisionState)
     if s.done
         return "done"
     else
-        return "[$(s.type),$(s.init_cond)]"
+        return "[$(s.type),$(s.init_sut),$(s.init_adv)]"
     end
 end
 
