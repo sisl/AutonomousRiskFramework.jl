@@ -16,8 +16,9 @@ using Parameters
 using MCTS
 using RiskSimulator
 using Distributions
+using Plots
 
-Random.seed!(1234)
+Random.seed!()
 #####################################################################################
 # Bayes Net representation of the scenario decision making problem
 #####################################################################################
@@ -103,7 +104,7 @@ system = IntelligentDriverModel()
 function eval_AST(s::DecisionState)
     try
         scenario = get_scenario(scenario_types[s.type]; s_sut=Float64(s.init_sut[1]), s_adv=Float64(s.init_adv[1]), v_sut=Float64(s.init_sut[2]), v_adv=Float64(s.init_adv[2]))
-        planner = setup_ast(sut=system, scenario=scenario, nnobs=false)
+        planner = setup_ast(sut=system, scenario=scenario, nnobs=false, seed=rand(1:100000))
         planner.solver.show_progress = false
         search!(planner)    
         α = 0.2 # risk tolerance
@@ -127,10 +128,14 @@ function random_baseline()
     tmp_sample = rand(bn)
     # @show tmp_sample
     tmp_s = DecisionState(tmp_sample[:type],tmp_sample[:sut],tmp_sample[:adv], true)
-    return eval_AST(tmp_s)
+    return (tmp_s, eval_AST(tmp_s))
+    # return (tmp_s, nothing)
 end
 
-risks = [random_baseline() for i=1:10];
+results = [random_baseline() for i=1:20];
+states = [result[1] for result in results];
+risks = [result[2] for result in results];
+plot([state.init_sut[1] for state in states])
 
 #####################################################################################
 # MDP definition from Bayes Net
