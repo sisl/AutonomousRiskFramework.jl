@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-This module provides an AST agent to control the ego vehicle
+This module provides an agent to control the ego vehicle using GNSS observations.
 """
 
 from __future__ import print_function
@@ -10,6 +10,7 @@ import carla
 from agents.navigation.basic_agent import BasicAgent
 from agents.navigation.agent import AgentState
 from agents.tools.misc import is_within_distance_ahead, is_within_distance, compute_distance
+import math
 import random
 import numpy as np
 import weakref
@@ -19,17 +20,11 @@ import os
 from srunner.autoagents.autonomous_agent import AutonomousAgent
 from srunner.scenariomanager.carla_data_provider import CarlaDataProvider
 from srunner.scenariomanager.timer import GameTime
-from ast_sensor_wrapper import ASTSensorWrapper
-from ast_sensor_wrapper import GnssSensor
 
-from pdb import set_trace as breakpoint # DEBUG. TODO!
 
-repetitions = 0
-
-class BetterAstAgent(AutonomousAgent):
-
+class GnssAgent(AutonomousAgent):
     """
-    Autonomous agent to control the ego vehicle for Adaptive Stress Testing
+    Autonomous agent to control the ego vehicle for that uses GNSS sensor observations.
     """
 
     _agent = None
@@ -39,13 +34,10 @@ class BetterAstAgent(AutonomousAgent):
         """
         Setup the agent parameters
         """
-        global repetitions
-
         self._route_assigned = False
         self._agent = None
         self.time = 0
         self.min_distance = 100000
-        repetitions += 1
         self.use_ego_truth = True
 
         self.ego_truth_location = None
@@ -72,7 +64,7 @@ class BetterAstAgent(AutonomousAgent):
         """
         sensors = [
             {'type': 'sensor.other.gnss', 'x': 0.0, 'y': 0.0, 'z': 0.0, 'yaw': 0.0, 'pitch': 0.0, 'roll': 0.0, 'id': 'GPS'},
-            {'type': 'sensor.other.obstacle', 'x': 0.0, 'y': 0.0, 'z': 0.0, 'yaw': 0.0, 'pitch': 0.0, 'roll': 0.0, 'id': 'Obstacle'}
+            # {'type': 'sensor.other.obstacle', 'x': 0.0, 'y': 0.0, 'z': 0.0, 'yaw': 0.0, 'pitch': 0.0, 'roll': 0.0, 'id': 'Obstacle'}
         ]
 
         return sensors
@@ -88,7 +80,6 @@ class BetterAstAgent(AutonomousAgent):
         control.brake = 0.0
         control.hand_brake = False
         gnss_data = input_data['GPS'][1]
-        # breakpoint()
 
         if not self._agent:
             hero_actor = None
@@ -183,9 +174,6 @@ class BetterAstAgent(AutonomousAgent):
                    and False otherwise
                  - vehicle is the blocker object itself
         """
-        global repetitions
-
-
         # record for `render`
         self.ego_truth_location = self._agent._vehicle.get_location() # Truth
 
@@ -225,3 +213,120 @@ class BetterAstAgent(AutonomousAgent):
                 return (True, target_vehicle)
 
         return (False, None)
+
+
+# ==============================================================================
+# -- GnssSensor --------------------------------------------------------
+# ==============================================================================
+
+
+class GnssSensor(object):
+    """
+    Class for GNSS sensors.
+
+    Sensor parameters:
+        https://carla.readthedocs.io/en/0.9.11/ref_sensors/#gnss-sensor
+        ---------------------------------------------------------------
+        noise_alt_bias      float   0.0    Mean parameter in the noise model for altitude.
+        noise_alt_stddev    float   0.0    Standard deviation parameter in the noise model for altitude.
+        noise_lat_bias      float   0.0    Mean parameter in the noise model for latitude.
+        noise_lat_stddev    float   0.0    Standard deviation parameter in the noise model for latitude.
+        noise_lon_bias      float   0.0    Mean parameter in the noise model for longitude.
+        noise_lon_stddev    float   0.0    Standard deviation parameter in the noise model for longitude.
+        noise_seed          int     0      Initializer for a pseudorandom number generator.
+        sensor_tick         float   0.0    Simulation seconds between sensor captures (ticks).
+    """
+
+
+    def __init__(self, parent_actor, sensor_params=None):
+        """Constructor method"""
+        self.sensor = None
+        self._parent = parent_actor
+        self.lat = 0.0
+        self.lon = 0.0
+        self.alt = 0.0
+        world = self._parent.get_world()
+        blueprint = world.get_blueprint_library().find('sensor.other.gnss')
+
+        # set GNSS sensor noise parameters here (e.g.)
+        if sensor_params is None:
+            sensor_params = defaultdict(float) # defaults to all zeros
+        else:
+            # combine input sensor_params with defaultdict of zeros (prioritizing input values)
+            sensor_params = defaultdict(float).update(sensor_params)
+
+        # set sensor-level parameters
+        blueprint.set_attribute('noise_alt_bias', str(sensor_params['noise_alt_bias']))
+        blueprint.set_attribute('noise_alt_stddev', str(sensor_params['noise_alt_stddev']))
+        blueprint.set_attribute('noise_lat_bias', str(sensor_params['noise_lat_bias']))
+        blueprint.set_attribute('noise_lat_stddev', str(sensor_params['noise_lat_stddev']))
+        blueprint.set_attribute('noise_lon_bias', str(sensor_params['noise_lon_bias']))
+        blueprint.set_attribute('noise_lon_stddev', str(sensor_params['noise_lon_stddev']))
+        blueprint.set_attribute('noise_seed', str(int(sensor_params['noise_seed'])))
+        blueprint.set_attribute('sensor_tick', str(sensor_params['sensor_tick']))
+
+        self.sensor = world.spawn_actor(blueprint, carla.Transform(carla.Location(x=1.0, z=2.8)),
+                                        attach_to=self._parent)
+
+        # We need to pass the lambda a weak reference to
+        # self to avoid circular reference.
+        weak_self = weakref.ref(self)
+        self.sensor.listen(lambda event: GnssSensor._on_gnss_event(weak_self, event))
+
+
+    def destroy(self):
+        if self.sensor is not None:
+            self.sensor.destroy()
+
+
+    @staticmethod
+    def _on_gnss_event(weak_self, event):
+        """GNSS listener method"""
+        self = weak_self()
+        if not self:
+            return
+        self.lat = event.latitude
+        self.lon = event.longitude
+        self.alt = event.altitude
+
+
+    def get_observation(self):
+        """ Get tuple of current sensor observation"""
+        return (self.lat, self.lon, self.alt)
+
+
+    def get_location(self):
+        """ Get the CARLA x/y Location based on the current sensor observation"""
+        (x, y, z) = GnssSensor.gps_to_location(self.lat, self.lon, self.alt)
+        return carla.Location(x=x, y=y, z=z)
+
+
+    @staticmethod
+    def gps_to_location(latitude, longitude, altitude):
+        """Creates Location from GPS (latitude, longitude, altitude).
+        This is the inverse of the _location_to_gps method found in:
+            https://github.com/carla-simulator/scenario_runner/blob/master/srunner/tools/route_manipulation.py
+        Taken from the `pylot` project function `from_gps`:
+            https://github.com/erdos-project/pylot/blob/master/pylot/utils.py
+        """
+        EARTH_RADIUS_EQUA = 6378137.0
+        # The following reference values are applicable for towns 1 through 7,
+        # and are taken from the corresponding OpenDrive map files.
+        # LAT_REF = 49.0
+        # LON_REF = 8.0
+        LAT_REF = 0.0
+        LON_REF = 0.0
+
+        scale = math.cos(LAT_REF * math.pi / 180.0)
+        basex = scale * math.pi * EARTH_RADIUS_EQUA / 180.0 * LON_REF
+        basey = scale * EARTH_RADIUS_EQUA * math.log(
+            math.tan((90.0 + LAT_REF) * math.pi / 360.0))
+
+        x = scale * math.pi * EARTH_RADIUS_EQUA / 180.0 * longitude - basex
+        y = scale * EARTH_RADIUS_EQUA * math.log(
+            math.tan((90.0 + latitude) * math.pi / 360.0)) - basey
+
+        # This wasn't in the original method, but seems to be necessary.
+        y *= -1
+
+        return (x, y, altitude)

@@ -2,14 +2,25 @@ import numpy as np
 import gym
 import adv_carla
 
-env = gym.make('adv-carla-v0') # AdversarialCARLAEnv()
+# maps to the AutonomousAgent.sensors() return vector.
+sensors = [
+    {
+        'id': 'GPS',
+        'lat': {'mean': 0, 'std': 0.0001, 'upper': 10, 'lower': -10},
+        'lon': {'mean': 0, 'std': 0.0001, 'upper': 10, 'lower': -10},
+        'alt': {'mean': 0, 'std': 0.00000001, 'upper': 0, 'lower': 0},
+    },
+]
+
+env = gym.make('adv-carla-v0', sensors=sensors)
 obs = env.reset()
 t = r = 0
 done = False
-σ = 1 # noise variance
+σ = 0.0001 # noise standard deviation
 while not done:
     t += 1
-    action = np.array([0, 0]) # σ*np.random.rand(2) # xy in meters
+    action = np.array([0, 0, 0]) # σ*np.random.rand(3) # lat/lon/alt
+    # action = σ*np.random.rand(3) # lat/lon/alt
     obs, reward, done, info = env.step(action)
     r += reward
     env.render()

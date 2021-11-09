@@ -23,6 +23,7 @@ import os
 import signal
 import sys
 import time
+import warnings
 
 import carla
 import py_trees
@@ -33,9 +34,10 @@ else:
     sys.path.append(os.getenv('SCENARIO_RUNNER_ROOT')) # Add scenario_runner package to import path
 
 from ..ast_scenario_runner import ASTScenarioRunner
+from .adversarial_sensors import *
+
 from srunner.scenariomanager.carla_data_provider import CarlaDataProvider
 from srunner.scenariomanager.timer import GameTime
-from srunner.autoagents.sensor_interface import CallBack
 
 from pdb import set_trace as breakpoint # DEBUG. TODO!
 
@@ -49,12 +51,14 @@ DEFAULT_PARAMS = {
     'reward_bonus': 100,
     'discount': 1.0,
     'max_past_step': 3,
-    'lower_disturbance': np.float32(np.array([-10, -10])),
-    'upper_disturbance': np.float32(np.array([10, 10])),
-    'var_disturbance': np.array([1, 1]),
-    'mean_disturbance': np.array([0, 0]),
     'lower_actor_state': np.float32(np.array([-100, -100, -100, -100, 0])),   # x_topright, y_topright, x_bottomleft, y_bottomleft, status
     'upper_actor_state': np.float32(np.array([100, 100, 100, 100, 1])),
+}
+
+# Mapping from sensor type => adversarial callback class
+ADVERSARIAL_SENSOR_MAPPING = {
+    'sensor.other.gnss': AdvGNSSCallBack,
+    'sensor.other.obstacle': AdvObstacleCallBack,
 }
 
 
@@ -90,7 +94,7 @@ class AdversarialCARLAEnv(gym.Env):
     scenario_config = None
 
     # Agent selections
-    agent = os.path.join(dirname, "../agents/better_ast_agent.py")
+    agent = os.path.join(dirname, "../agents/gnss_agent.py")
 
     # CARLA configuration parameters
     port = 2222
@@ -107,11 +111,14 @@ class AdversarialCARLAEnv(gym.Env):
     # Gym environment parameters
     block_size = 10
 
-    adv_gnss_callback = None
-    adv_obstacle_callback = None
+    # Dictionary of adversarial sensors, keyed by the `id` from AutonomousAgent.sensors() return vector.
+    adv_sensor_callbacks = {}
+
+    # Parameters associated with each disturbance type.
+    disturbance_params = []
 
 
-    def __init__(self, *, route=route, scenario=scenario, agent=agent, port=port, record=record, params=DEFAULT_PARAMS):
+    def __init__(self, *, route=route, scenario=scenario, agent=agent, port=port, record=record, params=DEFAULT_PARAMS, sensors=disturbance_params):
         """
         Setup ScenarioRunner
         """
@@ -149,6 +156,9 @@ class AdversarialCARLAEnv(gym.Env):
                                   randomize=False,
                                   repetitions=1,
                                   waitForEgo=False)
+
+        print("Disturbance profile:", sensors)
+        self.disturbance_params = sensors
 
         # Create signal handler for SIGINT
         if sys.platform != 'win32':
@@ -195,16 +205,13 @@ class AdversarialCARLAEnv(gym.Env):
         self.actor_keys = list(obs.keys())  # Ensure actor is matched to the right key for observations
         print("No. of Actors: ", len(self.actor_keys))
 
-        self.var_disturbance = params['var_disturbance']*(len(self.actor_keys)-1)
-        self.mean_disturbance = params['mean_disturbance']*(len(self.actor_keys)-1)
+        # reward parameters
+        sensor_params = self._associate_adv_sensor_params() # TODO: How to handle multiple adv. sensor types in the action space?
+        self.mean_disturbances, self.var_disturbances = self._get_disturbance_params(sensor_params)
 
-        # action/observation spaces
-        assert len(params['lower_disturbance']) == len(params['upper_disturbance'])
-        self.action_space = spaces.Box(
-                np.array(params['lower_disturbance']*(len(self.actor_keys)-1)),
-                np.array(params['upper_disturbance']*(len(self.actor_keys)-1)), dtype=np.float32)
-
-        assert len(params['lower_actor_state']) == len(params['upper_actor_state'])
+        # action space
+        lower, upper = self._get_disturbance_action_bounds(sensor_params)
+        self.action_space = spaces.Box(lower, upper, dtype=np.float32)
 
         # observation_space_dict = {}
         # for key in self.actor_keys:
@@ -214,6 +221,8 @@ class AdversarialCARLAEnv(gym.Env):
 
         # self.observation_space = spaces.Dict(observation_space_dict)
 
+        # observation space
+        assert len(params['lower_actor_state']) == len(params['upper_actor_state'])
         self.observation_space = spaces.Box(
                 np.array(params['lower_actor_state']*len(self.actor_keys)),
                 np.array(params['upper_actor_state']*len(self.actor_keys)), dtype=np.float32)
@@ -286,25 +295,12 @@ class AdversarialCARLAEnv(gym.Env):
 
     def reset(self, retdict=False):
         try:
+            # Reload scenario
             self.scenario_runner.load_scenario()
-            # self.scenario_runner.manager._agent # AgentWrapper
-            for sensor in self.scenario_runner.manager._agent._sensors_list:
-                if sensor is not None:
-                    sensor_interface = self.scenario_runner.manager._agent._agent.sensor_interface
-                    if sensor.type_id == 'sensor.other.gnss':
-                        tag = 'GPS' # TODO: attach from input config 'id' mapping.
-                        del sensor_interface._sensors_objects[tag]
-                        sensor.stop()
-                        self.adv_gnss_callback = AdvGNSSCallBack(tag, sensor, sensor_interface)
-                        sensor.listen(self.adv_gnss_callback)
-                    elif sensor.type_id == 'sensor.other.obstacle':
-                        tag = 'Obstacle' # TODO: attach from input config 'id' mapping.
-                        del sensor_interface._sensors_objects[tag]
-                        sensor.stop()
-                        self.adv_obstacle_callback = AdvObstacleCallBack(tag, sensor, sensor_interface)
-                        sensor.listen(self.adv_obstacle_callback)
 
-            # self.scenario_runner.manager._agent._sensors_list
+            # Handle replacing sensors with their adversarial counterpart
+            self._adversarial_replace_sensors()
+
             self._prev_distance = 10000 # TODO...
             self._timestep = 0
             self._info = {
@@ -314,7 +310,7 @@ class AdversarialCARLAEnv(gym.Env):
             return self._observation(retdict)
         except Exception as e:
             traceback.print_exc()
-            print("Could not reset env due to {}".format(e))
+            print("Could not reset env due to: {}".format(e))
             self.scenario_runner._cleanup()
             exit(-1)
 
@@ -323,13 +319,12 @@ class AdversarialCARLAEnv(gym.Env):
         try:
             done = False
             # self._actions.append(action)
-
-            if isinstance(action, np.ndarray):
-                disturbance = {'x': action[::2].astype(np.float64), 'y': action[1::2].astype(np.float64)}
-            else:
-                disturbance = {'x': action[::2], 'y': action[1::2]}
+            # if isinstance(action, np.ndarray):
+            #     disturbance = {'x': action[::2].astype(np.float64), 'y': action[1::2].astype(np.float64)}
+            # else:
+            #     disturbance = {'x': action[::2], 'y': action[1::2]}
             for _ in range(self.block_size):
-                self.scenario_runner.running, distance = self._tick_scenario_ast(disturbance)
+                self.scenario_runner.running, distance = self._tick_scenario_ast(action)
                 if not self.scenario_runner.running:
                     break
 
@@ -382,7 +377,7 @@ class AdversarialCARLAEnv(gym.Env):
             return (observation, reward, done, copy.deepcopy(self._info))
         except Exception as e:
             traceback.print_exc()
-            print("Could not step env due to {}".format(e))
+            print("Could not step env due to: {}".format(e))
             self.scenario_runner._cleanup()
             exit(-1)
 
@@ -394,7 +389,8 @@ class AdversarialCARLAEnv(gym.Env):
         distance = info['distance']
 
         # TODO: scale to be reasonable sized (Within [-1, 1])
-        reward = -utils.mahalanobis_d(action, self.mean_disturbance, self.var_disturbance)/utils.mahalanobis_d(10*self.var_disturbance, self.mean_disturbance, self.var_disturbance)
+        reward = -utils.mahalanobis_d(action, self.mean_disturbances, self.var_disturbances)/utils.mahalanobis_d(10*self.var_disturbances, self.mean_disturbances, self.var_disturbances)
+
         if collision:
             reward += 100
 
@@ -476,7 +472,7 @@ class AdversarialCARLAEnv(gym.Env):
         print("="*50)
 
 
-    def _tick_scenario_ast(self, disturbance):
+    def _tick_scenario_ast(self, action):
         """
         Progresses the scenario tick-by-tick for AST interface
         """
@@ -491,8 +487,7 @@ class AdversarialCARLAEnv(gym.Env):
             if self.scenario_runner.manager._timestamp_last_run < timestamp.elapsed_seconds:
                 self.scenario_runner.manager._timestamp_last_run = timestamp.elapsed_seconds
 
-                disturbance = [disturbance['x'][0], disturbance['y'][0], 0] # TODO: what form is this in?
-                self.adv_gnss_callback.set_disturbance(disturbance)
+                self._set_disturbances(action)
 
                 self.scenario_runner.manager._watchdog.update()
 
@@ -528,83 +523,83 @@ class AdversarialCARLAEnv(gym.Env):
         return self.scenario_runner.manager._running, distance
 
 
+    def _set_disturbances(self, action):
+        id = self._associate_adv_sensor_id()
+        self.adv_sensor_callbacks[id].set_disturbance(action)
 
 
-class AdvGNSSCallBack(CallBack):
-
-    """
-    Class the sensors listen to in order to receive their data each frame
-    """
-
-    def __init__(self, tag, sensor, data_provider):
-        """
-        Initializes the call back
-        """
-        super().__init__(tag, sensor, data_provider)
-        self.noise_lat = 0
-        self.noise_lon = 0
-        self.noise_alt = 0
-        self.dims = 3
+    def _get_disturbance_params(self, params):
+        sensor_type = self._id_to_sensor_type(params['id'])
+        if sensor_type == 'sensor.other.gnss':
+            mean = np.array([params['lat']['mean'], params['lon']['mean'], params['alt']['mean']])
+            var = np.sqrt(np.array([params['lat']['std'], params['lon']['std'], params['alt']['std']]))
+        else:
+            raise Exception("No disturbance parameters for sensor type of " + sensor_type)
+        return mean, var
 
 
-    def __call__(self, data):
-        """
-        call function
-        """
-        assert isinstance(data, carla.GnssMeasurement)
-        array = np.array([data.latitude,
-                          data.longitude,
-                          data.altitude], dtype=np.float64)
-
-        noise = np.array([self.noise_lat, self.noise_lon, self.noise_alt])
-        array += noise
-
-        self._data_provider.update_sensor(self._tag, array, data.frame)
+    def _get_disturbance_action_bounds(self, params):
+        sensor_type = self._id_to_sensor_type(params['id'])
+        if sensor_type == 'sensor.other.gnss':
+            lower = np.array([params['lat']['lower'], params['lon']['lower'], params['alt']['lower']])
+            upper = np.array([params['lat']['upper'], params['lon']['upper'], params['alt']['upper']])
+        else:
+            raise Exception("No disturbance bounding parameters for sensor type of " + sensor_type)
+        return lower, upper
 
 
-    def set_disturbance(self, disturbance):
-        self.noise_lat = disturbance[0]
-        self.noise_lon = disturbance[1]
-        self.noise_alt = disturbance[2]
+    def _id_to_sensor_type(self, id):
+        sensors = self.scenario_runner.manager._agent._agent.sensors()
+        for sensor in sensors:
+            if sensor['id'] == id:
+                return sensor['type']
+        raise Exception("No associated sensor with id " + id + " in the agent's sensors() list.")
 
 
-
-class AdvObstacleCallBack(CallBack):
-
-    """
-    Class the sensors listen to in order to receive their data each frame
-    """
-
-    def __init__(self, tag, sensor, data_provider):
-        """
-        Initializes the call back
-        """
-        super().__init__(tag, sensor, data_provider)
-        self.noise_distance = 0
-        self.dims = 1
+    def _associate_adv_sensor_id(self):
+        for params in self.disturbance_params:
+            id = params['id']
+            if id in self.adv_sensor_callbacks:
+                return id
+            else:
+                raise Exception("No matching sensor with adversarial id: " + id)
 
 
-    def __call__(self, data):
-        """
-        call function
-        """
-        # assert isinstance(data, carla.GnssMeasurement)
-        # array = np.array([data.latitude,
-        #                   data.longitude,
-        #                   data.altitude], dtype=np.float64)
-
-        # noise = np.array([self.noise_lat, self.noise_lon, self.noise_alt])
-        # array += noise
-
-        # breakpoint()
-        print("Obstacle data:", data)
-        print("Obstacle data.distance:", data.distance)
-        # print("Obstacle properties:", dir(data))
-
-        array = np.array([0])
-        self._data_provider.update_sensor(self._tag, array, data.frame)
-        print(self._data_provider._new_data_buffers)
+     # TODO: How to handle multiple adv. sensor types in the action space?
+    def _associate_adv_sensor_params(self):
+        for params in self.disturbance_params:
+            id = params['id']
+            if id in self.adv_sensor_callbacks:
+                return params
+            else:
+                raise Exception("No matching sensor with adversarial id: " + id)
+        raise Exception("No matching adversarial sensor found. Please set the `sensors` input to the gym environment.")
 
 
-    def set_disturbance(self, disturbance):
-        self.noise_distance = disturbance[0]
+    def _associate_sensor_id(self, sensor_interface, sensor):
+        sensors_objects = sensor_interface._sensors_objects
+        for id in sensors_objects.keys():
+            if sensors_objects[id] == sensor:
+                return id # guarenteed to find something
+
+
+    def _adversarial_replace_sensors(self):
+        for sensor in self.scenario_runner.manager._agent._sensors_list:
+            if sensor is not None:
+                sensor_interface = self.scenario_runner.manager._agent._agent.sensor_interface
+
+                # Replace adversarial version of the sensor(s)
+                if sensor.type_id in ADVERSARIAL_SENSOR_MAPPING:
+                    # Get the adversarial sensor callback class from the mapping
+                    AdvCallBack = ADVERSARIAL_SENSOR_MAPPING[sensor.type_id]
+
+                    # Get the `id` field that is associated to the output of AutonomousAgent.sensors()
+                    id = self._associate_sensor_id(sensor_interface, sensor)
+
+                    # Replace the sensor by first deleting it, stopping it, creating a new callback, then starting the listener.
+                    del sensor_interface._sensors_objects[id]
+                    sensor.stop()
+                    self.adv_sensor_callbacks[id] = AdvCallBack(id, sensor, sensor_interface)
+                    sensor.listen(self.adv_sensor_callbacks[id])
+                else:
+                    warnings.warn("No adversarial version of the sensor type: " + sensor.type_id)
