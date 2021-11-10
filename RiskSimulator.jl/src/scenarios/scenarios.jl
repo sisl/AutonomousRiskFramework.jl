@@ -49,17 +49,17 @@ end
 # Ranges computed based on manual rendering and visual inspection.
 function get_scenario_options(scenario_enum::SCENARIO)
     if scenario_enum == T_HEAD_ON
-        return Dict("s_sut" => [2.0, 60.0], "s_adv" => [2.0, 60.0], "v_sut" => [1.0, 60.0], "v_adv" =>[1.0, 60.0])
+        return Dict("s_sut" => [2.0, 20.0], "s_adv" => [2.0, 20.0], "v_sut" => [1.0, 5.0], "v_adv" =>[1.0, 5.0])
     elseif scenario_enum == T_LEFT
-        return Dict("s_sut" => [2.0, 60.0], "s_adv" => [2.0, 60.0], "v_sut" => [1.0, 60.0], "v_adv" =>[1.0, 60.0])
+        return Dict("s_sut" => [2.0, 20.0], "s_adv" => [2.0, 20.0], "v_sut" => [1.0, 5.0], "v_adv" =>[1.0, 5.0])
     elseif scenario_enum == STOPPING
-        return Dict("s_sut" => [2.0, 20.0], "s_adv" => [2.0, 20.0], "v_sut" => [2.0, 5.0], "v_adv" =>[2.0, 5.0])
+        return Dict("s_sut" => [2.0, 20.0], "s_adv" => [2.0, 20.0], "v_sut" => [1.0, 5.0], "v_adv" =>[1.0, 5.0])
     elseif scenario_enum == CROSSING
-        return Dict("s_sut" => [2.0, 40.0], "s_adv" => [2.0, 40.0], "v_sut" => [1.0, 40.0], "v_adv" =>[1.0, 40.0])
+        return Dict("s_sut" => [2.0, 20.0], "s_adv" => [2.0, 20.0], "v_sut" => [1.0, 5.0], "v_adv" =>[1.0, 5.0])
     elseif scenario_enum == MERGING
-        return Dict("s_sut" => [2.0, 45.0], "s_adv" => [2.0, 45.0], "v_sut" => [1.0, 45.0], "v_adv" =>[1.0, 45.0])
+        return Dict("s_sut" => [2.0, 20.0], "s_adv" => [2.0, 20.0], "v_sut" => [1.0, 5.0], "v_adv" =>[1.0, 5.0])
     elseif scenario_enum == CROSSWALK
-        return Dict("s_sut" => [2.0, 30.0], "s_adv" => [1.0, 15.0], "v_sut" => [1.0, 30.0], "v_adv" =>[1.0, 15.0])
+        return Dict("s_sut" => [2.0, 20.0], "s_adv" => [2.0, 20.0], "v_sut" => [1.0, 5.0], "v_adv" =>[1.0, 5.0])
     end
 end
 

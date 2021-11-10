@@ -423,6 +423,12 @@ git-tree-sha1 = "d8a578692e3077ac998b50c0217dfd67f21d1e5f"
 uuid = "b22a6f82-2f65-5046-a5b2-351ab43fb4e5"
 version = "4.4.0+0"
 
+[[FileIO]]
+deps = ["Pkg", "Requires", "UUIDs"]
+git-tree-sha1 = "2db648b6712831ecb333eae76dbfd1c156ca13bb"
+uuid = "5789e2e9-d7fb-5bc7-8068-2c6fae9b9549"
+version = "1.11.2"
+
 [[FileWatching]]
 uuid = "7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"
 

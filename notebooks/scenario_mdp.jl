@@ -16,14 +16,17 @@ using Parameters
 using MCTS
 using RiskSimulator
 using Distributions
-using Plots
+using FileIO
 
-Random.seed!()
+using Distributed
+using ProgressMeter
+
+Random.seed!(1234)
 #####################################################################################
 # Bayes Net representation of the scenario decision making problem
 #####################################################################################
-# scenario_types = [T_HEAD_ON, T_LEFT, STOPPING, CROSSING, MERGING, CROSSWALK];
-scenario_types = [STOPPING];
+scenario_types = [T_HEAD_ON, T_LEFT, STOPPING, CROSSING, MERGING, CROSSWALK];
+# scenario_types = [STOPPING];
 
 
 function get_actions(parent, value)
@@ -108,7 +111,8 @@ function eval_AST(s::DecisionState)
         planner.solver.show_progress = false
         search!(planner)    
         α = 0.2 # risk tolerance
-        risk = overall_area(planner,weights=[0, 0, 1, 0, 0, 0, 0], α=α)[1]
+        cvar_wt = [0, 0, 1, 0, 0, 0, 0]  # only compute cvar
+        risk = overall_area(planner,weights=cvar_wt, α=α)[1]
         if isnan(risk)
             return 0.0
         end
@@ -132,11 +136,14 @@ function random_baseline()
     # return (tmp_s, nothing)
 end
 
-results = [random_baseline() for i=1:20];
+results = []
+@showprogress @distributed for i=1:1000
+    push!(results, random_baseline())
+end
+
 states = [result[1] for result in results];
 risks = [result[2] for result in results];
-plot([state.init_sut[1] for state in states])
-
+save(raw"data\\risks_1000_ALL.jld2", Dict("risks:" => risks, "states:" => states))
 #####################################################################################
 # MDP definition from Bayes Net
 #####################################################################################
@@ -144,15 +151,17 @@ plot([state.init_sut[1] for state in states])
 # The scenario decision mdp type
 mutable struct ScenarioSearch <: MDP{DecisionState, Any}
     discount_factor::Float64 # disocunt factor
+    cvars::Vector
 end
 
-mdp = ScenarioSearch(1)
+mdp = ScenarioSearch(1, [])
 
 function POMDPs.reward(mdp::ScenarioSearch, state::DecisionState, action)
     if state.type===nothing || state.init_sut[1]===nothing || state.init_adv[1]===nothing
         r = 0
     else
         r = eval_AST(state)
+        push!(mdp.cvars, r)
         # r = sum(state.init_cond)
     end
     return r
@@ -224,7 +233,8 @@ function rollout(mdp::ScenarioSearch, s::DecisionState, d::Int64)
 end
 
 solver = MCTS.DPWSolver(;   estimate_value=rollout, # required.
-                            n_iterations=100,
+                            exploration_constant=0.3,
+                            n_iterations=1000,
                             enable_state_pw=false, # required.
                             show_progress=true,
                             tree_in_info=true)
@@ -248,6 +258,8 @@ using D3Trees
 a, info = action_info(planner, DecisionState(), tree_in_info=true)
 t = D3Tree(info[:tree], init_expand=1);
 inchrome(t)
+
+save(raw"data\\mctsrisks_100_ALL.jld2", Dict("risks:" => planner.mdp.cvars, "states:" => []))
 
 sim = RolloutSimulator()
 simulate(sim, mdp, RandomPolicy(mdp))
