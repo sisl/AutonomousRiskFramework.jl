@@ -10,7 +10,7 @@ def mahalanobis_d(action, mean_disturbance, var_disturbance):
 
     # subtract the mean from our actions
     dif = np.copy(action)
-    dif -= mean
+    dif = dif - mean
 
     # calculate the Mahalanobis distance
     dist = np.dot(np.dot(dif.T, np.linalg.inv(big_cov)), dif)

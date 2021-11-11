@@ -57,8 +57,18 @@ DEFAULT_PARAMS = {
 
 # Mapping from sensor type => adversarial callback class
 ADVERSARIAL_SENSOR_MAPPING = {
-    'sensor.other.gnss': AdvGNSSCallBack,
-    'sensor.other.obstacle': AdvObstacleCallBack,
+    'sensor.other.gnss': {
+        'callback': AdvGNSSCallBack,
+        'params': ['lat', 'lon', 'alt']
+    },
+    'sensor.other.obstacle': {
+        'callback': AdvObstacleCallBack,
+        'params': ['distance']
+    },
+    'sensor.other.collision': {
+        'callback': AdvCollisionCallBack,
+        'params': ['normal_impulse']
+    },
 }
 
 
@@ -530,22 +540,28 @@ class AdversarialCARLAEnv(gym.Env):
 
     def _get_disturbance_params(self, params):
         sensor_type = self._id_to_sensor_type(params['id'])
-        if sensor_type == 'sensor.other.gnss':
-            mean = np.array([params['lat']['mean'], params['lon']['mean'], params['alt']['mean']])
-            var = np.array([params['lat']['std'], params['lon']['std'], params['alt']['std']])**2
+        if sensor_type in ADVERSARIAL_SENSOR_MAPPING:
+            mean = np.array([])
+            var = np.array([])
+            for key in ADVERSARIAL_SENSOR_MAPPING[sensor_type]['params']:
+                mean = np.append(mean, params[key]['mean'])
+                var = np.append(var, params[key]['std'])**2
+            return mean, var
         else:
-            raise Exception("No disturbance parameters for sensor type of " + sensor_type)
-        return mean, var
+            raise Exception("Please add the following sensor type to ADVERSARIAL_SENSOR_MAPPING: " + sensor_type)
 
 
     def _get_disturbance_action_bounds(self, params):
         sensor_type = self._id_to_sensor_type(params['id'])
-        if sensor_type == 'sensor.other.gnss':
-            lower = np.array([params['lat']['lower'], params['lon']['lower'], params['alt']['lower']])
-            upper = np.array([params['lat']['upper'], params['lon']['upper'], params['alt']['upper']])
+        if sensor_type in ADVERSARIAL_SENSOR_MAPPING:
+            lower = np.array([])
+            upper = np.array([])
+            for key in ADVERSARIAL_SENSOR_MAPPING[sensor_type]['params']:
+                lower = np.append(lower, params[key]['lower'])
+                upper = np.append(upper, params[key]['upper'])
+            return lower, upper
         else:
-            raise Exception("No disturbance bounding parameters for sensor type of " + sensor_type)
-        return lower, upper
+            raise Exception("Please add the following sensor type to ADVERSARIAL_SENSOR_MAPPING: " + sensor_type)
 
 
     def _id_to_sensor_type(self, id):
@@ -591,7 +607,7 @@ class AdversarialCARLAEnv(gym.Env):
                 # Replace adversarial version of the sensor(s)
                 if sensor.type_id in ADVERSARIAL_SENSOR_MAPPING:
                     # Get the adversarial sensor callback class from the mapping
-                    AdvCallBack = ADVERSARIAL_SENSOR_MAPPING[sensor.type_id]
+                    AdvCallBack = ADVERSARIAL_SENSOR_MAPPING[sensor.type_id]['callback']
 
                     # Get the `id` field that is associated to the output of AutonomousAgent.sensors()
                     id = self._associate_sensor_id(sensor_interface, sensor)

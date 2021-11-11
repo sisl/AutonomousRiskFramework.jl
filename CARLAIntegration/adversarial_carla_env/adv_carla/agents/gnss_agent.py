@@ -64,7 +64,8 @@ class GnssAgent(AutonomousAgent):
         """
         sensors = [
             {'type': 'sensor.other.gnss', 'x': 0.0, 'y': 0.0, 'z': 0.0, 'yaw': 0.0, 'pitch': 0.0, 'roll': 0.0, 'id': 'GPS'},
-            # {'type': 'sensor.other.obstacle', 'x': 0.0, 'y': 0.0, 'z': 0.0, 'yaw': 0.0, 'pitch': 0.0, 'roll': 0.0, 'id': 'Obstacle'}
+            # {'type': 'sensor.other.obstacle', 'x': 0.0, 'y': 0.0, 'z': 0.0, 'yaw': 0.0, 'pitch': 0.0, 'roll': 0.0, 'id': 'Obstacle', 'sensor_tick': 1.0},
+            # {'type': 'sensor.other.collision', 'id': 'COLLISION'},
         ]
 
         return sensors
@@ -175,7 +176,7 @@ class GnssAgent(AutonomousAgent):
                  - vehicle is the blocker object itself
         """
         # record for `render`
-        self.ego_truth_location = self._agent._vehicle.get_location() # Truth
+        self.ego_truth_location = self._agent._vehicle.get_location() # Truth (not used for planning)
 
         (x, y, z) = GnssSensor.gps_to_location(gnss_data[0], gnss_data[1], gnss_data[2])
         ego_vehicle_location = carla.Location(x=x, y=y, z=z)

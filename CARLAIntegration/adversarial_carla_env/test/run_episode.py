@@ -11,6 +11,14 @@ sensors = [
         'lon': {'mean': 0, 'std': 0.0001, 'upper': 10, 'lower': -10},
         'alt': {'mean': 0, 'std': 0.00000001, 'upper': 0.0000001, 'lower': 0},
     },
+    # {
+    #     'id': 'OBSTACLE',
+    #     'distance': {'mean': 0, 'std': 1, 'upper': 10, 'lower': -10},
+    # },
+    # {
+    #     'id': 'COLLISION',
+    #     'normal_impulse': {'mean': 0, 'std': 1, 'upper': 10, 'lower': -10},
+    # },
 ]
 env = gym.make('adv-carla-v0', sensors=sensors)
 obs = env.reset()
