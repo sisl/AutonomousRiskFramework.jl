@@ -51,8 +51,8 @@ DEFAULT_PARAMS = {
     'reward_bonus': 100,
     'discount': 1.0,
     'max_past_step': 3,
-    'lower_actor_state': np.float32(np.array([-100, -100, -100, -100, 0])),   # x_topright, y_topright, x_bottomleft, y_bottomleft, status
-    'upper_actor_state': np.float32(np.array([100, 100, 100, 100, 1])),
+    'lower_actor_state': [-100, -100, -100, -100, 0],   # x_topright, y_topright, x_bottomleft, y_bottomleft, status
+    'upper_actor_state': [100, 100, 100, 100, 1],
 }
 
 # Mapping from sensor type => adversarial callback class
@@ -207,7 +207,7 @@ class AdversarialCARLAEnv(gym.Env):
 
         # reward parameters
         sensor_params = self._associate_adv_sensor_params() # TODO: How to handle multiple adv. sensor types in the action space?
-        self.mean_disturbances, self.var_disturbances = self._get_disturbance_params(sensor_params)
+        self.mean_disturbance, self.var_disturbance = self._get_disturbance_params(sensor_params)
 
         # action space
         lower, upper = self._get_disturbance_action_bounds(sensor_params)
@@ -389,7 +389,7 @@ class AdversarialCARLAEnv(gym.Env):
         distance = info['distance']
 
         # TODO: scale to be reasonable sized (Within [-1, 1])
-        reward = -utils.mahalanobis_d(action, self.mean_disturbances, self.var_disturbances)/utils.mahalanobis_d(10*self.var_disturbances, self.mean_disturbances, self.var_disturbances)
+        reward = -utils.mahalanobis_d(action, self.mean_disturbance, self.var_disturbance)/utils.mahalanobis_d(10*self.var_disturbance, self.mean_disturbance, self.var_disturbance)
 
         if collision:
             reward += 100
@@ -416,8 +416,6 @@ class AdversarialCARLAEnv(gym.Env):
         for i, (key, value) in enumerate(walker_poly_dict.items()):
             obs['walker_'+str(i)] = np.ones(5, dtype=np.float32)
             obs['walker_'+str(i)][:4] = value.flatten().astype(np.float32)
-
-        breakpoint()
 
         if retdict:
             return obs
@@ -534,7 +532,7 @@ class AdversarialCARLAEnv(gym.Env):
         sensor_type = self._id_to_sensor_type(params['id'])
         if sensor_type == 'sensor.other.gnss':
             mean = np.array([params['lat']['mean'], params['lon']['mean'], params['alt']['mean']])
-            var = np.sqrt(np.array([params['lat']['std'], params['lon']['std'], params['alt']['std']]))
+            var = np.array([params['lat']['std'], params['lon']['std'], params['alt']['std']])**2
         else:
             raise Exception("No disturbance parameters for sensor type of " + sensor_type)
         return mean, var
