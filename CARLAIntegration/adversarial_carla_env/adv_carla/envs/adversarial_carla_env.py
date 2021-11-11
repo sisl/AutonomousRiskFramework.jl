@@ -97,7 +97,7 @@ class AdversarialCARLAEnv(gym.Env):
     agent = os.path.join(dirname, "../agents/gnss_agent.py")
 
     # CARLA configuration parameters
-    port = 2222
+    port = 2000
 
     # Recoding parameters
     record = "recordings" # TODO: what are we recording here and is it needed?
@@ -253,9 +253,9 @@ class AdversarialCARLAEnv(gym.Env):
             #     else:
             #         CARLA_ROOT = os.environ[CARLA_ROOT_NAME]
             #     if os.name == 'nt': # Windows
-            #         cmd_str = "start " + CARLA_ROOT + "\\CarlaUE4.exe -carla-rpc-port=2222 -windowed -ResX=320 -ResY=240 -benchmark -fps=10 -quality-level=Low"
+            #         cmd_str = "start " + CARLA_ROOT + "\\CarlaUE4.exe -carla-rpc-port=2000 -windowed -ResX=320 -ResY=240 -benchmark -fps=10 -quality-level=Low"
             #     else:
-            #         cmd_str = CARLA_ROOT + "/CarlaUE4.sh -carla-rpc-port=2222 -windowed -ResX=320 -ResY=240 -benchmark -fps=10 -quality-level=Low &"
+            #         cmd_str = CARLA_ROOT + "/CarlaUE4.sh -carla-rpc-port=2000 -windowed -ResX=320 -ResY=240 -benchmark -fps=10 -quality-level=Low &"
             #     os.system(cmd_str)
             #     self.carla_running = True
             #     time.sleep(self._args.timeout) # Delay while CARLA spins up
@@ -416,6 +416,8 @@ class AdversarialCARLAEnv(gym.Env):
         for i, (key, value) in enumerate(walker_poly_dict.items()):
             obs['walker_'+str(i)] = np.ones(5, dtype=np.float32)
             obs['walker_'+str(i)][:4] = value.flatten().astype(np.float32)
+
+        breakpoint()
 
         if retdict:
             return obs

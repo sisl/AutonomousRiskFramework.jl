@@ -1,12 +1,21 @@
 import os
 import pickle
 import numpy as np
+import gym
+import adv_carla
 import stable_baselines3 as sb3
 from stable_baselines3.common.callbacks import CheckpointCallback
-from adversarial_carla_env import AdversarialCARLAEnv
 
 max_step = 200
-env = AdversarialCARLAEnv()
+sensors = [
+    {
+        'id': 'GPS',
+        'lat': {'mean': 0, 'std': 0.0001, 'upper': 10, 'lower': -10},
+        'lon': {'mean': 0, 'std': 0.0001, 'upper': 10, 'lower': -10},
+        'alt': {'mean': 0, 'std': 0.00000001, 'upper': 0, 'lower': 0},
+    },
+]
+env = gym.make('adv-carla-v0', sensors=sensors)
 model = sb3.SAC("MlpPolicy", env, verbose=1)
 # model = sb3.SAC.load(os.path.join(os.getcwd(), "checkpoints", "td3_carla_10000_steps"))
 model.set_env(env)

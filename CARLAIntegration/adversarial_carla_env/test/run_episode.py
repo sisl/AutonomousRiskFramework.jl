@@ -11,7 +11,6 @@ sensors = [
         'alt': {'mean': 0, 'std': 0.00000001, 'upper': 0, 'lower': 0},
     },
 ]
-
 env = gym.make('adv-carla-v0', sensors=sensors)
 obs = env.reset()
 t = r = 0
