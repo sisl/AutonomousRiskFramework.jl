@@ -64,8 +64,10 @@ class GnssAgent(AutonomousAgent):
         """
         sensors = [
             {'type': 'sensor.other.gnss', 'x': 0.0, 'y': 0.0, 'z': 0.0, 'yaw': 0.0, 'pitch': 0.0, 'roll': 0.0, 'id': 'GPS'},
-            # {'type': 'sensor.other.obstacle', 'x': 0.0, 'y': 0.0, 'z': 0.0, 'yaw': 0.0, 'pitch': 0.0, 'roll': 0.0, 'id': 'Obstacle', 'sensor_tick': 1.0},
+            {'type': 'sensor.other.obstacle', 'id': 'OBSTACLE', 'distance': 100, 'debug_linetrace': True, 'hit_radius': 0.01},
             # {'type': 'sensor.other.collision', 'id': 'COLLISION'},
+            # {'type': 'sensor.camera.rgb', 'x': 0.7, 'y': 0, 'z': 1.60, 'roll': 0.0, 'pitch': 0.0, 'yaw': 0.0,
+            #           'width': 300, 'height': 200, 'fov': 100, 'id': 'CAMERA'},
         ]
 
         return sensors
@@ -80,38 +82,41 @@ class GnssAgent(AutonomousAgent):
         control.throttle = 0.0
         control.brake = 0.0
         control.hand_brake = False
-        gnss_data = input_data['GPS'][1]
+        # gnss_data = [55, -1.9, 0] # input_data['GPS'][1]
 
-        if not self._agent:
-            hero_actor = None
-            for actor in CarlaDataProvider.get_world().get_actors():
-                if 'role_name' in actor.attributes and actor.attributes['role_name'] == 'hero':
-                    hero_actor = actor
-                    break
-            if hero_actor:
-                self._agent = BasicAgent(hero_actor, target_speed=25)
+        if input_data.get('GPS') is not None:
+            gnss_data = input_data['GPS'][1]
 
-            return control
+            if not self._agent:
+                hero_actor = None
+                for actor in CarlaDataProvider.get_world().get_actors():
+                    if 'role_name' in actor.attributes and actor.attributes['role_name'] == 'hero':
+                        hero_actor = actor
+                        break
+                if hero_actor:
+                    self._agent = BasicAgent(hero_actor, target_speed=25)
 
-        if not self._route_assigned:
-            if self._global_plan:
-                plan = []
+                return control
 
-                for transform, road_option in self._global_plan_world_coord:
-                    wp = CarlaDataProvider.get_map().get_waypoint(transform.location)
-                    plan.append((wp, road_option))
+            if not self._route_assigned:
+                if self._global_plan:
+                    plan = []
 
-                self._agent._local_planner.set_global_plan(plan)  # pylint: disable=protected-access
-                self._route_assigned = True
-        else:
-            if self.detect_hazard(gnss_data):
-                control = self._agent.emergency_stop()
+                    for transform, road_option in self._global_plan_world_coord:
+                        wp = CarlaDataProvider.get_map().get_waypoint(transform.location)
+                        plan.append((wp, road_option))
+
+                    self._agent._local_planner.set_global_plan(plan)  # pylint: disable=protected-access
+                    self._route_assigned = True
             else:
-                self.update_agent_state(AgentState.NAVIGATING)
-                # standard local planner behavior
-                control = self._agent._local_planner.run_step()
+                if self.detect_hazard(gnss_data):
+                    control = self._agent.emergency_stop()
+                else:
+                    self.update_agent_state(AgentState.NAVIGATING)
+                    # standard local planner behavior
+                    control = self._agent._local_planner.run_step()
 
-        self.time += 1
+            self.time += 1
         return control
 
 

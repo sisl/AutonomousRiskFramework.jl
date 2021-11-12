@@ -216,11 +216,11 @@ class AdversarialCARLAEnv(gym.Env):
         print("No. of Actors: ", len(self.actor_keys))
 
         # reward parameters
-        sensor_params = self._associate_adv_sensor_params() # TODO: How to handle multiple adv. sensor types in the action space?
-        self.mean_disturbance, self.var_disturbance = self._get_disturbance_params(sensor_params)
+        sensor_params_list = self._associate_adv_sensor_params() # TODO: How to handle multiple adv. sensor types in the action space?
+        self.mean_disturbance, self.var_disturbance = self._get_disturbance_params(sensor_params_list)
 
         # action space
-        lower, upper = self._get_disturbance_action_bounds(sensor_params)
+        lower, upper = self._get_disturbance_action_bounds(sensor_params_list)
         self.action_space = spaces.Box(lower, upper, dtype=np.float32)
 
         # observation_space_dict = {}
@@ -538,30 +538,32 @@ class AdversarialCARLAEnv(gym.Env):
         self.adv_sensor_callbacks[id].set_disturbance(action)
 
 
-    def _get_disturbance_params(self, params):
-        sensor_type = self._id_to_sensor_type(params['id'])
-        if sensor_type in ADVERSARIAL_SENSOR_MAPPING:
-            mean = np.array([])
-            var = np.array([])
-            for key in ADVERSARIAL_SENSOR_MAPPING[sensor_type]['params']:
-                mean = np.append(mean, params[key]['mean'])
-                var = np.append(var, params[key]['std'])**2
-            return mean, var
-        else:
-            raise Exception("Please add the following sensor type to ADVERSARIAL_SENSOR_MAPPING: " + sensor_type)
+    def _get_disturbance_params(self, params_list):
+        means = np.array([])
+        variances = np.array([])
+        for params in params_list:
+            sensor_type = self._id_to_sensor_type(params['id'])
+            if sensor_type in ADVERSARIAL_SENSOR_MAPPING:
+                for key in ADVERSARIAL_SENSOR_MAPPING[sensor_type]['params']:
+                    means = np.append(means, params[key]['mean'])
+                    variances = np.append(variances, params[key]['std'])**2
+            else:
+                raise Exception("Please add the following sensor type to ADVERSARIAL_SENSOR_MAPPING: " + sensor_type)
+        return means, variances
 
 
-    def _get_disturbance_action_bounds(self, params):
-        sensor_type = self._id_to_sensor_type(params['id'])
-        if sensor_type in ADVERSARIAL_SENSOR_MAPPING:
-            lower = np.array([])
-            upper = np.array([])
-            for key in ADVERSARIAL_SENSOR_MAPPING[sensor_type]['params']:
-                lower = np.append(lower, params[key]['lower'])
-                upper = np.append(upper, params[key]['upper'])
-            return lower, upper
-        else:
-            raise Exception("Please add the following sensor type to ADVERSARIAL_SENSOR_MAPPING: " + sensor_type)
+    def _get_disturbance_action_bounds(self, params_list):
+        lower = np.array([])
+        upper = np.array([])
+        for params in params_list:
+            sensor_type = self._id_to_sensor_type(params['id'])
+            if sensor_type in ADVERSARIAL_SENSOR_MAPPING:
+                for key in ADVERSARIAL_SENSOR_MAPPING[sensor_type]['params']:
+                    lower = np.append(lower, params[key]['lower'])
+                    upper = np.append(upper, params[key]['upper'])
+            else:
+                raise Exception("Please add the following sensor type to ADVERSARIAL_SENSOR_MAPPING: " + sensor_type)
+        return lower, upper
 
 
     def _id_to_sensor_type(self, id):
@@ -573,23 +575,28 @@ class AdversarialCARLAEnv(gym.Env):
 
 
     def _associate_adv_sensor_id(self):
+        # TODO: Handle multiple.
         for params in self.disturbance_params:
             id = params['id']
             if id in self.adv_sensor_callbacks:
                 return id
             else:
-                raise Exception("No matching sensor with adversarial id: " + id)
+                raise Exception("No matching sensor with id: " + id)
 
 
      # TODO: How to handle multiple adv. sensor types in the action space?
     def _associate_adv_sensor_params(self):
+        params_list = []
         for params in self.disturbance_params:
             id = params['id']
             if id in self.adv_sensor_callbacks:
-                return params
+                params_list.append(params)
             else:
-                raise Exception("No matching sensor with adversarial id: " + id)
-        raise Exception("No matching adversarial sensor found. Please set the `sensors` input to the gym environment.")
+                raise Exception("No matching sensor with id: " + id)
+        if len(params_list) == 0:
+            raise Exception("No matching sensor found. Please set the `sensors` input to the gym environment.")
+        else:
+            return params_list
 
 
     def _associate_sensor_id(self, sensor_interface, sensor):
@@ -615,7 +622,7 @@ class AdversarialCARLAEnv(gym.Env):
                     # Replace the sensor by first deleting it, stopping it, creating a new callback, then starting the listener.
                     del sensor_interface._sensors_objects[id]
                     sensor.stop()
-                    self.adv_sensor_callbacks[id] = AdvCallBack(id, sensor, sensor_interface)
+                    self.adv_sensor_callbacks[id] = AdvCallBack(id, sensor, sensor.type_id, sensor_interface)
                     sensor.listen(self.adv_sensor_callbacks[id])
                 else:
                     warnings.warn("No adversarial version of the sensor type: " + sensor.type_id)

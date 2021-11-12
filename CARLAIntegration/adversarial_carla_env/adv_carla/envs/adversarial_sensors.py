@@ -14,11 +14,11 @@ class AdvGNSSCallBack(CallBack):
     Class the sensors listen to in order to receive their data each frame
     """
 
-    def __init__(self, tag, sensor, data_provider):
+    def __init__(self, tag, sensor_type, sensor, data_provider):
         """
         Initializes the call back
         """
-        super().__init__(tag, sensor, data_provider)
+        super().__init__(tag, sensor_type, sensor, data_provider)
         self.noise_lat = 0
         self.noise_lon = 0
         self.noise_alt = 0
@@ -40,10 +40,10 @@ class AdvGNSSCallBack(CallBack):
         self._data_provider.update_sensor(self._tag, array, data.frame)
 
 
-    def set_disturbance(self, disturbance):
-        self.noise_lat = disturbance[0]
-        self.noise_lon = disturbance[1]
-        self.noise_alt = disturbance[2]
+    def set_disturbance(self, disturbance, offset=0):
+        self.noise_lat = disturbance[offset]
+        self.noise_lon = disturbance[offset+1]
+        self.noise_alt = disturbance[offset+2]
 
 
 
@@ -53,11 +53,13 @@ class AdvObstacleCallBack(CallBack):
     Class the sensors listen to in order to receive their data each frame
     """
 
-    def __init__(self, tag, sensor, data_provider):
+    def __init__(self, tag, sensor_type, sensor, data_provider):
         """
         Initializes the call back
         """
-        super().__init__(tag, sensor, data_provider)
+        super().__init__(tag, sensor_type, sensor, data_provider)
+        self._tag = tag
+        self._data_provider = data_provider
         self.noise_distance = 0
         self.dims = 1
 
@@ -74,18 +76,21 @@ class AdvObstacleCallBack(CallBack):
         # noise = np.array([self.noise_lat, self.noise_lon, self.noise_alt])
         # array += noise
 
-        # breakpoint()
-        print("Obstacle data:", data)
-        print("Obstacle data.distance:", data.distance)
-        # print("Obstacle properties:", dir(data))
+        if data.distance != 0:
+            # print("=--"*20)
+            # print("=--"*20)
+            # print("=--"*20)
+            print("Obstacle data distance:", data.distance)
+            # print("=--"*20)
+            # print("=--"*20)
+            # print("=--"*20)
 
-        array = np.array([0])
+        array = np.array([data.distance], dtype=np.float64)
         self._data_provider.update_sensor(self._tag, array, data.frame)
-        print(self._data_provider._new_data_buffers)
 
 
-    def set_disturbance(self, disturbance):
-        self.noise_distance = disturbance[0]
+    def set_disturbance(self, disturbance, offset=0):
+        self.noise_distance = disturbance[offset]
 
 
 
@@ -95,11 +100,11 @@ class AdvCollisionCallBack(CallBack):
     Class the sensors listen to in order to receive their data each frame
     """
 
-    def __init__(self, tag, sensor, data_provider):
+    def __init__(self, tag, sensor_type, sensor, data_provider):
         """
         Initializes the call back
         """
-        super().__init__(tag, sensor, data_provider)
+        super().__init__(tag, sensor_type, sensor, data_provider)
         self.noise_normal_impulse = 0
         self.dims = 1
 
@@ -110,7 +115,9 @@ class AdvCollisionCallBack(CallBack):
         """
         # assert isinstance(data, carla.GnssMeasurement)
         print("TYPE:", type(data))
-        array = np.array([data.normal_impulse], dtype=np.float64)
+        print("Collision data:", data.normal_impulse)
+        # array = np.array([data.normal_impulse], dtype=np.float64)
+        array = np.array([1], dtype=np.float64) # True == collision == 1
 
         noise = np.array([self.noise_normal_impulse])
         array += noise
@@ -118,5 +125,5 @@ class AdvCollisionCallBack(CallBack):
         self._data_provider.update_sensor(self._tag, array, data.frame)
 
 
-    def set_disturbance(self, disturbance):
-        self.noise_normal_impulse = disturbance[0]
+    def set_disturbance(self, disturbance, offset=0):
+        self.noise_normal_impulse = disturbance[offset]
