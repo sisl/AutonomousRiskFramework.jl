@@ -7,8 +7,10 @@ using RiskSimulator
 
 
 # Creates a GIF of a simulation run with the given scenario type and initial conditions.
-# Example: render_failure("animation.gif", STOPPING, s_sut=3.20, s_adv=12.50, v_sut=36.72, v_adv=1.83)
-function render_gif(filename, scenario_type::SCENARIO, s_sut, s_adv, v_sut, v_adv)
+# Examples:
+#   render_failure("animation.gif", MERGING, 3.20, 12.50, 36.72, 1.83)
+#   render_failure("animation.gif", STOPPING, 3.20, 12.50, 36.72, 1.83)
+function render_gif(filename::String, scenario_type::SCENARIO, s_sut::Float64, s_adv::Float64, v_sut::Float64, v_adv::Float64)
     scenario = get_scenario(scenario_type, s_sut=s_sut, s_adv=s_adv, v_sut=v_sut, v_adv=v_adv)
     roadway = scenario.roadway
 
