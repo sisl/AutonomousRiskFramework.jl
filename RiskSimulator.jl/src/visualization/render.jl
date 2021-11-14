@@ -25,7 +25,7 @@ function render_gif(filename::String, scenario_type::SCENARIO, s_sut::Float64, s
     nticks = length(scenes)
     animation = roll(fps=1.0/timestep, duration=nticks*timestep) do t, dt
         i = Int(floor(t/dt)) + 1
-        AutomotiveVisualization.render([roadway, scenes[i]], canvas_height=120)
+        AutomotiveVisualization.render([roadway, scenes[i]], canvas_height=240)
     end
 
     write(filename, animation)
