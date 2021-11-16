@@ -1,4 +1,5 @@
 gym
 numpy
+lxml
 pickleshare
 stable-baselines3

@@ -21,6 +21,7 @@ from srunner.autoagents.autonomous_agent import AutonomousAgent
 from srunner.scenariomanager.carla_data_provider import CarlaDataProvider
 from srunner.scenariomanager.timer import GameTime
 
+from pdb import set_trace as breakpoint # DEBUG. TODO!
 
 class GnssAgent(AutonomousAgent):
     """
@@ -38,7 +39,7 @@ class GnssAgent(AutonomousAgent):
         self._agent = None
         self.time = 0
         self.min_distance = 100000
-        self.use_ego_truth = True
+        self.use_obstacle_sensor_for_hazards = False
 
         self.ego_truth_location = None
         self.ego_sensor_location = None
@@ -64,10 +65,8 @@ class GnssAgent(AutonomousAgent):
         """
         sensors = [
             {'type': 'sensor.other.gnss', 'x': 0.0, 'y': 0.0, 'z': 0.0, 'yaw': 0.0, 'pitch': 0.0, 'roll': 0.0, 'id': 'GPS'},
-            {'type': 'sensor.other.obstacle', 'id': 'OBSTACLE', 'distance': 100, 'debug_linetrace': True, 'hit_radius': 0.01},
+            {'type': 'sensor.other.obstacle', 'id': 'OBSTACLE', 'distance': 10, 'debug_linetrace': True, 'hit_radius': 1},
             # {'type': 'sensor.other.collision', 'id': 'COLLISION'},
-            # {'type': 'sensor.camera.rgb', 'x': 0.7, 'y': 0, 'z': 1.60, 'roll': 0.0, 'pitch': 0.0, 'yaw': 0.0,
-            #           'width': 300, 'height': 200, 'fov': 100, 'id': 'CAMERA'},
         ]
 
         return sensors
@@ -82,7 +81,6 @@ class GnssAgent(AutonomousAgent):
         control.throttle = 0.0
         control.brake = 0.0
         control.hand_brake = False
-        # gnss_data = [55, -1.9, 0] # input_data['GPS'][1]
 
         if input_data.get('GPS') is not None:
             gnss_data = input_data['GPS'][1]
@@ -94,7 +92,7 @@ class GnssAgent(AutonomousAgent):
                         hero_actor = actor
                         break
                 if hero_actor:
-                    self._agent = BasicAgent(hero_actor, target_speed=25)
+                    self._agent = BasicAgent(hero_actor, target_speed=30) # TODO: 25
 
                 return control
 
@@ -109,7 +107,8 @@ class GnssAgent(AutonomousAgent):
                     self._agent._local_planner.set_global_plan(plan)  # pylint: disable=protected-access
                     self._route_assigned = True
             else:
-                if self.detect_hazard(gnss_data):
+                obstacle_data = input_data.get('OBSTACLE')
+                if self.detect_hazard(gnss_data, obstacle_data):
                     control = self._agent.emergency_stop()
                 else:
                     self.update_agent_state(AgentState.NAVIGATING)
@@ -141,7 +140,7 @@ class GnssAgent(AutonomousAgent):
         self._agent._state = state
 
 
-    def detect_hazard(self, gnss_data, debug=False):
+    def detect_hazard(self, gnss_data, obstacle_data, debug=False):
         # is there an obstacle in front of us?
         hazard_detected = False
 
@@ -152,7 +151,7 @@ class GnssAgent(AutonomousAgent):
         lights_list = actor_list.filter("*traffic_light*")
 
         # check possible obstacles
-        vehicle_state, vehicle = self._is_vehicle_hazard(vehicle_list, gnss_data)
+        vehicle_state, vehicle = self._is_vehicle_hazard(vehicle_list, gnss_data, obstacle_data)
         if vehicle_state:
             if debug:
                 print('!!! VEHICLE BLOCKING AHEAD [{}])'.format(vehicle.id))
@@ -172,7 +171,7 @@ class GnssAgent(AutonomousAgent):
         return hazard_detected
 
 
-    def _is_vehicle_hazard(self, vehicle_list, gnss_data):
+    def _is_vehicle_hazard(self, vehicle_list, gnss_data, obstacle_data):
         """
         :param vehicle_list: list of potential obstacle to check
         :return: a tuple given by (bool_flag, vehicle), where
@@ -190,7 +189,6 @@ class GnssAgent(AutonomousAgent):
         self.ego_sensor_location = ego_vehicle_location
 
         ego_vehicle_waypoint = self._agent._map.get_waypoint(ego_vehicle_location)
-
         veh_idx = -1
 
         self.min_distance = 10000
@@ -213,10 +211,20 @@ class GnssAgent(AutonomousAgent):
                     target_vehicle_waypoint.lane_id != ego_vehicle_waypoint.lane_id:
                 continue
 
-            if is_within_distance_ahead(target_tf,
-                                        self._agent._vehicle.get_transform(),
-                                        self._agent._proximity_vehicle_threshold):
-                return (True, target_vehicle)
+            ego_tf = self._agent._vehicle.get_transform()
+            ego_tf.location = ego_vehicle_location # use GNSS location in transform
+
+            if self.use_obstacle_sensor_for_hazards:
+                if obstacle_data is not None:
+                    distance = obstacle_data[1][0]
+                    # Use measurement from obstacle sensor to indicate imminent collision
+                    if distance <= self._agent._proximity_vehicle_threshold:
+                        return (True, target_vehicle)
+            else:
+                if is_within_distance_ahead(target_tf,
+                                            ego_tf,
+                                            self._agent._proximity_vehicle_threshold):
+                    return (True, target_vehicle)
 
         return (False, None)
 

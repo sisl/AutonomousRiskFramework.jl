@@ -11,3 +11,5 @@ scenario_runner/
 *.egg-info/
 Manifest.toml
 log/
+test.json
+test.xml
