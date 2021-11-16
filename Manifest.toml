@@ -888,8 +888,8 @@ uuid = "6f1432cf-f94c-5a45-995e-cdbf5db27b0b"
 version = "2.1.2"
 
 [[MCTS]]
-deps = ["CPUTime", "Colors", "D3Trees", "POMDPLinter", "POMDPModelTools", "POMDPPolicies", "POMDPSimulators", "POMDPs", "Printf", "ProgressMeter", "Random"]
-git-tree-sha1 = "864a39c4136998e421c7be0743b9bcfc770037e5"
+deps = ["CPUTime", "Colors", "D3Trees", "POMDPLinter", "POMDPModelTools", "POMDPPolicies", "POMDPSimulators", "POMDPs", "Printf", "ProgressMeter", "Random", "StatsBase"]
+path = "C:\\Users\\shubh\\.julia\\dev\\MCTS"
 uuid = "e12ccd36-dcad-5f33-8774-9175229e7b33"
 version = "0.4.7"
 
@@ -1312,6 +1312,11 @@ uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
 deps = ["AddPackage", "EllipsisNotation", "IJulia", "LinearAlgebra", "Parameters", "Plots", "Pluto", "Revise", "StatsFuns", "Zygote"]
 path = "STLCG.jl"
 uuid = "6ababdf7-4701-4f28-b3b2-5630f64e3c98"
+version = "0.1.0"
+
+[[ScenarioSelection]]
+path = "ScenarioSelection.jl"
+uuid = "3cd2cbe0-3bbe-474e-bd11-d54ca1f0eb8c"
 version = "0.1.0"
 
 [[Scratch]]
