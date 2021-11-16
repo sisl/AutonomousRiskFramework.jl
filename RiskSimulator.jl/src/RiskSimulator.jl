@@ -1,6 +1,6 @@
 module RiskSimulator # Naming? TODO: RiskAssessment?
 
-using IntelligentDriving
+# using IntelligentDriving
 using ObservationModels
 using AutomotiveSimulator
 using AutomotiveVisualization
@@ -45,6 +45,7 @@ export Simulator,
        merging_roadway,
        get_XIDM_template,
        get_scenario,
+       get_scenario_options,
        get_scenario_string,
        SCENARIO,
        CROSSING,
@@ -59,6 +60,7 @@ export Simulator,
        scenario_crossing,
        scenario_pedestrian_crosswalk,
        scenario_hw_merging,
+       scenario_hw_merging_no_obs,
 
        AutoRiskSim,
        AutoRiskParams,
