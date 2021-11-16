@@ -1,4 +1,5 @@
 using AdversarialDriving
+using AutomotiveSimulator
 using AutomotiveVisualization
 using POMDPPolicies
 using POMDPSimulators
@@ -29,4 +30,20 @@ function render_gif(filename::String, scenario_type::SCENARIO, s_sut::Float64, s
     end
 
     write(filename, animation)
+end
+
+
+# Creates a PNG of a given scenario.
+function render_png(filename::String, scenario_type::SCENARIO, s_sut::Float64, s_adv::Float64, v_sut::Float64, v_adv::Float64)
+	scenario = get_scenario(scenario_type, s_sut=s_sut, s_adv=s_adv, v_sut=v_sut, v_adv=v_adv)
+	roadway = scenario.roadway
+
+	surface = AutomotiveVisualization.CairoPDFSurface(IOBuffer(), DEFAULT_CANVAS_WIDTH, DEFAULT_CANVAS_HEIGHT)
+	visualization = AutomotiveVisualization.render(
+    	[roadway,
+     	 FancyCar(car=scenario.sut.get_initial_entity(), color=colorant"blue"),
+     	 scenario.adversary.get_initial_entity()],
+    	surface=surface)
+
+ 	write(filename, visualization)
 end
