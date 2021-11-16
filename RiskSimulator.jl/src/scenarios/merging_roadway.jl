@@ -113,5 +113,6 @@ function scenario_hw_merging(; init_noise_1::Noise=Noise(), init_noise_2::Noise=
     map(k->delete!(adversary_model.goals, k), 4:7)
     adversary = BlinkerVehicleAgent(hw_merging(id=2, noise=init_noise_2, roadway=roadway, s=s_adv, v=v_adv), adversary_model)
 
+
     return Scenario(roadway, sut, adversary)
 end

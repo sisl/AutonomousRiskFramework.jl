@@ -5,6 +5,7 @@ BIODS253/
 *.zip
 *.pkl
 *.npy
+*.jld2
 __pycache__/
 scenario_runner/
 *.egg-info/
