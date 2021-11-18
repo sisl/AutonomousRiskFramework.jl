@@ -1,3 +1,8 @@
+name = "AutonomousRiskFramework"
+uuid = "f30adb48-4635-49e6-94b7-3d00f44da48a"
+authors = ["Robert Moss <rmoss92@gmail.com>"]
+version = "0.1.0"
+
 [deps]
 AdversarialDriving = "0f7eb3e9-d51f-47f4-b915-6157e1c8ce29"
 BayesNets = "ba4760a4-c768-5bed-964b-cf806dc591cb"
@@ -25,3 +30,9 @@ STLCG = "6ababdf7-4701-4f28-b3b2-5630f64e3c98"
 ScenarioSelection = "3cd2cbe0-3bbe-474e-bd11-d54ca1f0eb8c"
 SpAutoDiff = "2746dd70-a8ae-4e63-b982-e2745bcfee82"
 Vec = "44eeaf0b-fee4-471f-9310-ed6585cb3142"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
