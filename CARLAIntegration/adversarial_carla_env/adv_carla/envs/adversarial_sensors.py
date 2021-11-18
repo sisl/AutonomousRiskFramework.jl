@@ -69,23 +69,14 @@ class AdvObstacleCallBack(CallBack):
         call function
         """
         # assert isinstance(data, carla.GnssMeasurement)
-        # array = np.array([data.latitude,
-        #                   data.longitude,
-        #                   data.altitude], dtype=np.float64)
-
-        # noise = np.array([self.noise_lat, self.noise_lon, self.noise_alt])
-        # array += noise
-
-        if data.distance != 0:
-            # print("=--"*20)
-            # print("=--"*20)
-            # print("=--"*20)
-            print("Obstacle data distance:", data.distance)
-            # print("=--"*20)
-            # print("=--"*20)
-            # print("=--"*20)
 
         array = np.array([data.distance], dtype=np.float64)
+        noise = np.array([self.noise_distance])
+        array += noise
+
+        if data.distance != 0:
+            print("Obstacle data distance (truth | noisy):", data.distance, "|", array[0])
+
         self._data_provider.update_sensor(self._tag, array, data.frame)
 
 

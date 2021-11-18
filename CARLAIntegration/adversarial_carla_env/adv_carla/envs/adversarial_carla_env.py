@@ -34,6 +34,7 @@ else:
     sys.path.append(os.getenv('SCENARIO_RUNNER_ROOT')) # Add scenario_runner package to import path
 
 from ..ast_scenario_runner import ASTScenarioRunner
+from ..generate_random_scenario import *
 from .adversarial_sensors import *
 
 from srunner.scenariomanager.carla_data_provider import CarlaDataProvider
@@ -79,44 +80,26 @@ class AdversarialCARLAEnv(gym.Env):
     running (and repeating) a single scenario or a list of scenarios.
 
     Usage:
-    env = AdversarialCARLAEnv(scenario, agent, config)
+    env = gym.make('adv-carla-v0', sensors=sensors)
     obs = env.reset()
     t = r = 0
     done = False
     while not done:
         t += 1
-        action = 0.0
+        action = np.array([0])
         obs, reward, done, info = env.step(action)
         r += reward
-    del env
+    env.close()
     """
 
     # CARLA scenario handler
     scenario_runner = None
-
-    # Scenario/route selections
-    dirname = os.path.dirname(__file__)
-    route_file = os.path.join(dirname, "../data/routes_ast.xml") # TODO: None then configure as input to __init__
-    scenario_file = os.path.join(dirname, "../data/ast_scenarios.json") # TODO?
-    route_id = 0 # TODO: Can we use this to control the background activity?
-    route = [route_file, scenario_file, route_id]
-    scenario = None # TODO?
-    scenario_config = None
-
-    # Agent selections
-    agent = os.path.join(dirname, "../agents/gnss_agent.py")
+    carla_map = None
+    spectator_loc = None
 
     # CARLA configuration parameters
-    port = 2000
-
-    # Recoding parameters
-    record = "recordings" # TODO: what are we recording here and is it needed?
-
-    # CARLA configuration parameters
-    carla_map = "Town01"
-    spectator_loc = [80.37, 25.30, 0.0]
-    no_rendering = False # TODO: make this configurable
     carla_running = False
+    follow_ego = True
 
     # Gym environment parameters
     block_size = 10
@@ -128,11 +111,27 @@ class AdversarialCARLAEnv(gym.Env):
     disturbance_params = []
 
 
-    def __init__(self, *, route=route, scenario=scenario, agent=agent, port=port, record=record, params=DEFAULT_PARAMS, sensors=disturbance_params):
-        """
-        Setup ScenarioRunner
-        """
+    def __init__(self, *, seed=0, scenario_type="Scenario2", weather="Random", agent=None, port=2000, record="recordings", params=DEFAULT_PARAMS, sensors=disturbance_params, no_rendering=False):
+        # Scenario/route selections
+        dirname = os.path.dirname(__file__)
+        example_scenario = False
+        if example_scenario:
+            route_file = os.path.join(dirname, "../data/routes_ast.xml")
+            scenario_file = os.path.join(dirname, "../data/ast_scenarios.json")
+            self.carla_map = "Town01"
+            self.spectator_loc = [80.37, 25.30, 0.0]
+        else:
+            route_file, scenario_file, self.carla_map, self.spectator_loc = create_random_scenario(seed=seed, scenario_type=scenario_type, weather=weather)
 
+        route_id = 0 # TODO: Can we use this to control the background activity?
+        route = [route_file, scenario_file, route_id]
+        scenario = None
+
+        # Agent selections
+        if agent is None:
+            agent = os.path.join(dirname, "../agents/gnss_agent.py")
+
+        ## Setup ScenarioRunner
         # Setup arguments passed to the ScenarioRunner constructor
         # TODO: How to piggy-back on scenario_runner.py "main()" defaults?
         args = argparse.Namespace(host="127.0.0.1",
@@ -191,7 +190,7 @@ class AdversarialCARLAEnv(gym.Env):
         spectator.set_transform(carla.Transform(new_location, carla.Rotation(pitch=-90)))
 
         settings = world.get_settings()
-        settings.no_rendering_mode = self.no_rendering
+        settings.no_rendering_mode = no_rendering
 
         # Create ScenarioRunner object to handle the core route/scenario parsing
         self.scenario_runner = ASTScenarioRunner(args)
@@ -214,6 +213,7 @@ class AdversarialCARLAEnv(gym.Env):
 
         self.actor_keys = list(obs.keys())  # Ensure actor is matched to the right key for observations
         print("No. of Actors: ", len(self.actor_keys))
+        assert(len(self.actor_keys) > 1)
 
         # reward parameters
         sensor_params_list = self._associate_adv_sensor_params() # TODO: How to handle multiple adv. sensor types in the action space?
@@ -356,7 +356,8 @@ class AdversarialCARLAEnv(gym.Env):
 
             self._failed_scenario = collision
 
-            if not running or collision:
+            timestep = self._info['timestep']
+            if not running or collision or timestep > self.endtime:
                 done = True
             #     _y = self._failed_scenario
             #     _x = (self._actions, min(self._distances), rate)
@@ -519,6 +520,12 @@ class AdversarialCARLAEnv(gym.Env):
                 # Tick scenario
                 self.scenario_runner.manager.scenario_tree.tick_once()
 
+                if self.follow_ego:
+                    spectator = world.get_spectator()
+                    spectator_loc = self.scenario_runner.manager._agent._agent._agent._vehicle.get_location()
+                    new_location = carla.Location(x=spectator_loc.x, y=spectator_loc.y, z=50+spectator_loc.z)
+                    spectator.set_transform(carla.Transform(new_location, carla.Rotation(pitch=-90)))
+
                 if self.scenario_runner.manager._debug_mode:
                     print("\n")
                     py_trees.display.print_ascii_tree(self.scenario_runner.manager.scenario_tree, show_status=True)
@@ -534,8 +541,14 @@ class AdversarialCARLAEnv(gym.Env):
 
 
     def _set_disturbances(self, action):
-        id = self._associate_adv_sensor_id()
-        self.adv_sensor_callbacks[id].set_disturbance(action)
+        ids = self._associate_adv_sensor_id()
+        for i,id in enumerate(ids):
+            offset = self.calc_action_space_offset(ids, i) # handle flattened actions across different sensors
+            self.adv_sensor_callbacks[id].set_disturbance(action, offset)
+
+
+    def calc_action_space_offset(self, ids, i):
+        return sum([self.adv_sensor_callbacks[id].dims for id in ids[:i]])
 
 
     def _get_disturbance_params(self, params_list):
@@ -575,13 +588,15 @@ class AdversarialCARLAEnv(gym.Env):
 
 
     def _associate_adv_sensor_id(self):
-        # TODO: Handle multiple.
+        ids = []
         for params in self.disturbance_params:
             id = params['id']
             if id in self.adv_sensor_callbacks:
-                return id
-            else:
-                raise Exception("No matching sensor with id: " + id)
+                ids.append(id)
+        if len(ids) == 0:
+            raise Exception("Could not find matching adversarial sensor IDs.")
+        else:
+            return ids
 
 
      # TODO: How to handle multiple adv. sensor types in the action space?
