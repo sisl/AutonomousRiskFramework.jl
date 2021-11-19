@@ -52,7 +52,8 @@ env = model.get_env()
 # ls_obs = []
 ls_action = []
 observation = env.reset()
-# print(observation, env.observation_space)
+print("Running with learned policy...")
+print(observation, env.observation_space)
 # raise
 for t in range(max_step):
     # ls_obs.append(observation)

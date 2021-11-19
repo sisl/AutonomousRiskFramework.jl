@@ -66,6 +66,8 @@ class GnssAgent(AutonomousAgent):
         sensors = [
             {'type': 'sensor.other.gnss', 'x': 0.0, 'y': 0.0, 'z': 0.0, 'yaw': 0.0, 'pitch': 0.0, 'roll': 0.0, 'id': 'GPS'},
             {'type': 'sensor.other.obstacle', 'id': 'OBSTACLE', 'distance': 10, 'debug_linetrace': True, 'hit_radius': 1},
+            {'type': 'sensor.camera.rgb', 'x': 0.7, 'y': 0, 'z': 1.6, 'roll': 0.0, 'pitch': 0.0, 'yaw': 0.0, 'width': 384, 'height': 240, 'fov': 50, 'id': 'CAMERA'},
+            {'type': 'sensor.camera.rgb', 'x': 0.7, 'y': 0, 'z': 50, 'roll': 0.0, 'pitch': -90.0, 'yaw': 0.0, 'width': 384*2, 'height': 240*2, 'fov': 50, 'id': 'VIDEO_CAMERA'},
             # {'type': 'sensor.other.collision', 'id': 'COLLISION'},
         ]
 
@@ -92,7 +94,7 @@ class GnssAgent(AutonomousAgent):
                         hero_actor = actor
                         break
                 if hero_actor:
-                    self._agent = BasicAgent(hero_actor, target_speed=30) # TODO: 25
+                    self._agent = BasicAgent(hero_actor, target_speed=25)
 
                 return control
 

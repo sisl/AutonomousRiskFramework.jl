@@ -48,7 +48,7 @@ from . import utils
 VERSION = '0.9.11'
 
 DEFAULT_PARAMS = {
-    'endtime': 200,
+    'endtime': 50,
     'reward_bonus': 100,
     'discount': 1.0,
     'max_past_step': 3,
@@ -69,6 +69,10 @@ ADVERSARIAL_SENSOR_MAPPING = {
     'sensor.other.collision': {
         'callback': AdvCollisionCallBack,
         'params': ['normal_impulse']
+    },
+    'sensor.camera.rgb': {
+        'callback': AdvCameraCallBack,
+        'params': ['dynamic_noise_std', 'exposure_compensation']
     },
 }
 
@@ -100,6 +104,7 @@ class AdversarialCARLAEnv(gym.Env):
     # CARLA configuration parameters
     carla_running = False
     follow_ego = True
+    save_video = True
 
     # Gym environment parameters
     block_size = 10
@@ -189,11 +194,24 @@ class AdversarialCARLAEnv(gym.Env):
         new_location = carla.Location(x=float(self.spectator_loc[0]), y=float(self.spectator_loc[1]), z=50+float(self.spectator_loc[2]))
         spectator.set_transform(carla.Transform(new_location, carla.Rotation(pitch=-90)))
 
+        # if self.save_video:
+            # video_camera_bp = world.get_blueprint_library().find('sensor.camera.rgb')
+            # camera_tf = carla.Transform(new_location, carla.Rotation(pitch=90))
+            # self.video_camera = world.spawn_actor(video_camera_bp, camera_tf)
+            # image_count = 0
+            # def save_video_image(image):
+            #     nonlocal image_count # closure
+            #     image.save_to_disk('images/spectator/%.6d.jpg' % image_count)
+            #     image_count += 1
+            # self.video_camera.listen(save_video_image)
+        # else:
+        #     self.video_camera = None
+
         settings = world.get_settings()
         settings.no_rendering_mode = no_rendering
 
         # Create ScenarioRunner object to handle the core route/scenario parsing
-        self.scenario_runner = ASTScenarioRunner(args)
+        self.scenario_runner = ASTScenarioRunner(args, remove_other_actors=False)
 
         # Warm up the scenario_runner
         self.scenario_runner.parse_scenario()
@@ -213,7 +231,9 @@ class AdversarialCARLAEnv(gym.Env):
 
         self.actor_keys = list(obs.keys())  # Ensure actor is matched to the right key for observations
         print("No. of Actors: ", len(self.actor_keys))
-        assert(len(self.actor_keys) > 1)
+        if len(self.actor_keys) <= 1:
+            warnings.warn("Only one actor in the scenario.")
+        # assert(len(self.actor_keys) > 1) # Ensure other actors are around (after removing background actors)
 
         # reward parameters
         sensor_params_list = self._associate_adv_sensor_params() # TODO: How to handle multiple adv. sensor types in the action space?
@@ -301,6 +321,8 @@ class AdversarialCARLAEnv(gym.Env):
         if self.scenario_runner is not None:
             self.scenario_runner.destroy()
             del self.scenario_runner
+        # if self.video_camera is not None:
+        #     del self.video_camera
 
 
     def reset(self, retdict=False):
@@ -524,7 +546,11 @@ class AdversarialCARLAEnv(gym.Env):
                     spectator = world.get_spectator()
                     spectator_loc = self.scenario_runner.manager._agent._agent._agent._vehicle.get_location()
                     new_location = carla.Location(x=spectator_loc.x, y=spectator_loc.y, z=50+spectator_loc.z)
-                    spectator.set_transform(carla.Transform(new_location, carla.Rotation(pitch=-90)))
+                    spectator_tf = carla.Transform(new_location, carla.Rotation(pitch=-90))
+                    spectator.set_transform(spectator_tf)
+                    # if self.save_video:
+                    #     self.video_camera.set_transform(spectator_tf)
+
 
                 if self.scenario_runner.manager._debug_mode:
                     print("\n")
@@ -628,11 +654,14 @@ class AdversarialCARLAEnv(gym.Env):
 
                 # Replace adversarial version of the sensor(s)
                 if sensor.type_id in ADVERSARIAL_SENSOR_MAPPING:
-                    # Get the adversarial sensor callback class from the mapping
-                    AdvCallBack = ADVERSARIAL_SENSOR_MAPPING[sensor.type_id]['callback']
-
                     # Get the `id` field that is associated to the output of AutonomousAgent.sensors()
                     id = self._associate_sensor_id(sensor_interface, sensor)
+
+                    # Get the adversarial sensor callback class from the mapping
+                    if id == "VIDEO_CAMERA":
+                        AdvCallBack = VideoCameraCallBack
+                    else:
+                        AdvCallBack = ADVERSARIAL_SENSOR_MAPPING[sensor.type_id]['callback']
 
                     # Replace the sensor by first deleting it, stopping it, creating a new callback, then starting the listener.
                     del sensor_interface._sensors_objects[id]
@@ -641,3 +670,36 @@ class AdversarialCARLAEnv(gym.Env):
                     sensor.listen(self.adv_sensor_callbacks[id])
                 else:
                     warnings.warn("No adversarial version of the sensor type: " + sensor.type_id)
+
+
+
+
+class VideoCameraCallBack(CallBack):
+    """
+    Class the sensors listen to in order to receive their data each frame
+    """
+
+    def __init__(self, tag, sensor_type, sensor, data_provider):
+        """
+        Initializes the call back
+        """
+        super().__init__(tag, sensor_type, sensor, data_provider)
+        self.counter = 0
+
+
+    def __call__(self, data):
+        """
+        call function
+        """
+        array = np.frombuffer(data.raw_data, dtype=np.dtype("uint8"))
+        array = copy.deepcopy(array)
+        array = np.reshape(array, (data.height, data.width, 4))
+
+        save_camera_image(array, "./images/spectator/" + str(self.counter) + "_spectator.png")
+
+        self._data_provider.update_sensor(self._tag, array, data.frame)
+        self.counter += 1
+
+    def set_disturbance(self, disturbance, offset=0):
+        # Dummy pass-through.
+        pass
