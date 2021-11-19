@@ -13,7 +13,7 @@ sensors = [
     ),
 ]
 
-mdp = GymPOMDP(Symbol("adv-carla"), sensors=sensors)
+mdp = GymPOMDP(Symbol("adv-carla"), sensors=sensors, seed=0xC0FFEE, scenario_type="Scenario2")
 env = mdp.env
 # initial_obs = reset!(env) # rest already called during the GymPOMDP constructor
 σ = 12 # noise variance

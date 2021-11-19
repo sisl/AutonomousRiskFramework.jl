@@ -47,8 +47,9 @@ from . import utils
 # Version of adversarial_carla_env (tied to CARLA and scenario_runner versions)
 VERSION = '0.9.11'
 
+# TODO: fan out into kwargs of the init() function
 DEFAULT_PARAMS = {
-    'endtime': 50,
+    'endtime': 100,
     'reward_bonus': 100,
     'discount': 1.0,
     'max_past_step': 3,
@@ -211,7 +212,7 @@ class AdversarialCARLAEnv(gym.Env):
         settings.no_rendering_mode = no_rendering
 
         # Create ScenarioRunner object to handle the core route/scenario parsing
-        self.scenario_runner = ASTScenarioRunner(args, remove_other_actors=False)
+        self.scenario_runner = ASTScenarioRunner(args, remove_other_actors=True)
 
         # Warm up the scenario_runner
         self.scenario_runner.parse_scenario()
@@ -394,14 +395,15 @@ class AdversarialCARLAEnv(gym.Env):
             self._info['failed_scenario'] = self._failed_scenario
             self._info['distance'] = distance
             self._info['rate'] = rate
+            # TODO: Include all necessary state information in `info` to pass to Julia (positions, velocities, etc)
             if agent is None:
                 self._info['ego_sensor_location'] = None
                 self._info['ego_truth_location'] = None
             else:
                 if agent.ego_truth_location is not None:
-                    self._info['ego_truth_location'] = (agent.ego_truth_location.x, agent.ego_truth_location.y)
+                    self._info['ego_truth_location'] = [agent.ego_truth_location.x, agent.ego_truth_location.y]
                 if agent.ego_sensor_location is not None:
-                    self._info['ego_sensor_location'] = (agent.ego_sensor_location.x, agent.ego_sensor_location.y)
+                    self._info['ego_sensor_location'] = [agent.ego_sensor_location.x, agent.ego_sensor_location.y]
 
             # Calculate the reward for this step
             reward = self._reward(self._info)
