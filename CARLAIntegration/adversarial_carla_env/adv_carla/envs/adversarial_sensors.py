@@ -136,7 +136,7 @@ class AdvCameraCallBack(CallBack):
         super().__init__(tag, sensor_type, sensor, data_provider)
         self.simulated_camera = None
         self.dynamic_noise_std = 0
-        self.exposure_compensation = 0
+        self.exposure_comp = 0
         self.save_image = True
         self.counter = 0
         self.dims = 2
@@ -151,14 +151,15 @@ class AdvCameraCallBack(CallBack):
         array = np.reshape(array, (data.height, data.width, 4))
 
         if self.simulated_camera is None:
-            self.simulated_camera = SimulatedCamera(array, exposure_compensation=self.exposure_compensation)
+            self.simulated_camera = SimulatedCamera(array, exposure_compensation=self.exposure_comp)
 
         if self.save_image:
             save_camera_image(array, "./images/ego/" + str(self.counter) + "_before_image.png")
 
         # Apply disturbance(s)
-        self.simulated_camera.dynamic_noise_std = (self.dynamic_noise_std, self.dynamic_noise_std, self.dynamic_noise_std)
-        # self.simulated_camera.exposure_compensation = self.exposure_compensation # TODO: This is part of the create_static_noise
+        red_std = green_std = blue_std = self.dynamic_noise_std
+        self.simulated_camera.dynamic_noise_std = (red_std, green_std, blue_std)
+        # self.simulated_camera.exposure_compensation = self.exposure_comp # TODO: This is part of the create_static_noise
         array = self.simulated_camera.simulate(array)
 
         if self.save_image:
@@ -170,4 +171,4 @@ class AdvCameraCallBack(CallBack):
 
     def set_disturbance(self, disturbance, offset=0):
         self.dynamic_noise_std = disturbance[offset]
-        self.exposure_compensation = disturbance[offset+1]
+        self.exposure_comp = disturbance[offset+1]
