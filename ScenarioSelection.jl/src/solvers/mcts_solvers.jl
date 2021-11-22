@@ -1,5 +1,17 @@
-function mcts_vanilla(mdp)
+function mcts_dpw(mdp)
     solver = MCTS.DPWSolver(;   estimate_value=rollout, # required.
+                            exploration_constant=1.0,
+                            n_iterations=1000,
+                            enable_state_pw=false, # required.
+                            show_progress=true,
+                            tree_in_info=true);
+
+    planner = solve(solver, mdp);
+    return planner
+end
+
+function mcts_isdpw(mdp)
+    solver = ISDPWSolver(;   estimate_value=rollout, # required.
                             exploration_constant=1.0,
                             n_iterations=1000,
                             enable_state_pw=false, # required.

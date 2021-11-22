@@ -7,7 +7,7 @@ function get_actions(parent, value)
 		return Distributions.Categorical(length(scenario_types))
     elseif parent == :type
         # @show parent, value
-		options = get_scenario_options(scenario_types[value])
+		options = get_scenario_options(scenario_types[Int64(value)])
         range_s_sut = options["s_sut"]
         range_v_sut = options["v_sut"]
         actions = [
@@ -17,7 +17,7 @@ function get_actions(parent, value)
         return product_distribution(actions)
     elseif parent == :sut
         # @show parent, value
-		options = get_scenario_options(scenario_types[value])
+		options = get_scenario_options(scenario_types[Int64(value)])
         range_s_adv = options["s_adv"]
         range_v_adv = options["v_adv"]
         actions = [
