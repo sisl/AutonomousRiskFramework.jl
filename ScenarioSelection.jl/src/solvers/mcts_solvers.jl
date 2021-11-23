@@ -12,7 +12,7 @@ end
 
 function mcts_isdpw(mdp)
     solver = ISDPWSolver(;   estimate_value=rollout, # required.
-                            exploration_constant=1.0,
+                            exploration_constant=0.5,
                             n_iterations=1000,
                             enable_state_pw=false, # required.
                             show_progress=true,

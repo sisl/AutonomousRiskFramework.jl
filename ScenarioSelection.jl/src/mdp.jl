@@ -39,7 +39,7 @@ end
 mutable struct ScenarioSearch <: MDP{DecisionState, Any}
     discount_factor::Float64 # disocunt factor
     cvars::Vector
-    isprob::Vector
+    logprob::Vector
 end
 
 function POMDPs.reward(mdp::ScenarioSearch, state::DecisionState, action)
@@ -48,7 +48,7 @@ function POMDPs.reward(mdp::ScenarioSearch, state::DecisionState, action)
     else
         r = eval_AST(state)
         push!(mdp.cvars, r)
-        push!(mdp.isprob, state.w)
+        push!(mdp.logprob, state.w)
         # r = sum(state.init_cond)
     end
     return r
@@ -66,9 +66,9 @@ function POMDPs.gen(m::ScenarioSearch, s::DecisionState, a, rng)
     if s.type === nothing
         sp = DecisionState(first(a), [nothing], [nothing], false, last(a))
     elseif s.init_sut[1] === nothing
-        sp =  DecisionState(s.type, first(a), [nothing], false, s.w*last(a))
+        sp =  DecisionState(s.type, first(a), [nothing], false, s.w + last(a))
     elseif s.init_adv[1] === nothing
-        sp =  DecisionState(s.type, s.init_sut, first(a), false, s.w*last(a))
+        sp =  DecisionState(s.type, s.init_sut, first(a), false, s.w + last(a))
     else
         sp = DecisionState(s.type, s.init_sut, s.init_adv, true, s.w)
     end
@@ -113,7 +113,7 @@ function rollout(mdp::ScenarioSearch, s::DecisionState, d::Int64)
         p_action = POMDPs.actions(mdp, s)
         a = rand(p_action)
 
-        (sp, r) = @gen(:sp, :r)(mdp, s, [a, pdf(p_action, a)], Random.GLOBAL_RNG)
+        (sp, r) = @gen(:sp, :r)(mdp, s, [a, logpdf(p_action, a)], Random.GLOBAL_RNG)
         q_value = r + discount(mdp)*rollout(mdp, sp, d-1)
 
         return q_value

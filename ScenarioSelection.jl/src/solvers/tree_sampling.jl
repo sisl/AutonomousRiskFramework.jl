@@ -8,10 +8,22 @@ function clear_tree!(p::ISDPWPlanner)
 end
 
 """
-Utility function for softmax
+Utility function for numerically stable softmax 
+Adapted from: https://nextjournal.com/jbowles/the-mathematical-ideal-and-softmax-in-julia
 """
-softmax(x) = exp.(x) ./    
-sum(exp.(x))
+_exp(x) = exp.(x .- maximum(x))
+_exp(x, θ::AbstractFloat) = exp.((x .- maximum(x)) * θ)
+_sftmax(e, d::Integer) = (e ./ sum(e, dims = d))
+
+function softmax(X, dim::Integer)
+    _sftmax(_exp(X), dim)
+end
+
+function softmax(X, dim::Integer, θ::Float64)
+    _sftmax(_exp(X, θ), dim)
+end
+
+softmax(X) = softmax(X, 1)
 
 """
 Construct an ISDPW tree and choose an action.
@@ -79,11 +91,11 @@ function POMDPModelTools.action_info(p::ISDPWPlanner, s; tree_in_info=false)
         N_children = length(tree.children[snode])
         idx_sanode = sample(1:N_children, Weights(softmax(all_Q)))
         sanode = tree.children[snode][idx_sanode]
-        w = softmax(all_Q)[idx_sanode]
+        w = log(softmax(all_Q)[idx_sanode])
         a = tree.a_labels[sanode] # choose action randomly based on approximate value
     catch ex
         a = convert(actiontype(p.mdp), default_action(p.solver.default_action, p.mdp, s, ex))
-        w = 1.0
+        w = 0.0
         info[:exception] = ex
     end
 
@@ -150,7 +162,7 @@ function simulate(dpw::ISDPWPlanner, snode::Int, d::Int)
     N_children = length(tree.children[snode])
     idx_sanode = sample(1:N_children, Weights(softmax(all_UCB)))
     sanode = tree.children[snode][idx_sanode]
-    w = softmax(all_UCB)[idx_sanode]
+    w = log(softmax(all_UCB)[idx_sanode])
     a = tree.a_labels[sanode] # choose action randomly based on approximate value
     
     # storing weights
