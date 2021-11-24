@@ -33,7 +33,7 @@ fail_metrics = failure_metrics(planner)
 p_closure = plot_closure_rate_distribution(𝒟; reuse=false)
 
 # Plot cost distribution.
-metrics = risk_assessment(𝒟, α)
+metrics = risk_metrics(𝒟, α)
 @show metrics
 p_risk = plot_risk(metrics; mean_y=0.33, var_y=0.25, cvar_y=0.1, α_y=0.2)
 

@@ -255,7 +255,7 @@ begin
 	𝒟 = planner.mdp.dataset
 
 	# Plot cost distribution.
-	metrics = risk_assessment(𝒟, α)
+	metrics = risk_metrics(𝒟, α)
 	p_risk = plot_risk(metrics; mean_y=3.33, var_y=3.25, cvar_y=2.1, α_y=2.8)
 end
 
@@ -267,7 +267,7 @@ begin
 	𝒟2 = planner2.mdp.dataset
 
 	# Plot cost distribution.
-	metrics2 = risk_assessment(𝒟2, α)
+	metrics2 = risk_metrics(𝒟2, α)
 	p_risk2 = plot_risk(metrics2; mean_y=2.33, var_y=2.25, cvar_y=1.1, α_y=1.8)
 end
 

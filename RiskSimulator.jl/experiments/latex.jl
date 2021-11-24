@@ -41,7 +41,7 @@ function latex_risk_table(planners)
                 format(rounding(risk_metrics.cvar)), " \t& ",
                 format(rounding(risk_metrics.worst)), "\t& ")
         else
-            risk_metrics_vector = risk_assessment.(local_planners, α)
+            risk_metrics_vector = risk_metrics.(local_planners, α)
             risk_metrics_mean = mean(risk_metrics_vector)
             risk_metrics_std = std(risk_metrics_vector)
             risk_rows = string(
