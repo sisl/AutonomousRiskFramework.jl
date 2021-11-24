@@ -57,7 +57,6 @@ CVaR(𝒫,Z,α) = mean(conditional_distr(𝒫,Z,α))
 CVaR(𝒞) = mean(𝒞)
 
 
-# TODO: Rename to `risk_metrics`?
 risk_metrics(planner, α=0.2) = risk_metrics(planner.mdp.dataset, α)
 function risk_metrics(𝒟::Vector, α=0.2)
     Z = cost_data(𝒟)
