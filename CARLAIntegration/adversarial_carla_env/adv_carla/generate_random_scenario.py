@@ -105,7 +105,7 @@ def distance_point(x1,y1,x2,y2,x,y,error_bound):
 
    return d, flag
 
-def find_route_snippet(rng, scenario_dict, routes_list, error_bound, randomize_first_point=True):
+def find_route_snippet(rng, scenario_dict, routes_list, error_bound, randomize_first_point=True, *, unavailable_towns=["Town06"]):
    """
    randomize_first_point: randomly initialize the first point between the points on
    """
@@ -117,6 +117,8 @@ def find_route_snippet(rng, scenario_dict, routes_list, error_bound, randomize_f
    candidates = []
    for route in routes_list:
       town_route = route["town"]
+      if town in unavailable_towns:
+         continue
       if town == town_route:
          no_waypoints = route["waypoints"].shape[0]
          wps = route["waypoints"]
@@ -273,7 +275,7 @@ def create_random_scenario(*, seed=None, scenario_type="Scenario4", weather="Ran
    # allowed_scenario_types = ["Scenario4"]
    allowed_scenario_types = [scenario_type]
 
-   while candidate==None:
+   while candidate is None:
       # select random scenario
       scenario_type = None
       while scenario_type not in allowed_scenario_types:

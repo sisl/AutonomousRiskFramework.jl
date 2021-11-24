@@ -1,5 +1,7 @@
+opencv-python
 gym
 numpy
 lxml
 pickleshare
+torchvision
 stable-baselines3

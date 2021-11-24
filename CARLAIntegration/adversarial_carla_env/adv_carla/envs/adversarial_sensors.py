@@ -2,10 +2,13 @@
 This module contains all of the adversarial sensor callback classes.
 """
 
+import copy
 import carla
 import numpy as np
 from srunner.autoagents.sensor_interface import CallBack
 from pdb import set_trace as breakpoint # DEBUG. TODO!
+
+from .camera_artifacts import *
 
 
 class AdvGNSSCallBack(CallBack):
@@ -118,3 +121,54 @@ class AdvCollisionCallBack(CallBack):
 
     def set_disturbance(self, disturbance, offset=0):
         self.noise_normal_impulse = disturbance[offset]
+
+
+class AdvCameraCallBack(CallBack):
+
+    """
+    Class the sensors listen to in order to receive their data each frame
+    """
+
+    def __init__(self, tag, sensor_type, sensor, data_provider):
+        """
+        Initializes the call back
+        """
+        super().__init__(tag, sensor_type, sensor, data_provider)
+        self.simulated_camera = None
+        self.dynamic_noise_std = 0
+        self.exposure_comp = 0
+        self.save_image = True
+        self.counter = 0
+        self.dims = 2
+
+
+    def __call__(self, data):
+        """
+        call function
+        """
+        array = np.frombuffer(data.raw_data, dtype=np.dtype("uint8"))
+        array = copy.deepcopy(array)
+        array = np.reshape(array, (data.height, data.width, 4))
+
+        if self.simulated_camera is None:
+            self.simulated_camera = SimulatedCamera(array, exposure_compensation=self.exposure_comp)
+
+        if self.save_image:
+            save_camera_image(array, "./images/ego/" + str(self.counter) + "_before_image.png")
+
+        # Apply disturbance(s)
+        red_std = green_std = blue_std = self.dynamic_noise_std
+        self.simulated_camera.dynamic_noise_std = (red_std, green_std, blue_std)
+        # self.simulated_camera.exposure_compensation = self.exposure_comp # TODO: This is part of the create_static_noise
+        array = self.simulated_camera.simulate(array)
+
+        if self.save_image:
+            save_camera_image(array, "./images/ego/" + str(self.counter) + "_after_image.png")
+
+        self._data_provider.update_sensor(self._tag, array, data.frame)
+        self.counter += 1
+
+
+    def set_disturbance(self, disturbance, offset=0):
+        self.dynamic_noise_std = disturbance[offset]
+        self.exposure_comp = disturbance[offset+1]

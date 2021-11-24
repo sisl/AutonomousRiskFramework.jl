@@ -1,3 +1,4 @@
+import carla
 import traceback
 import os
 import time
@@ -13,12 +14,13 @@ from scenario_runner import ScenarioRunner
 from srunner.scenarios.open_scenario import OpenScenario
 from srunner.scenarios.route_scenario import RouteScenario
 from srunner.scenariomanager.timer import GameTime
+from srunner.scenariomanager.carla_data_provider import CarlaDataProvider
 
 from pdb import set_trace as breakpoint # DEBUG. TODO!
 
 class ASTScenarioRunner(ScenarioRunner):
 
-    def __init__(self, args):
+    def __init__(self, args, *, remove_other_actors=True):
         super().__init__(args)
         self._args.reloadWorld = False # Force no-reload.
         self._args.record = False
@@ -27,6 +29,7 @@ class ASTScenarioRunner(ScenarioRunner):
         self.recorder_name = None
         self.scenario = None
         self.running = False
+        self.remove_other_actors = remove_other_actors
 
 
     def _load_and_run_scenario(self, config):
@@ -61,7 +64,10 @@ class ASTScenarioRunner(ScenarioRunner):
         # Prepare scenario
         print("Preparing scenario: " + self.scenario_config.name)
 
-        RouteScenario._initialize_actors = _initialize_actors # Monkey patching to avoid background actors
+        if self.remove_other_actors:
+            RouteScenario._initialize_actors = _initialize_actors_no_background # Monkey patching to avoid background actors
+        else:
+            RouteScenario._initialize_actors = _initialize_actors_reduced_background # Monkey patching to reduce background actors
 
         try:
             self._prepare_ego_vehicles(self.scenario_config.ego_vehicles)
@@ -179,7 +185,7 @@ class ASTScenarioRunner(ScenarioRunner):
         super().run()
 
 
-def _initialize_actors(self, config):
+def _initialize_actors_no_background(self, config):
     """
     Set other_actors to the superset of all scenario actors
     NOTE: monkey patching _initialize_actors from route_scenario.py
@@ -188,3 +194,37 @@ def _initialize_actors(self, config):
     # Add all the actors of the specific scenarios to self.other_actors
     for scenario in self.list_scenarios:
         self.other_actors.extend(scenario.other_actors)
+
+
+def _initialize_actors_reduced_background(self, config):
+    # Create the background activity of the route
+    # NOTE: Decreased these by an order of magnitude
+    town_amount = {
+        'Town01': 12,
+        'Town02': 10,
+        'Town03': 12,
+        'Town04': 20,
+        'Town05': 12,
+        'Town06': 15,
+        'Town07': 11,
+        'Town08': 18,
+        'Town09': 30,
+        'Town10': 12,
+    }
+
+    amount = town_amount[config.town] if config.town in town_amount else 0
+
+    new_actors = CarlaDataProvider.request_new_batch_actors('vehicle.*',
+                                                            amount,
+                                                            carla.Transform(),
+                                                            autopilot=True,
+                                                            random_location=True,
+                                                            rolename='background')
+
+    if new_actors is None:
+        raise Exception("Error: Unable to add the background activity, all spawn points were occupied")
+
+    for _actor in new_actors:
+        self.other_actors.append(_actor)
+
+    _initialize_actors_no_background(self, config)
