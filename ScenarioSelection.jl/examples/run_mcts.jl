@@ -6,12 +6,15 @@ using ProgressMeter
 # using D3Trees
 using MCTS
 
+N = 10
+c = 0.5
+
 mdp = ScenarioSearch(1, [], [])
 
-planner = mcts_isdpw(mdp)
+planner = mcts_isdpw(mdp; N, c)
 
 a, info = action_info(planner, DecisionState(), tree_in_info=true)
 # t = D3Tree(info[:tree], init_expand=1);
 # inchrome(t)
 
-save(raw"data\\mcts_random_IS_risks_1000_ALL.jld2", Dict("risks:" => planner.mdp.cvars, "states:" => [], "logprob:" => planner.mdp.logprob))
+save("/home/users/shubhgup/Codes/AutonomousRiskFramework.jl/data/mcts_IS_Lrisks_$(N)_$(c)_ALL.jld2", Dict("risks:" => planner.mdp.cvars, "states:" => [], "logprob:" => planner.mdp.logprob))

@@ -158,30 +158,35 @@ function simulate(dpw::ISDPWPlanner, snode::Int, d::Int)
         
         push!(all_UCB, UCB)
     end
-    # @info "Softmax weights" all_UCB
+    @info "Softmax weights" softmax(all_UCB)
     N_children = length(tree.children[snode])
     idx_sanode = sample(1:N_children, Weights(softmax(all_UCB)))
     sanode = tree.children[snode][idx_sanode]
     w = log(softmax(all_UCB)[idx_sanode])
     a = tree.a_labels[sanode] # choose action randomly based on approximate value
     
-    # storing weights
+     # state progressive widening
     new_node = false
-    sp, r = @gen(:sp, :r)(dpw.mdp, s, [a, w], dpw.rng)
+    if (dpw.solver.enable_state_pw && tree.n_a_children[sanode] <= sol.k_state*tree.n[sanode]^sol.alpha_state) || tree.n_a_children[sanode] == 0
+        sp, r = @gen(:sp, :r)(dpw.mdp, s, a, dpw.rng)
 
-    if sol.check_repeat_state && haskey(tree.s_lookup, sp)
-        spnode = tree.s_lookup[sp]
-    else
-        spnode = MCTS.insert_state_node!(tree, sp, sol.keep_tree || sol.check_repeat_state)
-        new_node = true
+        if sol.check_repeat_state && haskey(tree.s_lookup, sp)
+            spnode = tree.s_lookup[sp]
+        else
+            spnode = insert_state_node!(tree, sp, sol.keep_tree || sol.check_repeat_state)
+            new_node = true
+        end
+
         push!(tree.transitions[sanode], (spnode, r))
-    end
 
-    if !sol.check_repeat_state
-        tree.n_a_children[sanode] += 1
-    elseif !((sanode,spnode) in tree.unique_transitions)
-        push!(tree.unique_transitions, (sanode,spnode))
-        tree.n_a_children[sanode] += 1
+        if !sol.check_repeat_state
+            tree.n_a_children[sanode] += 1
+        elseif !((sanode,spnode) in tree.unique_transitions)
+            push!(tree.unique_transitions, (sanode,spnode))
+            tree.n_a_children[sanode] += 1
+        end
+    else
+        spnode, r = rand(dpw.rng, tree.transitions[sanode])
     end
 
     if new_node

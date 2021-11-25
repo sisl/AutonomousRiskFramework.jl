@@ -27,7 +27,7 @@ function eval_AST(s::DecisionState)
         if isnan(risk)
             return 0.0
         end
-        return risk
+        return 10*risk
     catch err
         # TODO: Write to log file
         @warn err
