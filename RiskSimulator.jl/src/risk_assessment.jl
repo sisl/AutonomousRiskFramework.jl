@@ -57,8 +57,8 @@ CVaR(𝒫,Z,α) = mean(conditional_distr(𝒫,Z,α))
 CVaR(𝒞) = mean(𝒞)
 
 
-risk_metrics(planner, α=0.2) = risk_metrics(planner.mdp.dataset, α)
-function risk_metrics(𝒟::Vector, α=0.2)
+metrics(planner, α=0.2) = metrics(planner.mdp.dataset, α)
+function metrics(𝒟::Vector, α=0.2)
     Z = cost_data(𝒟)
     return RiskMetrics(Z, α)
 end
@@ -72,7 +72,7 @@ Combine datasets from different runs then collect risk metrics.
 """
 function collect_metrics(planners, α)
     dataset = combine_datasets(planners)
-    metrics = risk_metrics(dataset, α)
+    metrics = metrics(dataset, α)
     return metrics
 end
 

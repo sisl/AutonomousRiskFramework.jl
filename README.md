@@ -25,7 +25,7 @@ search!(planner)
 
 fail_metrics = failure_metrics(planner)
 α = 0.2 # risk tolerance
-risks = risk_metrics(planner, α)
+risk_metrics = metrics(planner, α)
 risk = overall_area(planner, α=α)
 ```
 
