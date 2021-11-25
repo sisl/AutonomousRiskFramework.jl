@@ -87,7 +87,7 @@ distances, and rates, and a boolean indicating an event.
 function cost_data(𝒟; nonfailures=false, terminal_only=true)
     if typeof(𝒟[1][1]) <: Vector{Vector{Any}}
         # [end] in the 𝐱 data, and [2:end] to remove the first rate value (0 - first distance)
-        costs = [d[1][end][2:end] for d in filter(d -> nonfailures ? !d[2] : d[2], 𝒟)]
+        costs = [abs.(d[1][end][2:end]) for d in filter(d -> nonfailures ? !d[2] : d[2], 𝒟)]
         # when we collect data for FULL trajectory (not just at the terminal state)
         if terminal_only
             filter!(!isempty, costs)
@@ -96,7 +96,7 @@ function cost_data(𝒟; nonfailures=false, terminal_only=true)
             return convert(Vector{Real}, vcat(costs...))
         end
     else
-        return [d[1][end] for d in filter(d -> nonfailures ? !d[2] : d[2], 𝒟)]
+        return [abs.(d[1][end]) for d in filter(d -> nonfailures ? !d[2] : d[2], 𝒟)]
     end
 end
 
