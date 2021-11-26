@@ -107,7 +107,7 @@ Return the distance data (𝐝) of the failures or `nonfailures`.
 function distance_data(𝒟; nonfailures=false, terminal_only=true)
     if typeof(𝒟[1][1]) <: Vector{Vector{Any}}
         # [end] in the 𝐱 data, and [2:end] to match the removal of the first rate value (0 - first distance)
-        distances = [d[1][end-1][2:end] for d in filter(d->nonfailures ? !d[2] : d[2], 𝒟)]
+        distances = [d[1][end-1][2:end] for d in filter(d -> nonfailures ? !d[2] : d[2], 𝒟)]
         # when we collect data for FULL trajectory (not just at the terminal state)
         if terminal_only
             return convert(Vector{Real}, vcat(last.(distances)...))
