@@ -6,6 +6,7 @@ BIODS253/
 *.pkl
 *.npy
 *.jld2
+*.png
 __pycache__/
 scenario_runner/
 *.egg-info/
