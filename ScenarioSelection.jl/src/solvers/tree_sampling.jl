@@ -25,16 +25,30 @@ end
 
 softmax(X) = softmax(X, 1)
 
+
+"""
+Calculate next action
+"""
+function select_action(nodes, values; c=5.0)
+    prob = softmax(c*values)
+    sanode_idx = sample(1:length(nodes), Weights(prob))
+    sanode = nodes[sanode_idx]
+    w = log(1/length(nodes)) - log(prob[sanode_idx])
+    return sanode, w
+end
+
 """
 Construct an ISDPW tree and choose an action.
 """
 POMDPs.action(p::ISDPWPlanner, s) = first(action_info(p, s))
 
+MCTS.estimate_value(f::Function, mdp::Union{POMDP,MDP}, state, w::Float64, depth::Int) = f(mdp, state, w, depth)
+
 """
 Construct an ISDPW tree and choose the best action. Also output some information.
 """
-function POMDPModelTools.action_info(p::ISDPWPlanner, s; tree_in_info=false)
-    local a::actiontype(p.mdp), w::Float64
+function POMDPModelTools.action_info(p::ISDPWPlanner, s; tree_in_info=false, w=0.0)
+    local a::actiontype(p.mdp)
     info = Dict{Symbol, Any}()
     try
         if isterminal(p.mdp, s)
@@ -69,7 +83,7 @@ function POMDPModelTools.action_info(p::ISDPWPlanner, s; tree_in_info=false)
         start_us = MCTS.CPUtime_us()
         for i = 1:p.solver.n_iterations
             nquery += 1
-            simulate(p, snode, p.solver.depth) # (not 100% sure we need to make a copy of the state here)
+            simulate(p, snode, w, p.solver.depth) # (not 100% sure we need to make a copy of the state here)
             p.solver.show_progress ? next!(progress) : nothing
             if MCTS.CPUtime_us() - start_us >= p.solver.max_time * 1e6
                 p.solver.show_progress ? finish!(progress) : nothing
@@ -88,25 +102,22 @@ function POMDPModelTools.action_info(p::ISDPWPlanner, s; tree_in_info=false)
         for child in tree.children[snode]
             push!(all_Q, tree.q[child])
         end
-        N_children = length(tree.children[snode])
-        idx_sanode = sample(1:N_children, Weights(softmax(all_Q)))
-        sanode = tree.children[snode][idx_sanode]
-        w = log(softmax(all_Q)[idx_sanode])
+        sanode, w_node = select_action(tree.children[snode], all_Q)
+        w = w + w_node
         a = tree.a_labels[sanode] # choose action randomly based on approximate value
     catch ex
         a = convert(actiontype(p.mdp), default_action(p.solver.default_action, p.mdp, s, ex))
-        w = 0.0
         info[:exception] = ex
     end
 
-    return a, w, info
+    return a, info
 end
 
 
 """
 Return the reward for one iteration of MCTSDPW.
 """
-function simulate(dpw::ISDPWPlanner, snode::Int, d::Int)
+function simulate(dpw::ISDPWPlanner, snode::Int, w::Float64, d::Int)
     S = statetype(dpw.mdp)
     A = actiontype(dpw.mdp)
     sol = dpw.solver
@@ -116,7 +127,7 @@ function simulate(dpw::ISDPWPlanner, snode::Int, d::Int)
     if isterminal(dpw.mdp, s)
         return 0.0
     elseif d == 0
-        return estimate_value(dpw.solved_estimate, dpw.mdp, s, d)
+        return estimate_value(dpw.solved_estimate, dpw.mdp, s, w, d)
     end
 
     # action progressive widening
@@ -158,11 +169,9 @@ function simulate(dpw::ISDPWPlanner, snode::Int, d::Int)
         
         push!(all_UCB, UCB)
     end
-    @info "Softmax weights" softmax(all_UCB)
-    N_children = length(tree.children[snode])
-    idx_sanode = sample(1:N_children, Weights(softmax(all_UCB)))
-    sanode = tree.children[snode][idx_sanode]
-    w = log(softmax(all_UCB)[idx_sanode])
+    # @info "Softmax weights" softmax(all_UCB)
+    sanode, w_node = select_action(tree.children[snode], all_UCB)
+    w = w + w_node
     a = tree.a_labels[sanode] # choose action randomly based on approximate value
     
      # state progressive widening
@@ -173,7 +182,7 @@ function simulate(dpw::ISDPWPlanner, snode::Int, d::Int)
         if sol.check_repeat_state && haskey(tree.s_lookup, sp)
             spnode = tree.s_lookup[sp]
         else
-            spnode = insert_state_node!(tree, sp, sol.keep_tree || sol.check_repeat_state)
+            spnode = MCTS.insert_state_node!(tree, sp, sol.keep_tree || sol.check_repeat_state)
             new_node = true
         end
 
@@ -190,9 +199,9 @@ function simulate(dpw::ISDPWPlanner, snode::Int, d::Int)
     end
 
     if new_node
-        q = r + discount(dpw.mdp)*estimate_value(dpw.solved_estimate, dpw.mdp, sp, d-1)
+        q = r + discount(dpw.mdp)*estimate_value(dpw.solved_estimate, dpw.mdp, sp, w, d-1)
     else
-        q = r + discount(dpw.mdp)*simulate(dpw, spnode, d-1)
+        q = r + discount(dpw.mdp)*simulate(dpw, spnode, w, d-1)
     end
 
     tree.n[sanode] += 1

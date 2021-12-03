@@ -30,4 +30,12 @@ function MCTS.node_tag(s::DecisionState)
     end
 end
 
+function MCTS.node_tag(s::SimpleState) 
+    if s.done
+        return "done"
+    else
+        return "$(s.levels)"
+    end
+end
+
 MCTS.node_tag(a::Union{Int64, Float64, Nothing}) = "[$a]"

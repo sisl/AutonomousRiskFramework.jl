@@ -7,7 +7,7 @@ struct DecisionState
 end
 
 # initial state constructor
-DecisionState() = DecisionState(nothing,[nothing],[nothing], false, 1.0)
+DecisionState() = DecisionState(nothing,[nothing],[nothing], false, 0.0)
 
 # Define the system to test
 system = IntelligentDriverModel()    
@@ -27,7 +27,7 @@ function eval_AST(s::DecisionState)
         if isnan(risk)
             return 0.0
         end
-        return 10*risk
+        return risk
     catch err
         # TODO: Write to log file
         @warn err
@@ -39,16 +39,16 @@ end
 mutable struct ScenarioSearch <: MDP{DecisionState, Any}
     discount_factor::Float64 # disocunt factor
     cvars::Vector
-    logprob::Vector
+    IS_weights::Vector
 end
 
 function POMDPs.reward(mdp::ScenarioSearch, state::DecisionState, action)
-    if state.type===nothing || state.init_sut[1]===nothing || state.init_adv[1]===nothing
+    if !state.done
         r = 0
     else
         r = eval_AST(state)
         push!(mdp.cvars, r)
-        push!(mdp.logprob, state.w)
+        push!(mdp.IS_weights, state.w)
         # r = sum(state.init_cond)
     end
     return r
@@ -64,15 +64,15 @@ end
 function POMDPs.gen(m::ScenarioSearch, s::DecisionState, a, rng)
     # transition model
     if s.type === nothing
-        sp = DecisionState(first(a), [nothing], [nothing], false, last(a))
+        sp = DecisionState(a, [nothing], [nothing], false, 0.0)
     elseif s.init_sut[1] === nothing
-        sp =  DecisionState(s.type, first(a), [nothing], false, s.w + last(a))
+        sp =  DecisionState(s.type, a, [nothing], false, 0.0)
     elseif s.init_adv[1] === nothing
-        sp =  DecisionState(s.type, s.init_sut, first(a), false, s.w + last(a))
+        sp =  DecisionState(s.type, s.init_sut, a, false, 0.0)
     else
-        sp = DecisionState(s.type, s.init_sut, s.init_adv, true, s.w)
+        sp = DecisionState(s.type, s.init_sut, s.init_adv, true, a)
     end
-    r = POMDPs.reward(m, s, a)
+    r = POMDPs.reward(m, sp, a)
     return (sp=sp, r=r)
 end
 
@@ -106,15 +106,18 @@ function POMDPs.action(policy::RandomPolicy, s::DecisionState)
     end
 end
 
-function rollout(mdp::ScenarioSearch, s::DecisionState, d::Int64)
+function rollout(mdp::ScenarioSearch, s::DecisionState, w::Float64, d::Int64)
     if d == 0 || isterminal(mdp, s)
         return 0.0
     else
         p_action = POMDPs.actions(mdp, s)
         a = rand(p_action)
-
-        (sp, r) = @gen(:sp, :r)(mdp, s, [a, logpdf(p_action, a)], Random.GLOBAL_RNG)
-        q_value = r + discount(mdp)*rollout(mdp, sp, d-1)
+        if !(s.type===nothing || s.init_sut[1]===nothing || s.init_adv[1]===nothing)
+            a = w
+        end
+        
+        (sp, r) = @gen(:sp, :r)(mdp, s, a, Random.GLOBAL_RNG)
+        q_value = r + discount(mdp)*rollout(mdp, sp, w, d-1)
 
         return q_value
     end
