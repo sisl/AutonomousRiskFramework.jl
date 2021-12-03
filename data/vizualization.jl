@@ -62,6 +62,7 @@ risks =  [risk for risk in risks if (risk >= 0)];
 # end
 
 # plot([state.init_sut[1] for state in states])
+
 viridis_green = "#238a8dff"
 if !baseline
     histogram(risks,
@@ -177,4 +178,3 @@ plot_trajectory("mean", metrics_baseline, metrics_mcts)
 plot_trajectory("var", metrics_baseline, metrics_mcts)
 plot_trajectory("cvar", metrics_baseline, metrics_mcts)
 plot_trajectory("worst", metrics_baseline, metrics_mcts)
-

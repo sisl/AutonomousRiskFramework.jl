@@ -1,3 +1,8 @@
+name = "AutonomousRiskFramework"
+uuid = "d357daab-b3f7-46f7-b277-50984809e52b"
+authors = ["Robert Moss <mossr@cs.stanford.edu>"]
+version = "0.1.0"
+
 [deps]
 AdversarialDriving = "0f7eb3e9-d51f-47f4-b915-6157e1c8ce29"
 BayesNets = "ba4760a4-c768-5bed-964b-cf806dc591cb"
