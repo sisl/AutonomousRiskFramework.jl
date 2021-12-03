@@ -44,6 +44,7 @@ function plot_cost_distribution(Z)
         framestyle=:box,
         xlabel=L"\operatorname{cost}",
         ylabel=L"\operatorname{density}",
+        bins=50,
         normalize=:pdf, size=(600, 300))
 end
 
