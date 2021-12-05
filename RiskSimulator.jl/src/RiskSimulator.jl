@@ -103,6 +103,9 @@ export Simulator,
        plot_multivariate_distance_and_rate,
        analyze_fit,
        compute_svm,
+       # visualization/render.jl
+       render_gif,
+       render_png,
 
        ppo_rollout,
 
