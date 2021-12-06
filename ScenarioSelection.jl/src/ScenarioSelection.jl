@@ -14,7 +14,8 @@ using Parameters
 using MCTS
 using RiskSimulator
 using Distributions
-
+using ProgressMeter
+using StatsBase
 
 export scenario_types, get_actions, create_bayesnet
 include("bayesnet.jl")
@@ -22,10 +23,19 @@ include("bayesnet.jl")
 export DecisionState, system, eval_AST, ScenarioSearch, rollout
 include("mdp.jl")
 
-export random_baseline
+export SimpleState, SimpleSearch, rollout
+include("mdp_simple.jl")
+
+export random_baseline, simple_random_baseline
 include("baseline.jl")
 
-export mcts_vanilla
-include(joinpath("solvers", "mcts_vanilla.jl"))
+export mcts_dpw, mcts_isdpw
+include(joinpath("solvers", "mcts_solvers.jl"))
+
+export ISDPWSolver, ISDPWPlanner
+include(joinpath("solvers", "tree_sampling_types.jl"))
+
+export solve, softmax
+include(joinpath("solvers", "tree_sampling.jl"))
 
 end # module

@@ -1,19 +1,20 @@
-using Pkg
-Pkg.activate(normpath(joinpath(@__DIR__, "..", "..")))      # comment if using base package
 using ScenarioSelection
 using FileIO
 using Random
 using Distributed
 using ProgressMeter
-using D3Trees
+# using D3Trees
 using MCTS
 
-mdp = ScenarioSearch(1, [])
+N = 10000
+c = 0.5
 
-planner = mcts_vanilla(mdp)
+mdp = ScenarioSearch(1, [], [])
 
-a, info = action_info(planner, DecisionState(), tree_in_info=true; random=true)
-t = D3Tree(info[:tree], init_expand=1);
-inchrome(t)
+planner = mcts_isdpw(mdp; N, c)
 
-# save(raw"data\\mctsrisks_100_ALL.jld2", Dict("risks:" => planner.mdp.cvars, "states:" => []))
+a, info = action_info(planner, DecisionState(), tree_in_info=true)
+# t = D3Tree(info[:tree], init_expand=1);
+# inchrome(t)
+
+save("/home/users/shubhgup/Codes/AutonomousRiskFramework.jl/data/mcts_IS_$(N)_$(c)_ALL.jld2", Dict("risks:" => planner.mdp.cvars, "states:" => [], "IS_weights:" => planner.mdp.IS_weights, "tree:" => info[:tree]))

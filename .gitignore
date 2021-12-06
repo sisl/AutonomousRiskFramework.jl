@@ -1,11 +1,11 @@
-ast_obs/
+sherlock_scripts/
 .vscode/
-BIODS253/
 .ipynb_checkpoints/
 *.zip
 *.pkl
 *.npy
 *.jld2
+*.png
 __pycache__/
 scenario_runner/
 *.egg-info/

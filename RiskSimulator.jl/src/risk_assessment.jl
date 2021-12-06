@@ -33,7 +33,18 @@ function RiskMetrics(Z,α)
     𝔼 = mean(Z)
     var = VaR(𝒞)
     cvar = CVaR(𝒞)
-    return RiskMetrics(Z=Z, α=α, 𝒫=𝒫, 𝒞=𝒞, mean=𝔼, var=VaR(𝒞), cvar=CVaR(𝒞), worst=worst_case(Z))
+    return RiskMetrics(Z=Z, α=α, 𝒫=𝒫, 𝒞=𝒞, mean=𝔼, var=var, cvar=cvar, worst=worst_case(Z))
+end
+
+function RiskMetrics(Z,α,w)
+    # If no failures, no cost distribution.
+    Z = length(Z) == 0 ? [Inf] : Z
+    𝒫 = ecdf(Z, w)
+    𝒞, w_conditional = conditional_distr(𝒫, Z, α, w)
+    𝔼 = mean(Z, weights(w))
+    var = VaR(𝒞)
+    cvar = CVaR(𝒞, w_conditional)
+    return RiskMetrics(Z=Z, α=α, 𝒫=𝒫, 𝒞=𝒞, mean=𝔼, var=var, cvar=cvar, worst=worst_case(Z))
 end
 
 function RiskMetricsModeled(Z, α, ℱ; length=1000)
@@ -42,11 +53,16 @@ function RiskMetricsModeled(Z, α, ℱ; length=1000)
     𝔼 = mean(ℱ)
     var = VaR(𝒞)
     cvar = CVaR(𝒞)
-    return RiskMetrics(Z=Z, α=α, 𝒫=𝒫, 𝒞=𝒞, mean=𝔼, var=VaR(𝒞), cvar=CVaR(𝒞), worst=worst_case(Z))
+    return RiskMetrics(Z=Z, α=α, 𝒫=𝒫, 𝒞=𝒞, mean=𝔼, var=var, cvar=cvar, worst=worst_case(Z))
 end
+
 
 conditional_distr(𝒫,Z,α) = filter(z->1-𝒫(z) ≤ α, Z)
 conditional_distr_model(𝒫,α,ℱ;length=1000) = filter(z->1-𝒫(z) ≤ α, rand(ℱ, length))
+function conditional_distr(𝒫,Z,α,w)
+    idx = filter(i->1-𝒫(Z[i]) ≤ α, 1:length(Z))
+    return Z[idx], w[idx] 
+end
 
 VaR(𝒫,Z,α) = minimum(conditional_distr(𝒫,Z,α))
 VaR(𝒞) = minimum(𝒞)
@@ -55,6 +71,24 @@ worst_case(Z) = maximum(Z)
 
 CVaR(𝒫,Z,α) = mean(conditional_distr(𝒫,Z,α))
 CVaR(𝒞) = mean(𝒞)
+CVaR(𝒞, w) = mean(𝒞, weights(w))
+
+
+"""
+Weighted Empirical CDF
+"""
+function ecdf(X, w)
+    perm = sortperm(X)
+    Xs = X[perm]
+    ws = w[perm]
+    n = length(X)
+    tot_w = sum(w)
+
+    ef(x) = sum(ws[1:searchsortedlast(Xs, x)]) / tot_w
+
+    return ef
+end
+
 
 
 metrics(planner, α=0.2) = metrics(planner.mdp.dataset, α)
