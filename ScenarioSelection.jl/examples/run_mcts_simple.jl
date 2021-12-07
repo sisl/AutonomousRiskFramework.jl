@@ -4,10 +4,11 @@ using Random
 using ProgressMeter
 using MCTS
 
-N = 10000
+N = 10_000
+levels = 4
 c = 0.5
 
-mdp = SimpleSearch(1, [], [], 5)
+mdp = SimpleSearch(1, [], [], levels)
 
 planner = mcts_isdpw(mdp; N, c)
 

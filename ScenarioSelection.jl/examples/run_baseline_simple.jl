@@ -4,11 +4,12 @@ using FileIO
 using Random
 using ProgressMeter
 
-N = 100000
+N = 100_000
+levels = 4
 
 results = []
 @showprogress for i=1:N
-    push!(results, simple_random_baseline())
+    push!(results, simple_random_baseline(levels))
 end
 states = [result[1] for result in results]
 risks = [result[2] for result in results]

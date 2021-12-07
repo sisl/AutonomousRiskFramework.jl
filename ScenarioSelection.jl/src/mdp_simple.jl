@@ -16,9 +16,15 @@ mutable struct SimpleSearch <: MDP{SimpleState, Any}
 end
 
 function eval_simple_reward(state::SimpleState) 
-    reward_mask = [((lvl>4) ? 1 : lvl/10) for lvl in state.levels]
-    
-    return sum(reward_mask)/(length(reward_mask))
+    reward_mask = ones(10)*100
+    reward_mask[1] = 6
+    reward_mask[2] = 7
+    reward_mask[4] = 8
+
+    rewards = [((state.levels[i]>reward_mask[i]) ? state.levels[i]*2/20 : state.levels[i]*0.5/20) for i=1:length(state.levels)]
+    reward = sum(rewards)/(length(rewards))
+    # print("\n", state, reward)
+    return reward
 end
 
 function POMDPs.reward(mdp::SimpleSearch, state::SimpleState, action)
@@ -41,10 +47,12 @@ function POMDPs.gen(m::SimpleSearch, s::SimpleState, a, rng)
     # transition model
     if s.levels[1] === nothing
         sp = SimpleState([a], false, 0.0)
-    elseif length(s.levels) < m.levels - 1
+    elseif length(s.levels) < m.levels
         sp = SimpleState([s.levels..., a], false, 0.0)
-    else
+    elseif length(s.levels) == m.levels
         sp = SimpleState(s.levels, true, a)
+    else
+        print("\nUnexpected state: ", s)
     end
     r = POMDPs.reward(m, sp, a)
     return (sp=sp, r=r)
@@ -58,7 +66,7 @@ end
 POMDPs.discount(mdp::SimpleSearch) = mdp.discount_factor
 
 function get_actions(s::SimpleState)
-    return Distributions.Categorical(6)
+    return Distributions.Categorical(10)
 end
 
 function POMDPs.actions(mdp::SimpleSearch, s::SimpleState)
@@ -74,9 +82,11 @@ function rollout(mdp::SimpleSearch, s::SimpleState, w::Float64, d::Int64)
         return 0.0
     else
         p_action = POMDPs.actions(mdp, s)
-        a = rand(p_action)
-        if length(s.levels) >= mdp.levels
-            a = w
+        if length(s.levels) == mdp.levels && s.done == false
+            # print("\nWeight update: ", w)
+            a = w   # Weight update action
+        else
+            a = rand(p_action)
         end
         
         (sp, r) = @gen(:sp, :r)(mdp, s, a, Random.GLOBAL_RNG)
