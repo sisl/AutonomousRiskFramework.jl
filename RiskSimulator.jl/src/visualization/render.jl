@@ -35,7 +35,7 @@ end
 
 # Creates a GIF of a simulation run with a given ASTMDP and action trace.
 function render_gif(filename::String, mdp::ASTMDP, action_trace::Vector{ASTAction})
-    scenes = playback(mdp, action_trace, sim->sim.state, return_trace=true)
+    scenes = playback(mdp, action_trace, sim->sim.state, verbose=false, return_trace=true)
     roadway = mdp.sim.roadway
 
     timestep = 0.5
