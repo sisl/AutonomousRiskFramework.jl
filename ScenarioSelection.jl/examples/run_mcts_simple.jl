@@ -7,7 +7,7 @@ using MCTS
 N = 10000
 c = 0.5
 
-mdp = SimpleSearch(1, [], [])
+mdp = SimpleSearch(1, [], [], 5)
 
 planner = mcts_isdpw(mdp; N, c)
 

@@ -7,6 +7,6 @@ function random_baseline(bn)
 end
 
 function simple_random_baseline()
-    tmp_s = SimpleState(rand(Distributions.Categorical(5), 4), true, 0.0)
-    return (tmp_s, sum(tmp_s.levels)/(length(tmp_s.levels)*5))
+    tmp_s = SimpleState(rand(get_actions(SimpleState()), 5), true, 0.0)
+    return (tmp_s, eval_simple_reward(tmp_s))
 end

@@ -12,13 +12,20 @@ mutable struct SimpleSearch <: MDP{SimpleState, Any}
     discount_factor::Float64 # disocunt factor
     cvars::Vector
     IS_weights::Vector
+    levels::Int
+end
+
+function eval_simple_reward(state::SimpleState) 
+    reward_mask = [((lvl>4) ? 1 : lvl/10) for lvl in state.levels]
+    
+    return sum(reward_mask)/(length(reward_mask))
 end
 
 function POMDPs.reward(mdp::SimpleSearch, state::SimpleState, action)
     if !state.done
         r = 0
     else
-        r = sum(state.levels)/(length(state.levels)*5)
+        r = eval_simple_reward(state)
         push!(mdp.cvars, r)
         push!(mdp.IS_weights, state.w)
         # r = sum(state.init_cond)
@@ -34,7 +41,7 @@ function POMDPs.gen(m::SimpleSearch, s::SimpleState, a, rng)
     # transition model
     if s.levels[1] === nothing
         sp = SimpleState([a], false, 0.0)
-    elseif length(s.levels) < 5
+    elseif length(s.levels) < m.levels - 1
         sp = SimpleState([s.levels..., a], false, 0.0)
     else
         sp = SimpleState(s.levels, true, a)
@@ -50,13 +57,16 @@ end
 
 POMDPs.discount(mdp::SimpleSearch) = mdp.discount_factor
 
+function get_actions(s::SimpleState)
+    return Distributions.Categorical(6)
+end
+
 function POMDPs.actions(mdp::SimpleSearch, s::SimpleState)
-    
-    return Distributions.Categorical(5)   # TODO: Replace with a better placeholder
+    return get_actions(s)
 end
 
 function POMDPs.action(policy::RandomPolicy, s::SimpleState)
-    return rand(Distributions.Categorical(5))
+    return rand(get_actions(s))
 end
 
 function rollout(mdp::SimpleSearch, s::SimpleState, w::Float64, d::Int64)
@@ -65,7 +75,7 @@ function rollout(mdp::SimpleSearch, s::SimpleState, w::Float64, d::Int64)
     else
         p_action = POMDPs.actions(mdp, s)
         a = rand(p_action)
-        if length(s.levels) >= 5
+        if length(s.levels) >= mdp.levels
             a = w
         end
         
