@@ -119,14 +119,14 @@ function POMDPModelTools.action_info(p::ISDPWPlanner, s; tree_in_info=false, w=0
         info[:exception] = ex
     end
 
-    return a, info
+    return a, w, info
 end
 
 
 """
 Return the reward for one iteration of MCTSDPW.
 """
-function simulate(dpw::ISDPWPlanner, snode::Int, w::Float64, d::Int)
+function simulate(dpw::ISDPWPlanner, snode::Int, w::Float64, d::Int; freeze_q=false)
     S = statetype(dpw.mdp)
     A = actiontype(dpw.mdp)
     sol = dpw.solver
@@ -187,7 +187,7 @@ function simulate(dpw::ISDPWPlanner, snode::Int, w::Float64, d::Int)
      # state progressive widening
     new_node = false
     if (dpw.solver.enable_state_pw && tree.n_a_children[sanode] <= sol.k_state*tree.n[sanode]^sol.alpha_state) || tree.n_a_children[sanode] == 0
-        sp, r = @gen(:sp, :r)(dpw.mdp, s, a, dpw.rng)
+        sp, r = @gen(:sp, :r)(dpw.mdp, s, [a, w], dpw.rng)
 
         if sol.check_repeat_state && haskey(tree.s_lookup, sp)
             spnode = tree.s_lookup[sp]

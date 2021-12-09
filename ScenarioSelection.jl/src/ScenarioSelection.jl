@@ -23,7 +23,7 @@ include("bayesnet.jl")
 export DecisionState, system, eval_AST, ScenarioSearch, rollout
 include("mdp.jl")
 
-export SimpleState, SimpleSearch, rollout, eval_simple_reward
+export SimpleState, SimpleSearch, rollout, eval_simple_reward, rand
 include("mdp_simple.jl")
 
 export random_baseline, simple_random_baseline

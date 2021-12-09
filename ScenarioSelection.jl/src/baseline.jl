@@ -6,7 +6,7 @@ function random_baseline(bn)
     # return (tmp_s, nothing)
 end
 
-function simple_random_baseline(levels)
-    tmp_s = SimpleState(rand(get_actions(SimpleState()), levels), true, 0.0)
+function simple_random_baseline(levels, n_actions)
+    tmp_s = SimpleState(rand(get_actions(SimpleState(); n_s=n_actions), levels), true, 0.0)
     return (tmp_s, eval_simple_reward(tmp_s))
 end
