@@ -210,6 +210,8 @@ class AdversarialCARLAEnv(gym.Env):
 
         settings = world.get_settings()
         settings.no_rendering_mode = no_rendering
+        world.apply_settings(settings)
+
 
         # Create ScenarioRunner object to handle the core route/scenario parsing
         self.scenario_runner = ASTScenarioRunner(args, remove_other_actors=True)
@@ -395,6 +397,7 @@ class AdversarialCARLAEnv(gym.Env):
             self._info['failed_scenario'] = self._failed_scenario
             self._info['distance'] = distance
             self._info['rate'] = rate
+            self._info['done'] = done
             # TODO: Include all necessary state information in `info` to pass to Julia (positions, velocities, etc)
             if agent is None:
                 self._info['ego_sensor_location'] = None
