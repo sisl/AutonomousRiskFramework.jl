@@ -11,19 +11,19 @@ pyimport("adv_carla")
 sensors = [
     Dict(
         "id" => "GPS",
-        "lat" => Dict("mean" => 0, "std" => 0.00001, "upper" => 0.00001, "lower" => -0.00001),
-        "lon" => Dict("mean" => 0, "std" => 0.00001, "upper" => 0.00001, "lower" => -0.00001),
+        "lat" => Dict("mean" => 0, "std" => 0.0000001, "upper" => 0.0000001, "lower" => -0.0000001),
+        "lon" => Dict("mean" => 0, "std" => 0.0000001, "upper" => 0.0000001, "lower" => -0.0000001),
         "alt" => Dict("mean" => 0, "std" => 0.00000001, "upper" => 0.0000001, "lower" => 0),
     ),
 ]
 seed = 1
-scenario_type = "Scenario4"
+scenario_type = "Scenario2"
 gym_args = (sensors=sensors, seed=seed, scenario_type=scenario_type, no_rendering=false)
 mdp = GymPOMDP(Symbol("adv-carla"); gym_args...)
 
 
-function sac_solver()
-    global mdp, sensors
+function sac_solver(mdp)
+    global sensors
 
     S = state_space(mdp)
     amin = [Float32(sensors[1][k]["lower"]) for k in ["lat", "lon", "alt"]]
@@ -43,12 +43,12 @@ function sac_solver()
 
     off_policy = (S=S,
                   ΔN=50,
-                  N=10, # NOTE: was 30_000 (then 100)
+                  N=2, # NOTE: was 30_000 (then 100)
                   buffer_size=Int(5e5),
                   buffer_init=1000,
                   c_opt=(batch_size=100, optimizer=ADAM(1e-3)),
                   a_opt=(batch_size=100, optimizer=ADAM(1e-3)),
-                  π_explore=FirstExplorePolicy(100, rand_policy, GaussianNoiseExplorationPolicy(0.5f0, a_min=amin, a_max=amax))) # NOTE: was 1000
+                  π_explore=FirstExplorePolicy(5, rand_policy, GaussianNoiseExplorationPolicy(0.0000001f0, a_min=amin, a_max=amax))) # NOTE: was 1000
     return SAC(; π=ActorCritic(SAC_A(), DoubleNetwork(QSA(), QSA())), off_policy...)
 end
 
@@ -76,7 +76,7 @@ function collect_and_train_gda(mdp)
     # 1. run AST with data collection ON (records distance and rate at terminal state)
     @info "Running AST to collect dataset..."
     mdp_info = InfoCollector(mdp, extract_info)
-    @time π_train = solve(sac_solver(), mdp_info)
+    @time π_train = solve(sac_solver(mdp_info), mdp_info)
 
     # 2. compile data set of ([d,r], y)
     dataset = mdp_info.dataset
@@ -100,19 +100,22 @@ function collect_and_train_gda(mdp)
     # 5 (external). re-run solver using reward augmented MDP
     @info "Re-running AST with reward augmentation..."
     mdp_aug = RewardMod(mdp, reward_mod)
-    @time π_aug = solve(sac_solver(), mdp_aug)
+    @time π_aug = solve(sac_solver(mdp_aug), mdp_aug)
 
-    return π_aug
+    return π_aug, dataset
 end
 
 
-function run(mdp, π)
+function run(mdp, π, show_render=false)
     s = rand(initialstate(mdp))
     total_reward = 0
     while !isterminal(mdp, s)
         a = action(π, Vector(s))
         s, o, r = gen(mdp, s, a)
         total_reward += r
+        show_render && render(mdp.pomdp.env)
     end
     return total_reward
 end
+
+# policy, dataset = collect_and_train_gda(mdp)
