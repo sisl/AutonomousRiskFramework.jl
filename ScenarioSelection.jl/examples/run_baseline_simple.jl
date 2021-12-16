@@ -4,7 +4,7 @@ using FileIO
 using Random
 using ProgressMeter
 
-N = 100_000
+N = 10
 levels = 5
 n_actions = 10
 

@@ -4,7 +4,7 @@ using Random
 using ProgressMeter
 using MCTS
 
-N = 10_000
+N = 10
 levels = 5
 n_actions = 10
 c = 0.5
