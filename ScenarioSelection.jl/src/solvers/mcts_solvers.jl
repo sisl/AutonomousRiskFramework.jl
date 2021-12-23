@@ -11,7 +11,8 @@ function mcts_dpw(mdp; N=10, c=1.0)
 end
 
 function mcts_isdpw(mdp; N=10, c=1.0)
-    solver = ISDPWSolver(;   estimate_value=rollout, # required.
+    solver = ISDPWSolver(;  depth=100, 
+                            estimate_value=rollout, # required.
                             exploration_constant=c,
                             n_iterations=N,
                             enable_state_pw=false, # required.

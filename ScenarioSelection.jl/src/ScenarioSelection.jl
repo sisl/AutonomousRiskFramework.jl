@@ -16,6 +16,7 @@ using RiskSimulator
 using Distributions
 using ProgressMeter
 using StatsBase
+using TreeImportanceSampling
 
 export scenario_types, get_actions, create_bayesnet
 include("bayesnet.jl")
@@ -23,7 +24,7 @@ include("bayesnet.jl")
 export DecisionState, system, eval_AST, ScenarioSearch, rollout
 include("mdp.jl")
 
-export SimpleState, SimpleSearch, rollout
+export SimpleState, SimpleSearch, rollout, eval_simple_reward, rand
 include("mdp_simple.jl")
 
 export random_baseline, simple_random_baseline
@@ -31,11 +32,5 @@ include("baseline.jl")
 
 export mcts_dpw, mcts_isdpw
 include(joinpath("solvers", "mcts_solvers.jl"))
-
-export ISDPWSolver, ISDPWPlanner
-include(joinpath("solvers", "tree_sampling_types.jl"))
-
-export solve, softmax
-include(joinpath("solvers", "tree_sampling.jl"))
 
 end # module

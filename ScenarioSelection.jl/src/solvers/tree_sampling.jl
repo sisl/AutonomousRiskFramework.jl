@@ -33,8 +33,16 @@ function select_action(nodes, values; c=5.0)
     prob = softmax(c*values)
     sanode_idx = sample(1:length(nodes), Weights(prob))
     sanode = nodes[sanode_idx]
-    w = log(1/length(nodes)) - log(prob[sanode_idx])
-    return sanode, w
+    q_logprob = log(prob[sanode_idx])
+    return sanode, q_logprob
+end
+
+"""
+Calculate IS weights
+"""
+function compute_IS_weight(q_logprob, a, distribution)
+    w = logpdf(distribution, a) - q_logprob
+    return w
 end
 
 """
@@ -102,22 +110,23 @@ function POMDPModelTools.action_info(p::ISDPWPlanner, s; tree_in_info=false, w=0
         for child in tree.children[snode]
             push!(all_Q, tree.q[child])
         end
-        sanode, w_node = select_action(tree.children[snode], all_Q)
-        w = w + w_node
+        sanode, q_logprob = select_action(tree.children[snode], all_Q)
         a = tree.a_labels[sanode] # choose action randomly based on approximate value
+        w_node = compute_IS_weight(q_logprob, a, actions(p.mdp, s))
+        w = w + w_node
     catch ex
         a = convert(actiontype(p.mdp), default_action(p.solver.default_action, p.mdp, s, ex))
         info[:exception] = ex
     end
 
-    return a, info
+    return a, w, info
 end
 
 
 """
 Return the reward for one iteration of MCTSDPW.
 """
-function simulate(dpw::ISDPWPlanner, snode::Int, w::Float64, d::Int)
+function simulate(dpw::ISDPWPlanner, snode::Int, w::Float64, d::Int; freeze_q=false)
     S = statetype(dpw.mdp)
     A = actiontype(dpw.mdp)
     sol = dpw.solver
@@ -170,14 +179,15 @@ function simulate(dpw::ISDPWPlanner, snode::Int, w::Float64, d::Int)
         push!(all_UCB, UCB)
     end
     # @info "Softmax weights" softmax(all_UCB)
-    sanode, w_node = select_action(tree.children[snode], all_UCB)
-    w = w + w_node
+    sanode, q_logprob = select_action(tree.children[snode], all_UCB)
     a = tree.a_labels[sanode] # choose action randomly based on approximate value
+    w_node = compute_IS_weight(q_logprob, a, actions(dpw.mdp, s))
+    w = w + w_node
     
      # state progressive widening
     new_node = false
     if (dpw.solver.enable_state_pw && tree.n_a_children[sanode] <= sol.k_state*tree.n[sanode]^sol.alpha_state) || tree.n_a_children[sanode] == 0
-        sp, r = @gen(:sp, :r)(dpw.mdp, s, a, dpw.rng)
+        sp, r = @gen(:sp, :r)(dpw.mdp, s, [a, w], dpw.rng)
 
         if sol.check_repeat_state && haskey(tree.s_lookup, sp)
             spnode = tree.s_lookup[sp]
