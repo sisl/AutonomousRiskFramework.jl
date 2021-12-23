@@ -41,7 +41,11 @@ end
 Calculate IS weights
 """
 function compute_IS_weight(q_logprob, a, distribution)
-    w = logpdf(distribution, a) - q_logprob
+    if distribution === nothing
+        w = -q_logprob
+    else
+        w = logpdf(distribution, a) - q_logprob
+    end
     return w
 end
 
@@ -55,7 +59,7 @@ MCTS.estimate_value(f::Function, mdp::Union{POMDP,MDP}, state, w::Float64, depth
 """
 Construct an ISDPW tree and choose the best action. Also output some information.
 """
-function POMDPModelTools.action_info(p::ISDPWPlanner, s; tree_in_info=false, w=0.0)
+function POMDPModelTools.action_info(p::ISDPWPlanner, s; tree_in_info=false, w=0.0, use_prior=true)
     local a::actiontype(p.mdp)
     info = Dict{Symbol, Any}()
     try
@@ -91,7 +95,7 @@ function POMDPModelTools.action_info(p::ISDPWPlanner, s; tree_in_info=false, w=0
         start_us = MCTS.CPUtime_us()
         for i = 1:p.solver.n_iterations
             nquery += 1
-            simulate(p, snode, w, p.solver.depth) # (not 100% sure we need to make a copy of the state here)
+            simulate(p, snode, w, p.solver.depth; use_prior=use_prior) # (not 100% sure we need to make a copy of the state here)
             p.solver.show_progress ? next!(progress) : nothing
             if MCTS.CPUtime_us() - start_us >= p.solver.max_time * 1e6
                 p.solver.show_progress ? finish!(progress) : nothing
@@ -112,7 +116,11 @@ function POMDPModelTools.action_info(p::ISDPWPlanner, s; tree_in_info=false, w=0
         end
         sanode, q_logprob = select_action(tree.children[snode], all_Q)
         a = tree.a_labels[sanode] # choose action randomly based on approximate value
-        w_node = compute_IS_weight(q_logprob, a, actions(p.mdp, s))
+        if use_prior
+            w_node = compute_IS_weight(q_logprob, a, actions(p.mdp, s))
+        else
+            w_node = compute_IS_weight(q_logprob, a, nothing)
+        end
         w = w + w_node
     catch ex
         a = convert(actiontype(p.mdp), default_action(p.solver.default_action, p.mdp, s, ex))
@@ -126,7 +134,7 @@ end
 """
 Return the reward for one iteration of MCTSDPW.
 """
-function simulate(dpw::ISDPWPlanner, snode::Int, w::Float64, d::Int; freeze_q=false)
+function simulate(dpw::ISDPWPlanner, snode::Int, w::Float64, d::Int; use_prior=true)
     S = statetype(dpw.mdp)
     A = actiontype(dpw.mdp)
     sol = dpw.solver
@@ -181,7 +189,11 @@ function simulate(dpw::ISDPWPlanner, snode::Int, w::Float64, d::Int; freeze_q=fa
     # @info "Softmax weights" softmax(all_UCB)
     sanode, q_logprob = select_action(tree.children[snode], all_UCB)
     a = tree.a_labels[sanode] # choose action randomly based on approximate value
-    w_node = compute_IS_weight(q_logprob, a, actions(dpw.mdp, s))
+    if use_prior
+        w_node = compute_IS_weight(q_logprob, a, actions(dpw.mdp, s))
+    else
+        w_node = compute_IS_weight(q_logprob, a, nothing)
+    end
     w = w + w_node
     
      # state progressive widening

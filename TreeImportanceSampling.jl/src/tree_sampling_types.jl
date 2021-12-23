@@ -103,6 +103,15 @@ mutable struct ISDPWSolver <: AbstractMCTSSolver
     show_progress::Bool
 end
 
+mutable struct UniformActionGenerator{RNG<:AbstractRNG}
+    rng::RNG
+end
+UniformActionGenerator() = UniformActionGenerator(Random.GLOBAL_RNG)
+
+function MCTS.next_action(gen::UniformActionGenerator, mdp::Union{POMDP,MDP}, s, snode::AbstractStateNode)
+    rand(gen.rng, support(actions(mdp, s)))
+end
+
 """
 TreeSamplingDPWSolver()
 Use keyword arguments to specify values for the fields
@@ -125,13 +134,14 @@ function ISDPWSolver(;depth::Int=10,
                     estimate_value::Any = RolloutEstimator(RandomSolver(rng)),
                     init_Q::Any = 0.0,
                     init_N::Any = 1,
-                    next_action::Any = RandomActionGenerator(rng),
+                    next_action::Any = UniformActionGenerator(rng),
                     default_action::Any = ExceptionRethrow(),
                     reset_callback::Function = (mdp, s)->false,
                     show_progress::Bool = false,
                    )
         ISDPWSolver(depth, exploration_constant, n_iterations, max_time, k_action, alpha_action, k_state, alpha_state, keep_tree, enable_action_pw, enable_state_pw, check_repeat_state, check_repeat_action, tree_in_info, rng, estimate_value, init_Q, init_N, next_action, default_action, reset_callback, show_progress)
 end
+
 
 mutable struct ISDPWPlanner{P<:Union{MDP,POMDP}, S, A, SE, NA, RCB, RNG} <: AbstractMCTSPlanner{P}
     solver::ISDPWSolver

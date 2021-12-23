@@ -8,6 +8,10 @@ using POMDPModelTools
 using POMDPPolicies
 using POMDPSimulators
 
+using POMDPGym
+using Crux
+using Flux
+
 using CrossEntropyMethod
 using Distributions
 using Parameters
@@ -26,6 +30,9 @@ include("mdp.jl")
 
 export SimpleState, SimpleSearch, rollout, eval_simple_reward, rand
 include("mdp_simple.jl")
+
+export TreeState, construct_tree_rmdp, reward, rollout, TreeMDP
+include("rmdp_tree_mdp.jl")
 
 export random_baseline, simple_random_baseline
 include("baseline.jl")
