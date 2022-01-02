@@ -88,7 +88,7 @@ function POMDPModelTools.action_info(p::ISDPWPlanner, s; tree_in_info=false, w=0
         start_us = CPUtime_us()
         for i = 1:p.solver.n_iterations
             nquery += 1
-            simulate(p, snode, w, p.solver.depth; use_prior) # (not 100% sure we need to make a copy of the state here)
+            simulate(p, snode, w, p.solver.depth; use_prior=use_prior) # (not 100% sure we need to make a copy of the state here)
             p.solver.show_progress ? next!(progress) : nothing
             if CPUtime_us() - start_us >= p.solver.max_time * 1e6
                 p.solver.show_progress ? finish!(progress) : nothing
@@ -104,7 +104,7 @@ function POMDPModelTools.action_info(p::ISDPWPlanner, s; tree_in_info=false, w=0
 
         sanode, q_logprob = sample_sanode(tree, snode)
         a = tree.a_labels[sanode] # choose action randomly based on approximate value
-        w_node = compute_IS_weight(q_logprob, a, use_prior ? actions(dpw.mdp, s) : nothing)
+        w_node = compute_IS_weight(q_logprob, a, (use_prior ? actions(dpw.mdp, s) : nothing))
         w = w + w_node
     catch ex
         a = convert(actiontype(p.mdp), default_action(p.solver.default_action, p.mdp, s, ex))

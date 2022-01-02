@@ -5,6 +5,8 @@ using POMDPs
 using Random
 using POMDPModelTools
 using ProgressMeter
+using StatsBase
+using Distributions
 
 export ISDPWSolver, ISDPWPlanner
 include("tree_sampling_types.jl")

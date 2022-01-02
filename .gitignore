@@ -1,4 +1,5 @@
 sherlock_scripts/
+external/
 .vscode/
 .ipynb_checkpoints/
 *.zip
@@ -11,5 +12,3 @@ scenario_runner/
 *.egg-info/
 Manifest.toml
 log/
-test.json
-test.xml
