@@ -41,7 +41,11 @@ end
 Calculate IS weights
 """
 function compute_IS_weight(q_logprob, a, distribution)
-    w = logpdf(distribution, a) - q_logprob
+    if distribution == nothing
+        w = -q_logprob
+    else
+        w = logpdf(distribution, a) - q_logprob
+    end
     return w
 end
 
@@ -50,12 +54,12 @@ Construct an ISDPW tree and choose an action.
 """
 POMDPs.action(p::ISDPWPlanner, s) = first(action_info(p, s))
 
-MCTS.estimate_value(f::Function, mdp::Union{POMDP,MDP}, state, w::Float64, depth::Int) = f(mdp, state, w, depth)
+estimate_value(f::Function, mdp::Union{POMDP,MDP}, state, w::Float64, depth::Int) = f(mdp, state, w, depth)
 
 """
 Construct an ISDPW tree and choose the best action. Also output some information.
 """
-function POMDPModelTools.action_info(p::ISDPWPlanner, s; tree_in_info=false, w=0.0)
+function POMDPModelTools.action_info(p::ISDPWPlanner, s; tree_in_info=false, w=0.0, use_prior=true)
     local a::actiontype(p.mdp)
     info = Dict{Symbol, Any}()
     try
@@ -66,53 +70,41 @@ function POMDPModelTools.action_info(p::ISDPWPlanner, s; tree_in_info=false, w=0
                   """)
         end
 
-        S = statetype(p.mdp)
-        A = actiontype(p.mdp)
-        if p.solver.keep_tree
-            if p.tree === nothing
-                tree = MCTS.DPWTree{S,A}(p.solver.n_iterations)
-                p.tree = tree
-            else
-                tree = p.tree
-            end
+        if p.solver.keep_tree && p.tree != nothing
+            tree = p.tree
             if haskey(tree.s_lookup, s)
                 snode = tree.s_lookup[s]
             else
-                snode = MCTS.insert_state_node!(tree, s, true)
+                snode = insert_state_node!(tree, s, true)
             end
         else
-            tree = MCTS.DPWTree{S,A}(p.solver.n_iterations)
+            tree = DPWTree{statetype(p.mdp),actiontype(p.mdp)}(p.solver.n_iterations)
             p.tree = tree
-            snode = MCTS.insert_state_node!(tree, s, p.solver.check_repeat_state)
+            snode = insert_state_node!(tree, s, p.solver.check_repeat_state)
         end
 
         p.solver.show_progress ? progress = Progress(p.solver.n_iterations) : nothing
         nquery = 0
-        start_us = MCTS.CPUtime_us()
+        start_us = CPUtime_us()
         for i = 1:p.solver.n_iterations
             nquery += 1
-            simulate(p, snode, w, p.solver.depth) # (not 100% sure we need to make a copy of the state here)
+            simulate(p, snode, w, p.solver.depth; use_prior) # (not 100% sure we need to make a copy of the state here)
             p.solver.show_progress ? next!(progress) : nothing
-            if MCTS.CPUtime_us() - start_us >= p.solver.max_time * 1e6
+            if CPUtime_us() - start_us >= p.solver.max_time * 1e6
                 p.solver.show_progress ? finish!(progress) : nothing
                 break
             end
         end
         p.reset_callback(p.mdp, s) # Optional: leave the MDP in the current state.
-        info[:search_time_us] = MCTS.CPUtime_us() - start_us
+        info[:search_time_us] = CPUtime_us() - start_us
         info[:tree_queries] = nquery
         if p.solver.tree_in_info || tree_in_info
             info[:tree] = tree
         end
 
-        all_Q = []
-        sanode = 0
-        for child in tree.children[snode]
-            push!(all_Q, tree.q[child])
-        end
-        sanode, q_logprob = select_action(tree.children[snode], all_Q)
+        sanode, q_logprob = sample_sanode(tree, snode)
         a = tree.a_labels[sanode] # choose action randomly based on approximate value
-        w_node = compute_IS_weight(q_logprob, a, actions(p.mdp, s))
+        w_node = compute_IS_weight(q_logprob, a, use_prior ? actions(dpw.mdp, s) : nothing)
         w = w + w_node
     catch ex
         a = convert(actiontype(p.mdp), default_action(p.solver.default_action, p.mdp, s, ex))
@@ -126,9 +118,7 @@ end
 """
 Return the reward for one iteration of MCTSDPW.
 """
-function simulate(dpw::ISDPWPlanner, snode::Int, w::Float64, d::Int; freeze_q=false)
-    S = statetype(dpw.mdp)
-    A = actiontype(dpw.mdp)
+function simulate(dpw::ISDPWPlanner, snode::Int, w::Float64, d::Int; use_prior=true)
     sol = dpw.solver
     tree = dpw.tree
     s = tree.s_labels[snode]
@@ -142,10 +132,10 @@ function simulate(dpw::ISDPWPlanner, snode::Int, w::Float64, d::Int; freeze_q=fa
     # action progressive widening
     if dpw.solver.enable_action_pw
         if length(tree.children[snode]) <= sol.k_action*tree.total_n[snode]^sol.alpha_action # criterion for new action generation
-            a = next_action(dpw.next_action, dpw.mdp, s, MCTS.DPWStateNode(tree, snode)) # action generation step
+            a = next_action(dpw.next_action, dpw.mdp, s, DPWStateNode(tree, snode)) # action generation step
             if !sol.check_repeat_action || !haskey(tree.a_lookup, (snode, a))
                 n0 = init_N(sol.init_N, dpw.mdp, s, a)
-                MCTS.insert_action_node!(tree, snode, a, n0,
+                insert_action_node!(tree, snode, a, n0,
                                     init_Q(sol.init_Q, dpw.mdp, s, a),
                                     sol.check_repeat_action
                                    )
@@ -155,33 +145,16 @@ function simulate(dpw::ISDPWPlanner, snode::Int, w::Float64, d::Int; freeze_q=fa
     elseif isempty(tree.children[snode])
         for a in actions(dpw.mdp, s)
             n0 = init_N(sol.init_N, dpw.mdp, s, a)
-            MCTS.insert_action_node!(tree, snode, a, n0,
+            insert_action_node!(tree, snode, a, n0,
                                 init_Q(sol.init_Q, dpw.mdp, s, a),
                                 false)
             tree.total_n[snode] += n0
         end
     end
 
-    all_UCB = []
-    ltn = log(tree.total_n[snode])
-    for child in tree.children[snode]
-        n = tree.n[child]
-        q = tree.q[child]
-        c = sol.exploration_constant # for clarity
-        if (ltn <= 0 && n == 0) || c == 0.0
-            UCB = q
-        else
-            UCB = q + c*sqrt(ltn/n)
-        end
-        @assert !isnan(UCB) "UCB was NaN (q=$q, c=$c, ltn=$ltn, n=$n)"
-        @assert !isequal(UCB, -Inf)
-        
-        push!(all_UCB, UCB)
-    end
-    # @info "Softmax weights" softmax(all_UCB)
-    sanode, q_logprob = select_action(tree.children[snode], all_UCB)
+    sanode, q_logprob = sample_sanode_UCB(tree, snode)
     a = tree.a_labels[sanode] # choose action randomly based on approximate value
-    w_node = compute_IS_weight(q_logprob, a, actions(dpw.mdp, s))
+    w_node = compute_IS_weight(q_logprob, a, use_prior ? actions(dpw.mdp, s) : nothing)
     w = w + w_node
     
      # state progressive widening
@@ -192,7 +165,7 @@ function simulate(dpw::ISDPWPlanner, snode::Int, w::Float64, d::Int; freeze_q=fa
         if sol.check_repeat_state && haskey(tree.s_lookup, sp)
             spnode = tree.s_lookup[sp]
         else
-            spnode = MCTS.insert_state_node!(tree, sp, sol.keep_tree || sol.check_repeat_state)
+            spnode = insert_state_node!(tree, sp, sol.keep_tree || sol.check_repeat_state)
             new_node = true
         end
 
@@ -214,10 +187,38 @@ function simulate(dpw::ISDPWPlanner, snode::Int, w::Float64, d::Int; freeze_q=fa
         q = r + discount(dpw.mdp)*simulate(dpw, spnode, w, d-1)
     end
 
-    tree.n[sanode] += 1
     tree.total_n[snode] += 1
-
+    tree.n[sanode] += 1
     tree.q[sanode] += (q - tree.q[sanode])/tree.n[sanode]
 
     return q
+end
+
+
+function sample_sanode(tree, snode)
+    all_Q = [tree.q[child] for child in tree.children[snode]]
+    sanode, q_logprob = select_action(tree.children[snode], all_Q)
+    return sanode, q_logprob
+end
+
+
+function sample_sanode_UCB(tree, snode)
+    all_UCB = []
+    ltn = log(tree.total_n[snode])
+    for child in tree.children[snode]
+        n = tree.n[child]
+        q = tree.q[child]
+        c = sol.exploration_constant # for clarity
+        if (ltn <= 0 && n == 0) || c == 0.0
+            UCB = q
+        else
+            UCB = q + c*sqrt(ltn/n)
+        end
+        @assert !isnan(UCB) "UCB was NaN (q=$q, c=$c, ltn=$ltn, n=$n)"
+        @assert !isequal(UCB, -Inf)
+        
+        push!(all_UCB, UCB)
+    end
+    sanode, q_logprob = select_action(tree.children[snode], all_UCB)
+    return sanode, q_logprob
 end

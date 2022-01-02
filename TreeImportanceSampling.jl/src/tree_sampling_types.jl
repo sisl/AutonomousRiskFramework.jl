@@ -103,6 +103,15 @@ mutable struct ISDPWSolver <: AbstractMCTSSolver
     show_progress::Bool
 end
 
+mutable struct UniformActionGenerator{RNG<:AbstractRNG}
+    rng::RNG
+end
+UniformActionGenerator() = UniformActionGenerator(Random.GLOBAL_RNG)
+
+function MCTS.next_action(gen::UniformActionGenerator, mdp::Union{POMDP,MDP}, s, snode::AbstractStateNode)
+    rand(gen.rng, support(actions(mdp, s)))
+end
+
 """
 TreeSamplingDPWSolver()
 Use keyword arguments to specify values for the fields
@@ -123,20 +132,98 @@ function ISDPWSolver(;depth::Int=10,
                     tree_in_info::Bool=false,
                     rng::AbstractRNG=Random.GLOBAL_RNG,
                     estimate_value::Any = RolloutEstimator(RandomSolver(rng)),
-                    init_Q::Any = 0.0,
-                    init_N::Any = 1,
-                    next_action::Any = RandomActionGenerator(rng),
-                    default_action::Any = ExceptionRethrow(),
+                    init_Q::Any=0.0,
+                    init_N::Any=1,
+                    next_action::Any=UniformActionGenerator(rng),
+                    default_action::Any=ExceptionRethrow(),
                     reset_callback::Function = (mdp, s)->false,
                     show_progress::Bool = false,
                    )
         ISDPWSolver(depth, exploration_constant, n_iterations, max_time, k_action, alpha_action, k_state, alpha_state, keep_tree, enable_action_pw, enable_state_pw, check_repeat_state, check_repeat_action, tree_in_info, rng, estimate_value, init_Q, init_N, next_action, default_action, reset_callback, show_progress)
 end
 
+
+mutable struct DPWTree{S,A}
+    # for each state node
+    total_n::Vector{Int}
+    children::Vector{Vector{Int}}
+    s_labels::Vector{S}
+    s_lookup::Dict{S, Int}
+
+    # for each state-action node
+    n::Vector{Int}
+    q::Vector{Float64}
+    transitions::Vector{Vector{Tuple{Int,Float64}}}
+    a_labels::Vector{A}
+    a_lookup::Dict{Tuple{Int,A}, Int}
+
+    # for tracking transitions
+    n_a_children::Vector{Int}
+    unique_transitions::Set{Tuple{Int,Int}}
+
+
+    function DPWTree{S,A}(sz::Int=1000) where {S,A} 
+        sz = min(sz, 100_000)
+        return new(sizehint!(Int[], sz),
+                   sizehint!(Vector{Int}[], sz),
+                   sizehint!(S[], sz),
+                   Dict{S, Int}(),
+                   
+                   sizehint!(Int[], sz),
+                   sizehint!(Float64[], sz),
+                   sizehint!(Vector{Tuple{Int,Float64}}[], sz),
+                   sizehint!(A[], sz),
+                   Dict{Tuple{Int,A}, Int}(),
+
+                   sizehint!(Int[], sz),
+                   Set{Tuple{Int,Int}}()
+                  )
+    end
+end
+
+
+function insert_state_node!(tree::DPWTree{S,A}, s::S, maintain_s_lookup=true) where {S,A}
+    push!(tree.total_n, 0)
+    push!(tree.children, Int[])
+    push!(tree.s_labels, s)
+    snode = length(tree.total_n)
+    if maintain_s_lookup
+        tree.s_lookup[s] = snode
+    end
+    return snode
+end
+
+
+function insert_action_node!(tree::DPWTree{S,A}, snode::Int, a::A, n0::Int, q0::Float64, maintain_a_lookup=true) where {S,A}
+    push!(tree.n, n0)
+    push!(tree.q, q0)
+    push!(tree.a_labels, a)
+    push!(tree.transitions, Vector{Tuple{Int,Float64}}[])
+    sanode = length(tree.n)
+    push!(tree.children[snode], sanode)
+    push!(tree.n_a_children, 0)
+    if maintain_a_lookup
+        tree.a_lookup[(snode, a)] = sanode
+    end
+    return sanode
+end
+
+Base.isempty(tree::DPWTree) = isempty(tree.n) && isempty(tree.q)
+
+struct DPWStateNode{S,A} <: AbstractStateNode
+    tree::DPWTree{S,A}
+    index::Int
+end
+
+children(n::DPWStateNode) = n.tree.children[n.index]
+n_children(n::DPWStateNode) = length(children(n))
+isroot(n::DPWStateNode) = n.index == 1
+
+
 mutable struct ISDPWPlanner{P<:Union{MDP,POMDP}, S, A, SE, NA, RCB, RNG} <: AbstractMCTSPlanner{P}
     solver::ISDPWSolver
     mdp::P
-    tree::Union{Nothing, MCTS.DPWTree{S,A}}
+    tree::Union{Nothing, DPWTree{S,A}}
     solved_estimate::SE
     next_action::NA
     reset_callback::RCB
