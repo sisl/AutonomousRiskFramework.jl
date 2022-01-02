@@ -36,7 +36,9 @@ version = "0.1.1"
 
 [[AdversarialDriving]]
 deps = ["AutomotiveSimulator", "AutomotiveVisualization", "Cairo", "Distributions", "LinearAlgebra", "POMDPModelTools", "POMDPPolicies", "POMDPSimulators", "POMDPs", "Parameters", "Random", "Reel", "Test"]
-path = "/home/groups/gracegao/.julia/dev/AdversarialDriving"
+git-tree-sha1 = "e68a12e0987015b26e4aa7fc311fb1c65078c367"
+repo-rev = "master"
+repo-url = "https://github.com/sisl/AdversarialDriving.jl"
 uuid = "0f7eb3e9-d51f-47f4-b915-6157e1c8ce29"
 version = "0.1.0"
 
@@ -854,7 +856,7 @@ version = "2018.0.3+2"
 
 [[IntelligentDriving]]
 deps = ["AdversarialDriving", "AutomotiveSimulator", "BenchmarkTools", "Debugger", "Documenter", "LinearAlgebra", "Optim", "Printf", "PyCall", "PyPlot", "Random", "STLCG", "SpAutoDiff", "SparseArrays", "Statistics", "Zygote"]
-path = "/home/users/shubhgup/Codes/AutonomousRiskFramework.jl/IntelligentDriving.jl"
+path = "IntelligentDriving.jl"
 uuid = "7d69903b-b3bd-4fe8-821b-47e97f7f1652"
 version = "0.1.0"
 
@@ -1248,7 +1250,7 @@ version = "0.4.0"
 
 [[ObservationModels]]
 deps = ["AdversarialDriving", "AutomotiveSimulator", "AutomotiveVisualization", "Blink", "CUDA", "Cairo", "CrossEntropyMethod", "Distances", "Distributed", "Distributions", "Documenter", "Flux", "LinearAlgebra", "Parameters", "Plots", "Printf", "Random", "Statistics", "Test", "Vec", "Zygote"]
-path = "/home/users/shubhgup/Codes/AutonomousRiskFramework.jl/ObservationModels.jl"
+path = "ObservationModels.jl"
 uuid = "36e58220-4bbe-4dfe-b3a4-5a64030e6065"
 version = "0.1.0"
 
@@ -1577,7 +1579,7 @@ version = "3.2.1"
 
 [[RiskSimulator]]
 deps = ["AdversarialDriving", "AutomotiveSimulator", "AutomotiveVisualization", "Blink", "ColorSchemes", "Convex", "Distributions", "IntelligentDriving", "Interact", "InteractiveUtils", "LaTeXStrings", "LinearAlgebra", "Markdown", "ObservationModels", "PGFPlotsX", "POMDPModelTools", "POMDPPolicies", "POMDPSimulators", "POMDPStressTesting", "POMDPs", "Parameters", "Plots", "Random", "SCS", "SpAutoDiff", "Statistics", "StatsBase", "Vec", "WebIO"]
-path = "/home/users/shubhgup/Codes/AutonomousRiskFramework.jl/RiskSimulator.jl"
+path = "RiskSimulator.jl"
 uuid = "d80ce8e1-c758-40bc-a0e7-b6008fb95ad7"
 version = "0.1.0"
 
@@ -1628,7 +1630,7 @@ uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
 
 [[STLCG]]
 deps = ["AddPackage", "EllipsisNotation", "IJulia", "LinearAlgebra", "Parameters", "Plots", "Pluto", "Revise", "StatsFuns", "Zygote"]
-path = "/home/users/shubhgup/Codes/AutonomousRiskFramework.jl/STLCG.jl"
+path = "STLCG.jl"
 uuid = "6ababdf7-4701-4f28-b3b2-5630f64e3c98"
 version = "0.1.0"
 
@@ -1680,7 +1682,9 @@ version = "0.3.1"
 
 [[SpAutoDiff]]
 deps = ["BenchmarkTools", "Debugger", "FiniteDiff", "LinearAlgebra", "Printf", "ReverseDiff", "SparseArrays", "Statistics", "Zygote"]
-path = "/home/groups/gracegao/.julia/dev/SpAutoDiff"
+git-tree-sha1 = "04c35fb79c56aa92e5ec32a2a1ea50b6c4b11cea"
+repo-rev = "main"
+repo-url = "https://github.com/rdyro/SpAutoDiff.jl.git"
 uuid = "2746dd70-a8ae-4e63-b982-e2745bcfee82"
 version = "0.1.0"
 
@@ -1867,7 +1871,9 @@ version = "0.5.4"
 
 [[Vec]]
 deps = ["LinearAlgebra", "Printf", "Random", "StaticArrays"]
-path = "/home/groups/gracegao/.julia/dev/Vec"
+git-tree-sha1 = "6277414ebe60873b872929eeda97aa4be710ea0e"
+repo-rev = "master"
+repo-url = "https://github.com/sisl/Vec.jl.git"
 uuid = "44eeaf0b-fee4-471f-9310-ed6585cb3142"
 version = "2.0.2"
 
