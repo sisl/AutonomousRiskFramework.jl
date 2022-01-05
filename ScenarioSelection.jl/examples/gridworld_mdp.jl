@@ -24,6 +24,7 @@ for (k,v) in mdp.g.rewards
     if v < 0
         adv_rewards[k] += -10*v
     end
+    adv_rewards[k] /= 100
 end
 
 amdp = GridWorldMDP(rewards=adv_rewards, tprob=1., discount=1., terminate_from=mdp.g.terminate_from)
@@ -32,7 +33,7 @@ amdp = GridWorldMDP(rewards=adv_rewards, tprob=1., discount=1., terminate_from=m
 action_probability(mdp, s, a) = (a == atable[s]) ? tprob : ((1. - tprob) / (length(actions(mdp)) - 1.))
 
 
-# Generic Discrete NonParametric with symbol support 
+# Generic Discrete NonParametric with symbol support
 struct GenericDiscreteNonParametric
     g_support::Any
     pm::DiscreteNonParametric
@@ -70,7 +71,7 @@ function Distributions.pdf(d::GenericDiscreteNonParametric, x::Any)
 end
 Distributions.logpdf(d::GenericDiscreteNonParametric, x::Any) = log(pdf(d, x))
 
-function disturbance(m::typeof(amdp), s) 
+function disturbance(m::typeof(amdp), s)
     xs = POMDPs.actions(m, s)
     ps = [action_probability(m, s, x) for x in xs]
     ps ./= sum(ps)
@@ -100,6 +101,3 @@ planner = mcts_isdpw(tree_mdp; N, c)
 a, w, info = action_info(planner, TreeState(rand(initialstate(amdp))), tree_in_info=true)
 
 save("/home/users/shubhgup/Codes/AutonomousRiskFramework.jl/data/gridworld_mcts_IS_$(N).jld2", Dict("risks:" => planner.mdp.costs, "states:" => [], "IS_weights:" => planner.mdp.IS_weights, "tree:" => info[:tree]))
-
-
-

@@ -8,7 +8,7 @@ function clear_tree!(p::ISDPWPlanner)
 end
 
 """
-Utility function for numerically stable softmax 
+Utility function for numerically stable softmax
 Adapted from: https://nextjournal.com/jbowles/the-mathematical-ideal-and-softmax-in-julia
 """
 _exp(x) = exp.(x .- maximum(x))
@@ -46,6 +46,7 @@ function compute_IS_weight(q_logprob, a, distribution)
     else
         w = logpdf(distribution, a) - q_logprob
     end
+    # @show a, q_logprob, w
     return w
 end
 
@@ -183,10 +184,10 @@ function simulate(dpw::ISDPWPlanner, snode::Int, w::Float64, d::Int; use_prior=t
         end
         @assert !isnan(UCB) "UCB was NaN (q=$q, c=$c, ltn=$ltn, n=$n)"
         @assert !isequal(UCB, -Inf)
-        
+
         push!(all_UCB, UCB)
     end
-    # @info "Softmax weights" softmax(all_UCB)
+    # print("Softmax weights: ", softmax(all_UCB))
     sanode, q_logprob = select_action(tree.children[snode], all_UCB)
     a = tree.a_labels[sanode] # choose action randomly based on approximate value
     if use_prior
@@ -195,7 +196,7 @@ function simulate(dpw::ISDPWPlanner, snode::Int, w::Float64, d::Int; use_prior=t
         w_node = compute_IS_weight(q_logprob, a, nothing)
     end
     w = w + w_node
-    
+
      # state progressive widening
     new_node = false
     if (dpw.solver.enable_state_pw && tree.n_a_children[sanode] <= sol.k_state*tree.n[sanode]^sol.alpha_state) || tree.n_a_children[sanode] == 0
