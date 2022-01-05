@@ -1,5 +1,6 @@
 [deps]
 AdversarialDriving = "0f7eb3e9-d51f-47f4-b915-6157e1c8ce29"
+BSON = "fbb218c0-5317-5bc6-957e-2ee96dd4b1f0"
 Crux = "e51cc422-768a-4345-bb8e-2246287ae729"
 Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 FileIO = "5789e2e9-d7fb-5bc7-8068-2c6fae9b9549"
@@ -19,5 +20,6 @@ RiskSimulator = "d80ce8e1-c758-40bc-a0e7-b6008fb95ad7"
 STLCG = "6ababdf7-4701-4f28-b3b2-5630f64e3c98"
 ScenarioSelection = "3cd2cbe0-3bbe-474e-bd11-d54ca1f0eb8c"
 SpAutoDiff = "2746dd70-a8ae-4e63-b982-e2745bcfee82"
+StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 TreeImportanceSampling = "07d9af09-3262-428e-aa81-a8be63372c4c"
 Vec = "44eeaf0b-fee4-471f-9310-ed6585cb3142"

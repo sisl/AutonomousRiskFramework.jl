@@ -171,4 +171,17 @@ function ISDPWPlanner(solver::ISDPWSolver, mdp::P) where P<:Union{POMDP,MDP}
                      )
 end
 
+function preload_actions!(dpw::ISDPWPlanner, tree::MCTS.DPWTree{S,A}, s, snode::Int) where {S,A}
+    sol = dpw.solver
+    for a in support(actions(dpw.mdp, s))
+        n0 = init_N(sol.init_N, dpw.mdp, s, a)
+        MCTS.insert_action_node!(tree, snode, a, n0,
+                            init_Q(sol.init_Q, dpw.mdp, s, a),
+                            sol.check_repeat_action
+                           )
+        tree.total_n[snode] += n0
+    end
+end
+
+
 Random.seed!(p::ISDPWPlanner, seed) = Random.seed!(p.rng, seed)

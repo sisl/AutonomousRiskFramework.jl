@@ -31,7 +31,7 @@ include("mdp.jl")
 export SimpleState, SimpleSearch, rollout, eval_simple_reward, rand
 include("mdp_simple.jl")
 
-export TreeState, construct_tree_rmdp, reward, rollout, TreeMDP
+export TreeState, construct_tree_rmdp, construct_tree_amdp, reward, rollout, TreeMDP
 include("rmdp_tree_mdp.jl")
 
 export random_baseline, simple_random_baseline

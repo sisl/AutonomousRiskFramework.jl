@@ -221,6 +221,7 @@ function simulate(dpw::ISDPWPlanner, snode::Int, w::Float64, d::Int; use_prior=t
     end
 
     if new_node
+        preload_actions!(dpw, tree, sp, spnode)
         q = r + discount(dpw.mdp)*estimate_value(dpw.solved_estimate, dpw.mdp, sp, w, d-1)
     else
         q = r + discount(dpw.mdp)*simulate(dpw, spnode, w, d-1)

@@ -8,7 +8,7 @@ using ProgressMeter
 using StatsBase
 using Distributions
 
-export ISDPWSolver, ISDPWPlanner
+export ISDPWSolver, ISDPWPlanner, preload_actions!
 include("tree_sampling_types.jl")
 
 export solve, softmax

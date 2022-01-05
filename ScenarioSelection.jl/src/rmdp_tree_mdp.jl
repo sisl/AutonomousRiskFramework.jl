@@ -19,7 +19,11 @@ mutable struct TreeMDP <: MDP{TreeState, Any}
 end
 
 function construct_tree_rmdp(rmdp, distribution)
-    return TreeMDP(rmdp, 1.0, [], [], distribution)
+    return TreeMDP(rmdp, 1.0, [], [], (m, s) -> distribution)
+end
+
+function construct_tree_amdp(amdp, distribution)
+    return TreeMDP(amdp, 1.0, [], [], distribution)
 end
 
 function POMDPs.reward(mdp::TreeMDP, state::TreeState, action)
@@ -55,7 +59,7 @@ end
 POMDPs.discount(mdp::TreeMDP) = mdp.discount_factor
 
 function POMDPs.actions(mdp::TreeMDP, s::TreeState)
-    return mdp.distribution
+    return mdp.distribution(mdp.rmdp, s.mdp_state)
 end
 
 # function POMDPs.action(policy::RandomPolicy, s::TreeState)
