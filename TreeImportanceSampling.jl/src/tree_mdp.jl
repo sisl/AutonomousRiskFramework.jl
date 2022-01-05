@@ -30,7 +30,8 @@ function POMDPs.reward(mdp::TreeMDP, state::TreeState, action)
     if !state.done
         r = 0
     else
-        r = max(state.costs...)
+        r = sum(state.costs)
+        # r = max(state.costs...)
         # print("\nState: ", state, " Reward: ", r)
         push!(mdp.costs, r)
         push!(mdp.IS_weights, state.w)

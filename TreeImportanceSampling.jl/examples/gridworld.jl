@@ -24,13 +24,15 @@ for (k,v) in mdp.g.rewards
     if v < 0
         adv_rewards[k] += -10*v
     end
+end
+for (k,v) in adv_rewards
     adv_rewards[k] /= 100
 end
 
 amdp = GridWorldMDP(rewards=adv_rewards, tprob=1., discount=1., terminate_from=mdp.g.terminate_from)
 
 # Define action probability for the adv_mdp
-action_probability(mdp, s, a) = (a == atable[s]) ? tprob : ((1. - tprob) / (length(actions(mdp)) - 1.))
+action_probability(mdp, s, a) = (a == atable[s][1]) ? tprob : ((1. - tprob) / (length(actions(mdp)) - 1.))
 
 
 # Generic Discrete NonParametric with symbol support
@@ -81,23 +83,24 @@ end
 
 import TreeImportanceSampling
 
-N = 10000
+N = 100000
 c = 0.3
+softmax_temp = 10.0
 
 # BASELINE
 @show "Executing baseline"
 
-samps = [maximum(collect(simulate(HistoryRecorder(), amdp, FunctionPolicy((s) -> rand(disturbance(amdp, s))))[:r])) for _ in 1:N]
+samps = [sum(collect(simulate(HistoryRecorder(), amdp, FunctionPolicy((s) -> rand(disturbance(amdp, s))))[:r])) for _ in 1:N]
 
 save("/home/users/shubhgup/Codes/AutonomousRiskFramework.jl/data/gridworld_baseline_$(N).jld2", Dict("risks:" => samps, "states:" => [], "IS_weights:" => []))
 
-# MCTS
+MCTS
 @show "Executing Tree-IS"
 
 tree_mdp = TreeImportanceSampling.construct_tree_amdp(amdp, disturbance)
 
 planner = TreeImportanceSampling.mcts_isdpw(tree_mdp; N, c)
 
-a, w, info = action_info(planner, TreeImportanceSampling.TreeState(rand(initialstate(amdp))), tree_in_info=true)
+a, w, info = action_info(planner, TreeImportanceSampling.TreeState(rand(initialstate(amdp))), tree_in_info=true, softmax_temp=softmax_temp)
 
 save("/home/users/shubhgup/Codes/AutonomousRiskFramework.jl/data/gridworld_mcts_IS_$(N).jld2", Dict("risks:" => planner.mdp.costs, "states:" => [], "IS_weights:" => planner.mdp.IS_weights, "tree:" => info[:tree]))
