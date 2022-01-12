@@ -73,9 +73,9 @@ version = "0.1.0"
 
 [[AutomotiveSimulator]]
 deps = ["DataFrames", "Distributions", "LinearAlgebra", "Parameters", "Printf", "Random", "Reexport", "StaticArrays", "Tricks"]
-path = "../../../../../.julia/dev/AutomotiveSimulator"
+git-tree-sha1 = "8abb2a4050d43b49f41adcfb23ed82f136c76aea"
 uuid = "6aa42d20-6c96-11ea-1103-339224409280"
-version = "0.1.1"
+version = "0.1.2"
 
 [[AutomotiveVisualization]]
 deps = ["AutomotiveSimulator", "Cairo", "Colors", "Parameters", "Pkg", "Printf", "Reexport", "Rsvg", "StaticArrays"]
