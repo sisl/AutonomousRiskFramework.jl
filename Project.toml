@@ -5,7 +5,6 @@ version = "0.1.0"
 
 [deps]
 AdversarialDriving = "0f7eb3e9-d51f-47f4-b915-6157e1c8ce29"
-BayesNets = "ba4760a4-c768-5bed-964b-cf806dc591cb"
 ColorSchemes = "35d6a980-a343-548e-a6ea-1d62b119f2f4"
 CrossEntropyMethod = "f7e364ee-db6c-46d3-b598-27dc284d9c4d"
 D3Trees = "e3df1716-f71e-5df9-9e2d-98e193103c45"
