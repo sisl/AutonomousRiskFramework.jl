@@ -34,20 +34,16 @@ Conditional distribution from importance weighted samples
 """
 function conditional_distr(𝒫,Z,α,w)
     idx = filter(i->1-𝒫(Z[i]) ≤ α, 1:length(Z))
-    return Z[idx], w[idx] 
+    return Z[idx], w[idx]
 end
 
 """
 Importance weighted Empirical CDF
 """
 function StatsBase.ecdf(X, w)
-    perm = sortperm(X)
-    Xs = X[perm]
-    ws = w[perm]
-    n = length(X)
-    tot_w = sum(w)
+    est = RunningCDFEstimator(X, w)
 
-    ef(x) = sum(ws[1:searchsortedlast(Xs, x)]) / tot_w
+    ef(x) = cdf(est, x)
 
     return ef
 end

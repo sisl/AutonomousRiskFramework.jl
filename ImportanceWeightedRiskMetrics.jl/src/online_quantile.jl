@@ -39,7 +39,7 @@ end
 """
 P-square algorithm adapted from (Jain and Chlamtac)
 """
-function update_quantile!(est::RunningQuantileEstimator, x::Float64)
+function update!(est::RunningQuantileEstimator, x::Float64)
     q = est.q
     n = est.n
     n_prime = est.n_prime
