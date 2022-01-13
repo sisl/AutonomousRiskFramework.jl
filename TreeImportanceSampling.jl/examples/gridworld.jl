@@ -1,11 +1,13 @@
 using Revise
-using POMDPs, POMDPGym, POMDPSimulators, POMDPPolicies, Distributions, Plots
+using POMDPs, POMDPGym, POMDPSimulators, POMDPPolicies, Distributions
 using Crux, Flux, BSON, StaticArrays, Random
 using MCTS
 using FileIO
+using Plots
+unicodeplots()
 
 # Basic MDP
-tprob = 0.7
+tprob = 0.5
 Random.seed!(0)
 randcosts = Dict(POMDPGym.GWPos(i,j) => rand() for i = 1:10, j=1:10)
 mdp = GridWorldMDP(costs=randcosts, cost_penalty=0.1, tprob=tprob)
@@ -24,9 +26,6 @@ for (k,v) in mdp.g.rewards
     if v < 0
         adv_rewards[k] += -10*v
     end
-end
-for (k,v) in adv_rewards
-    adv_rewards[k] /= 100
 end
 
 amdp = GridWorldMDP(rewards=adv_rewards, tprob=1., discount=1., terminate_from=mdp.g.terminate_from)
@@ -81,26 +80,27 @@ function disturbance(m::typeof(amdp), s)
     return px
 end
 
+fixed_s = rand(initialstate(amdp))
+
 import TreeImportanceSampling
 
 N = 100000
 c = 0.3
-softmax_temp = 10.0
 
 # BASELINE
 @show "Executing baseline"
 
-samps = [sum(collect(simulate(HistoryRecorder(), amdp, FunctionPolicy((s) -> rand(disturbance(amdp, s))))[:r])) for _ in 1:N]
+samps = [sum(collect(simulate(HistoryRecorder(), amdp, FunctionPolicy((s) -> rand(disturbance(amdp, s))), fixed_s)[:r])) for _ in 1:N]
 
 save("/home/users/shubhgup/Codes/AutonomousRiskFramework.jl/data/gridworld_baseline_$(N).jld2", Dict("risks:" => samps, "states:" => [], "IS_weights:" => []))
 
-MCTS
+# MCTS
 @show "Executing Tree-IS"
 
 tree_mdp = TreeImportanceSampling.construct_tree_amdp(amdp, disturbance)
 
 planner = TreeImportanceSampling.mcts_isdpw(tree_mdp; N, c)
 
-a, w, info = action_info(planner, TreeImportanceSampling.TreeState(rand(initialstate(amdp))), tree_in_info=true, softmax_temp=softmax_temp)
+a, info = action_info(planner, TreeImportanceSampling.TreeState(fixed_s); tree_in_info=true)
 
 save("/home/users/shubhgup/Codes/AutonomousRiskFramework.jl/data/gridworld_mcts_IS_$(N).jld2", Dict("risks:" => planner.mdp.costs, "states:" => [], "IS_weights:" => planner.mdp.IS_weights, "tree:" => info[:tree]))

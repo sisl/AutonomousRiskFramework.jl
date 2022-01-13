@@ -25,16 +25,93 @@ end
 
 softmax(X) = softmax(X, 1)
 
+"""
+quantile computation
+"""
+function parabolic_update(i, q, n, d)
+    return q[i] + d/(n[i+1]-n[i-1])*((n[i]-n[i-1]+d)*(q[i+1]-q[i])/(n[i+1]-n[i]) + (n[i+1]-n[i]-d)*(q[i]-q[i-1])/(n[i]-n[i-1]))
+end
+
+function linear_update(i, q, n, d)
+    return q[i] + d/(n[i+d]-n[i])*(q[i+d]-q[i])
+end
+
+function online_update_quantile(costs, IS_weights, q, n, n_prime, α, cost_i)
+    if length(costs) < 5
+        return [], [], []
+    end
+    if length(q) == 0
+        q = [costs[i] for i=1:5]
+        n = [i for i=1:5]
+        n_prime = [1, 1 + 2α, 1+4α, 3+2α, 5]
+        cost_i = 5
+    end
+    for j=cost_i+1:length(costs)
+        x = costs[j]
+        wt = exp(IS_weights[j])
+        if x < q[1]
+            q[1] = x
+            k = 1
+        elseif q[1] ≤ x < q[2]
+            k = 1
+        elseif q[2] ≤ x < q[3]
+            k = 2
+        elseif q[3] ≤ x < q[4]
+            k = 3
+        elseif q[4] ≤ x < q[5]
+            k = 4
+        else
+            q[5] = x
+            k = 4
+        end
+        for i=k:5
+            n[i] = n[i] + wt
+        end
+        dn = [0, α/2, α, (1+α)/2, 1]
+        n_prime = n_prime .+ wt*dn
+        for i=2:4
+            d = n_prime - n
+            if ((d ≥ 1) && (n[i+1] - n[i] > 1))||((d ≤ -1) && (n[i-1] - n[i] < -1))
+                d = sign(d)
+                q_prime = parabolic_update(i, q, n, d)
+                if q[i-1] < q_prime < q[i+1]
+                    q[i] = q_prime
+                else
+                    q[i] = linear_update(i, q, n, d)
+                end
+                n[i] = n[i] + d
+            end
+        end
+        cost_i = j
+    end
+    return q, n, n_prime, cost_i
+end
 
 """
 Calculate next action
 """
-function select_action(nodes, values; c=5.0)
-    prob = softmax(c*values)
+function select_action(nodes, values, q, p_prob)
+    prob = adaptive_probs(values, q, p_prob)
     sanode_idx = sample(1:length(nodes), Weights(prob))
     sanode = nodes[sanode_idx]
     q_logprob = log(prob[sanode_idx])
     return sanode, q_logprob
+end
+
+function adaptive_probs(values, q, p_prob)
+    if length(values)==1
+        return 1.0
+    end
+
+    tail_prob = [(values[i] ≥ q ? values[i]*p_prob[i] : 0) for i=1:length(values)] .+ 1e-5
+    notail_prob = [(values[i] < q ? p_prob[i] : 0) for i=1:length(values)] .+ 1e-5
+    tail_prob /= sum(tail_prob)
+    notail_prob /= sum(notail_prob)
+
+    # Mixture weighting
+    prob = 0.3*notail_prob .+ 0.7*tail_prob
+    # @show tail_prob, notail_prob
+    return prob
 end
 
 """
@@ -46,7 +123,7 @@ function compute_IS_weight(q_logprob, a, distribution)
     else
         w = logpdf(distribution, a) - q_logprob
     end
-    # @show a, q_logprob, w
+    @show a, q_logprob, w
     return w
 end
 
@@ -60,7 +137,7 @@ MCTS.estimate_value(f::Function, mdp::Union{POMDP,MDP}, state, w::Float64, depth
 """
 Construct an ISDPW tree and choose the best action. Also output some information.
 """
-function POMDPModelTools.action_info(p::ISDPWPlanner, s; tree_in_info=false, w=0.0, use_prior=true, softmax_temp=5.0)
+function POMDPModelTools.action_info(p::ISDPWPlanner, s; tree_in_info=false, w=0.0)
     local a::actiontype(p.mdp)
     info = Dict{Symbol, Any}()
     try
@@ -96,7 +173,7 @@ function POMDPModelTools.action_info(p::ISDPWPlanner, s; tree_in_info=false, w=0
         start_us = MCTS.CPUtime_us()
         for i = 1:p.solver.n_iterations
             nquery += 1
-            simulate(p, snode, w, p.solver.depth; use_prior=use_prior, softmax_temp=softmax_temp) # (not 100% sure we need to make a copy of the state here)
+            simulate(p, snode, w, p.solver.depth) # (not 100% sure we need to make a copy of the state here)
             p.solver.show_progress ? next!(progress) : nothing
             if MCTS.CPUtime_us() - start_us >= p.solver.max_time * 1e6
                 p.solver.show_progress ? finish!(progress) : nothing
@@ -110,32 +187,21 @@ function POMDPModelTools.action_info(p::ISDPWPlanner, s; tree_in_info=false, w=0
             info[:tree] = tree
         end
 
-        all_Q = []
-        sanode = 0
-        for child in tree.children[snode]
-            push!(all_Q, tree.q[child])
-        end
-        sanode, q_logprob = select_action(tree.children[snode], all_Q; c=softmax_temp)
+        sanode = best_sanode(tree, snode)
         a = tree.a_labels[sanode] # choose action randomly based on approximate value
-        if use_prior
-            w_node = compute_IS_weight(q_logprob, a, actions(p.mdp, s))
-        else
-            w_node = compute_IS_weight(q_logprob, a, nothing)
-        end
-        w = w + w_node
     catch ex
         a = convert(actiontype(p.mdp), default_action(p.solver.default_action, p.mdp, s, ex))
         info[:exception] = ex
     end
 
-    return a, w, info
+    return a, info
 end
 
 
 """
 Return the reward for one iteration of MCTSDPW.
 """
-function simulate(dpw::ISDPWPlanner, snode::Int, w::Float64, d::Int; use_prior=true, softmax_temp=5.0)
+function simulate(dpw::ISDPWPlanner, snode::Int, w::Float64, d::Int)
     S = statetype(dpw.mdp)
     A = actiontype(dpw.mdp)
     sol = dpw.solver
@@ -162,7 +228,7 @@ function simulate(dpw::ISDPWPlanner, snode::Int, w::Float64, d::Int; use_prior=t
             end
         end
     elseif isempty(tree.children[snode])
-        for a in actions(dpw.mdp, s)
+        for a in support(actions(dpw.mdp, s))
             n0 = init_N(sol.init_N, dpw.mdp, s, a)
             MCTS.insert_action_node!(tree, snode, a, n0,
                                 init_Q(sol.init_Q, dpw.mdp, s, a),
@@ -188,13 +254,10 @@ function simulate(dpw::ISDPWPlanner, snode::Int, w::Float64, d::Int; use_prior=t
         push!(all_UCB, UCB)
     end
     # print("Softmax weights: ", softmax(all_UCB))
-    sanode, q_logprob = select_action(tree.children[snode], all_UCB; c=softmax_temp)
+    # dpw.quantile_q, dpw.quantile_n, dpw.quantile_n_prime, dpw.cost_i = online_update_quantile(dpw.mdp.costs, dpw.mdp.IS_weights, dpw.quantile_q, dpw.quantile_n, dpw.quantile_n_prime, dpw.quantile_α, dpw.cost_i)
+    sanode, q_logprob = select_action(tree.children[snode], all_UCB, max(all_UCB...)/1.2, [pdf(actions(dpw.mdp, s), a) for a in support(actions(dpw.mdp, s))])
     a = tree.a_labels[sanode] # choose action randomly based on approximate value
-    if use_prior
-        w_node = compute_IS_weight(q_logprob, a, actions(dpw.mdp, s))
-    else
-        w_node = compute_IS_weight(q_logprob, a, nothing)
-    end
+    w_node = compute_IS_weight(q_logprob, a, actions(dpw.mdp, s))
     w = w + w_node
 
      # state progressive widening
@@ -222,7 +285,7 @@ function simulate(dpw::ISDPWPlanner, snode::Int, w::Float64, d::Int; use_prior=t
     end
 
     if new_node
-        preload_actions!(dpw, tree, sp, spnode)
+        # preload_actions!(dpw, tree, sp, spnode)
         q = r + discount(dpw.mdp)*estimate_value(dpw.solved_estimate, dpw.mdp, sp, w, d-1)
     else
         q = r + discount(dpw.mdp)*simulate(dpw, spnode, w, d-1)
@@ -234,4 +297,21 @@ function simulate(dpw::ISDPWPlanner, snode::Int, w::Float64, d::Int; use_prior=t
     tree.q[sanode] += (q - tree.q[sanode])/tree.n[sanode]
 
     return q
+end
+
+"""
+Return the best action.
+Some publications say to choose action that has been visited the most
+e.g., Continuous Upper Confidence Trees by Couëtoux et al.
+"""
+function best_sanode(tree::MCTS.DPWTree, snode::Int)
+    best_Q = -Inf
+    sanode = 0
+    for child in tree.children[snode]
+        if tree.q[child] > best_Q
+            best_Q = tree.q[child]
+            sanode = child
+        end
+    end
+    return sanode
 end

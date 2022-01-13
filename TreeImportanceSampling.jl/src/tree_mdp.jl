@@ -16,22 +16,28 @@ mutable struct TreeMDP <: MDP{TreeState, Any}
     costs::Vector
     IS_weights::Vector
     distribution::Any
+    reduction::String
 end
 
-function construct_tree_rmdp(rmdp, distribution)
-    return TreeMDP(rmdp, 1.0, [], [], (m, s) -> distribution)
+function construct_tree_rmdp(rmdp, distribution; reduction="max")
+    return TreeMDP(rmdp, 1.0, [], [], (m, s) -> distribution, reduction)
 end
 
-function construct_tree_amdp(amdp, distribution)
-    return TreeMDP(amdp, 1.0, [], [], distribution)
+function construct_tree_amdp(amdp, distribution; reduction="sum")
+    return TreeMDP(amdp, 1.0, [], [], distribution, reduction)
 end
 
 function POMDPs.reward(mdp::TreeMDP, state::TreeState, action)
     if !state.done
         r = 0
     else
-        r = sum(state.costs)
-        # r = max(state.costs...)
+        if mdp.reduction=="sum"
+            r = sum(state.costs)
+        elseif mdp.reduction=="max"
+            r = max(state.costs...)
+        else
+            throw("Not implemented reduction $(mdp.reduction)!")
+        end
         # print("\nState: ", state, " Reward: ", r)
         push!(mdp.costs, r)
         push!(mdp.IS_weights, state.w)

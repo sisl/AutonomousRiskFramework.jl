@@ -101,6 +101,7 @@ mutable struct ISDPWSolver <: AbstractMCTSSolver
     default_action::Any
     reset_callback::Function
     show_progress::Bool
+    α::Float64
 end
 
 mutable struct UniformActionGenerator{RNG<:AbstractRNG}
@@ -109,7 +110,8 @@ end
 UniformActionGenerator() = UniformActionGenerator(Random.GLOBAL_RNG)
 
 function MCTS.next_action(gen::UniformActionGenerator, mdp::Union{POMDP,MDP}, s, snode::AbstractStateNode)
-    rand(gen.rng, support(actions(mdp, s)))
+    # rand(gen.rng, support(actions(mdp, s)))
+    rand(gen.rng, actions(mdp, s))
 end
 
 """
@@ -138,8 +140,9 @@ function ISDPWSolver(;depth::Int=10,
                     default_action::Any = ExceptionRethrow(),
                     reset_callback::Function = (mdp, s)->false,
                     show_progress::Bool = false,
+                    α::Float64 = 0.1
                    )
-        ISDPWSolver(depth, exploration_constant, n_iterations, max_time, k_action, alpha_action, k_state, alpha_state, keep_tree, enable_action_pw, enable_state_pw, check_repeat_state, check_repeat_action, tree_in_info, rng, estimate_value, init_Q, init_N, next_action, default_action, reset_callback, show_progress)
+        ISDPWSolver(depth, exploration_constant, n_iterations, max_time, k_action, alpha_action, k_state, alpha_state, keep_tree, enable_action_pw, enable_state_pw, check_repeat_state, check_repeat_action, tree_in_info, rng, estimate_value, init_Q, init_N, next_action, default_action, reset_callback, show_progress, α)
 end
 
 
@@ -151,6 +154,12 @@ mutable struct ISDPWPlanner{P<:Union{MDP,POMDP}, S, A, SE, NA, RCB, RNG} <: Abst
     next_action::NA
     reset_callback::RCB
     rng::RNG
+
+    # Quantile summary statistics
+    quantile_q::Vector{Float64}
+    quantile_n::Vector{Int}
+    quantile_n_prime::Vector{Float64}
+    cost_i::Int
 end
 
 function ISDPWPlanner(solver::ISDPWSolver, mdp::P) where P<:Union{POMDP,MDP}
@@ -167,8 +176,12 @@ function ISDPWPlanner(solver::ISDPWSolver, mdp::P) where P<:Union{POMDP,MDP}
                                           se,
                                           solver.next_action,
                                           solver.reset_callback,
-                                          solver.rng
-                     )
+                                          solver.rng,
+                                          [],
+                                          [],
+                                          [],
+                                          0
+                    )
 end
 
 function preload_actions!(dpw::ISDPWPlanner, tree::MCTS.DPWTree{S,A}, s, snode::Int) where {S,A}
