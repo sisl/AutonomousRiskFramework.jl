@@ -13,3 +13,4 @@ Manifest.toml
 log/
 test.json
 test.xml
+CARLAIntegration/adversarial_carla_env/images/

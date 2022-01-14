@@ -20,6 +20,8 @@ packages = [
     PackageSpec(url=joinpath(@__DIR__, "ScenarioSelection.jl")),
 
     # [deps] AutonomousRiskFramework.jl
+    PackageSpec(url="https://github.com/ancorso/POMDPGym.jl"),
+    PackageSpec(url="https://github.com/ancorso/Crux.jl"),
     PackageSpec(url=joinpath(@__DIR__)),
 ]
 

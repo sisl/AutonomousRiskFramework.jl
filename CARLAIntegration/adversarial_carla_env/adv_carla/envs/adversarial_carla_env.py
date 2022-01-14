@@ -398,15 +398,19 @@ class AdversarialCARLAEnv(gym.Env):
             self._info['distance'] = distance
             self._info['rate'] = rate
             self._info['done'] = done
-            # TODO: Include all necessary state information in `info` to pass to Julia (positions, velocities, etc)
+            # Include all necessary state information in `info` to pass to Julia (positions, velocities, etc)
             if agent is None:
                 self._info['ego_sensor_location'] = None
                 self._info['ego_truth_location'] = None
             else:
-                if agent.ego_truth_location is not None:
+                if hasattr(agent, 'ego_truth_location') and agent.ego_truth_location is not None:
                     self._info['ego_truth_location'] = [agent.ego_truth_location.x, agent.ego_truth_location.y]
-                if agent.ego_sensor_location is not None:
+                else:
+                    self._info['ego_sensor_location'] = 0
+                if hasattr(agent, 'ego_sensor_location') and agent.ego_sensor_location is not None:
                     self._info['ego_sensor_location'] = [agent.ego_sensor_location.x, agent.ego_sensor_location.y]
+                else:
+                    self._info['ego_truth_location'] = 0
 
             # Calculate the reward for this step
             reward = self._reward(self._info)
