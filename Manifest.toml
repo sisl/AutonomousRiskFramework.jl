@@ -783,9 +783,9 @@ version = "1.2.1"
 
 [[ImageMagick_jll]]
 deps = ["Artifacts", "JLLWrappers", "JpegTurbo_jll", "Libdl", "Libtiff_jll", "Pkg", "Zlib_jll", "libpng_jll"]
-git-tree-sha1 = "ea2b6fd947cdfc43c6b8c15cff982533ec1f72cd"
+git-tree-sha1 = "d43c324d044dc8256e1470a561ee7a0cf5e122c9"
 uuid = "c73af94c-d91f-53ed-93a7-00f77d67a9d7"
-version = "6.9.12+0"
+version = "6.9.12+1"
 
 [[ImageMetadata]]
 deps = ["AxisArrays", "ColorVectorSpace", "ImageAxes", "ImageCore", "IndirectArrays"]
@@ -831,7 +831,9 @@ version = "3.1.2+0"
 
 [[ImportanceWeightedRiskMetrics]]
 deps = ["Distributions", "LinearAlgebra", "Parameters", "SpecialFunctions", "Statistics", "StatsBase"]
-path = "ImportanceWeightedRiskMetrics.jl"
+git-tree-sha1 = "7a388a82c7df3dbe1eaeb6e6537879c4272adbdd"
+repo-rev = "main"
+repo-url = "https://github.com/shubhg1996/ImportanceWeightedRiskMetrics.jl.git"
 uuid = "0d2f0bec-1620-4cca-89d1-e694ad7e7b82"
 version = "0.1.0"
 
@@ -1814,7 +1816,7 @@ uuid = "3bb67fe8-82b1-5028-8e26-92a6c54297fa"
 version = "0.9.6"
 
 [[TreeImportanceSampling]]
-deps = ["Distributions", "MCTS", "POMDPModelTools", "POMDPs", "ProgressMeter", "Random", "StatsBase"]
+deps = ["Distributions", "ImportanceWeightedRiskMetrics", "MCTS", "POMDPModelTools", "POMDPs", "ProgressMeter", "Random", "StatsBase"]
 path = "TreeImportanceSampling.jl"
 uuid = "07d9af09-3262-428e-aa81-a8be63372c4c"
 version = "0.1.0"
