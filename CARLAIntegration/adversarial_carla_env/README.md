@@ -27,7 +27,7 @@ Install Instructions
     pip install -r requirements.txt
      ```
 
-     - Install `adv-carla-v0` gym environment:
+     - Install `adv-carla-v0` gym environment (from the same directory):
     ```
     pip install -e .
     ```
@@ -70,7 +70,7 @@ Install Instructions
     export CARLA_ROOT=/path/to/CARLA_0.9.11
 
     export SCENARIO_RUNNER_ROOT=$CARLA_ROOT/PythonAPI/scenario_runner
-    export PYTHONPATH=$PYTHONPATH:$CARLA_ROOT/PythonAPI/carla/dist/carla-0.9.11-py3.7-win-amd64.egg
+    export PYTHONPATH=$PYTHONPATH:$CARLA_ROOT/PythonAPI/carla/dist/carla-0.9.11-py3.7-linux-x86_64.egg
     export PYTHONPATH=$PYTHONPATH:$CARLA_ROOT/PythonAPI/carla/agents
     export PYTHONPATH=$PYTHONPATH:$CARLA_ROOT/PythonAPI/carla
     export PYTHONPATH=$PYTHONPATH:$CARLA_ROOT/PythonAPI
