@@ -7,6 +7,12 @@ Based on [ScenarioRunner](https://github.com/carla-simulator/scenario_runner), m
 Install Instructions
 ========================
 1. Download CARLA 0.9.11: https://github.com/carla-simulator/carla/releases/tag/0.9.11
+    - On Linux:
+    ```
+    wget https://carla-releases.s3.eu-west-3.amazonaws.com/Linux/CARLA_0.9.11.tar.gz
+    mkdir CARLA_0.9.11
+    tar -xvzf CARLA_0.9.11.tar.gz -C CARLA_0.9.11
+    ```     
 
 1. Download `scenario_runner` 0.9.11
     > **NOTE: Make sure `scenario_runner` is placed in the `<CARLA_ROOT>/PythonAPI/` directory.**
