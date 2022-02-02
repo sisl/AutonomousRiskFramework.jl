@@ -1,0 +1,433 @@
+diff --git a/srunner/autoagents/agent_wrapper.py b/srunner/autoagents/agent_wrapper.py
+index 6043ebd..0f1fc5f 100644
+--- a/srunner/autoagents/agent_wrapper.py
++++ b/srunner/autoagents/agent_wrapper.py
+@@ -14,6 +14,7 @@ from __future__ import print_function
+ import carla
+ 
+ from srunner.autoagents.sensor_interface import CallBack
++from srunner.autoagents.sensor_interface import SpeedometerReader
+ from srunner.scenariomanager.carla_data_provider import CarlaDataProvider
+ 
+ 
+@@ -47,38 +48,54 @@ class AgentWrapper(object):
+         bp_library = CarlaDataProvider.get_world().get_blueprint_library()
+         for sensor_spec in self._agent.sensors():
+             # These are the sensors spawned on the carla world
+-            bp = bp_library.find(str(sensor_spec['type']))
+-            if sensor_spec['type'].startswith('sensor.camera'):
+-                bp.set_attribute('image_size_x', str(sensor_spec['width']))
+-                bp.set_attribute('image_size_y', str(sensor_spec['height']))
+-                bp.set_attribute('fov', str(sensor_spec['fov']))
+-                sensor_location = carla.Location(x=sensor_spec['x'], y=sensor_spec['y'],
+-                                                 z=sensor_spec['z'])
+-                sensor_rotation = carla.Rotation(pitch=sensor_spec['pitch'],
+-                                                 roll=sensor_spec['roll'],
+-                                                 yaw=sensor_spec['yaw'])
+-            elif sensor_spec['type'].startswith('sensor.lidar'):
+-                bp.set_attribute('range', str(sensor_spec['range']))
+-                bp.set_attribute('rotation_frequency', str(sensor_spec['rotation_frequency']))
+-                bp.set_attribute('channels', str(sensor_spec['channels']))
+-                bp.set_attribute('upper_fov', str(sensor_spec['upper_fov']))
+-                bp.set_attribute('lower_fov', str(sensor_spec['lower_fov']))
+-                bp.set_attribute('points_per_second', str(sensor_spec['points_per_second']))
+-                sensor_location = carla.Location(x=sensor_spec['x'], y=sensor_spec['y'],
+-                                                 z=sensor_spec['z'])
+-                sensor_rotation = carla.Rotation(pitch=sensor_spec['pitch'],
+-                                                 roll=sensor_spec['roll'],
+-                                                 yaw=sensor_spec['yaw'])
+-            elif sensor_spec['type'].startswith('sensor.other.gnss'):
+-                sensor_location = carla.Location(x=sensor_spec['x'], y=sensor_spec['y'],
+-                                                 z=sensor_spec['z'])
+-                sensor_rotation = carla.Rotation()
+-
+-            # create sensor
+-            sensor_transform = carla.Transform(sensor_location, sensor_rotation)
+-            sensor = CarlaDataProvider.get_world().spawn_actor(bp, sensor_transform, vehicle)
++            if sensor_spec['type'].startswith('sensor.speedometer'):
++                delta_time = CarlaDataProvider.get_world().get_settings().fixed_delta_seconds
++                frame_rate = 1 / delta_time
++                sensor = SpeedometerReader(vehicle, frame_rate)
++            else:
++                bp = bp_library.find(str(sensor_spec['type']))
++                if sensor_spec['type'].startswith('sensor.camera'):
++                    bp.set_attribute('image_size_x', str(sensor_spec['width']))
++                    bp.set_attribute('image_size_y', str(sensor_spec['height']))
++                    bp.set_attribute('fov', str(sensor_spec['fov']))
++                    sensor_location = carla.Location(x=sensor_spec['x'], y=sensor_spec['y'],
++                                                     z=sensor_spec['z'])
++                    sensor_rotation = carla.Rotation(pitch=sensor_spec['pitch'],
++                                                     roll=sensor_spec['roll'],
++                                                     yaw=sensor_spec['yaw'])
++                elif sensor_spec['type'].startswith('sensor.lidar'):
++                    bp.set_attribute('range', str(sensor_spec['range']))
++                    bp.set_attribute('rotation_frequency', str(sensor_spec['rotation_frequency']))
++                    bp.set_attribute('channels', str(sensor_spec['channels']))
++                    bp.set_attribute('upper_fov', str(sensor_spec['upper_fov']))
++                    bp.set_attribute('lower_fov', str(sensor_spec['lower_fov']))
++                    bp.set_attribute('points_per_second', str(sensor_spec['points_per_second']))
++                    sensor_location = carla.Location(x=sensor_spec['x'], y=sensor_spec['y'],
++                                                     z=sensor_spec['z'])
++                    sensor_rotation = carla.Rotation(pitch=sensor_spec['pitch'],
++                                                     roll=sensor_spec['roll'],
++                                                     yaw=sensor_spec['yaw'])
++                elif sensor_spec['type'].startswith('sensor.other.gnss'):
++                    sensor_location = carla.Location(x=sensor_spec['x'], y=sensor_spec['y'],
++                                                     z=sensor_spec['z'])
++                    sensor_rotation = carla.Rotation()
++                else:
++                    if sensor_spec['type'].startswith('sensor.other.obstacle'):
++                        if 'distance' in sensor_spec:
++                            bp.set_attribute('distance', str(sensor_spec['distance']))
++                        if 'debug_linetrace' in sensor_spec:
++                            bp.set_attribute('debug_linetrace', str(sensor_spec['debug_linetrace']))
++                        if 'hit_radius' in sensor_spec:
++                            bp.set_attribute('hit_radius', str(sensor_spec['hit_radius']))
++                    sensor_location = carla.Location(x=0, y=0, z=0)
++                    sensor_rotation = carla.Rotation()
++
++                # create sensor
++                sensor_transform = carla.Transform(sensor_location, sensor_rotation)
++                sensor = CarlaDataProvider.get_world().spawn_actor(bp, sensor_transform, vehicle)
++
+             # setup callback
+-            sensor.listen(CallBack(sensor_spec['id'], sensor, self._agent.sensor_interface))
++            sensor.listen(CallBack(sensor_spec['id'], sensor_spec['type'], sensor, self._agent.sensor_interface))
+             self._sensors_list.append(sensor)
+ 
+         # Tick once to spawn the sensors
+diff --git a/srunner/autoagents/sensor_interface.py b/srunner/autoagents/sensor_interface.py
+index 940b6f7..0a6337b 100644
+--- a/srunner/autoagents/sensor_interface.py
++++ b/srunner/autoagents/sensor_interface.py
+@@ -10,6 +10,10 @@ handling the use of sensors for the agents
+ 
+ import copy
+ import logging
++import weakref
++import numpy as np
++import time
++from threading import Thread
+ 
+ try:
+     from queue import Queue
+@@ -18,17 +22,233 @@ except ImportError:
+     from Queue import Queue
+     from Queue import Empty
+ 
+-import numpy as np
+ 
+ import carla
++from srunner.scenariomanager.carla_data_provider import CarlaDataProvider
++from srunner.scenariomanager.timer import GameTime
+ 
++from pdb import set_trace as breakpoint # DEBUG. TODO!
++
++
++def threaded(fn):
++    def wrapper(*args, **kwargs):
++        thread = Thread(target=fn, args=args, kwargs=kwargs)
++        thread.setDaemon(True)
++        thread.start()
++
++        return thread
++    return wrapper
+ 
+-class SensorReceivedNoData(Exception):
+ 
++class SensorReceivedNoData(Exception):
+     """
+     Exceptions thrown when the sensors used by the agent take too long to receive data
+     """
+ 
++    def __init__(self, message):
++        super(SensorReceivedNoData, self).__init__(message)
++
++
++class GenericMeasurement(object):
++    def __init__(self, data, frame):
++        self.data = data
++        self.frame = frame
++
++
++class CollisionReader:
++    def __init__(self, bp_library, vehicle, reading_frequency=1.0):
++        self._collided = False
++        self.type_id = 'sensor.other.collision'
++        bp = bp_library.find(self.type_id)
++        self.sensor = CarlaDataProvider.get_world().spawn_actor(bp, carla.Transform(), vehicle)
++        self.sensor.listen(lambda event: self.__class__.on_collision(weakref.ref(self), event))
++
++        self._reading_frequency = reading_frequency
++        self._callback = None
++        self._run_ps = True
++        self.run()
++
++    @threaded
++    def run(self):
++        first_time = True
++        latest_time = GameTime.get_time()
++        while self._run_ps:
++            if self._callback is not None:
++                current_time = GameTime.get_time()
++
++                # Second part forces the sensors to send data at the first tick, regardless of frequency
++                if current_time - latest_time > (1 / self._reading_frequency) \
++                        or (first_time and GameTime.get_frame() != 0):
++                    self._callback(GenericMeasurement(self._collided, GameTime.get_frame()))
++                    latest_time = GameTime.get_time()
++                    first_time = False
++                else:
++                    time.sleep(0.001)
++
++    def listen(self, callback):
++        # Tell that this function receives what the producer does.
++        self._callback = callback
++
++    def stop(self):
++        self._run_ps = False
++
++    def destroy(self):
++        self._run_ps = False
++        self.sensor.destroy()
++
++    @staticmethod
++    def on_collision(weakself, data):
++        self = weakself()
++        self._collided = True
++
++
++class ObstacleReader:
++    def __init__(self, bp_library, vehicle, reading_frequency=1.0):
++        self._obstacle_distance = 999999999 # float('inf') TODO
++        self._obstacle_actor = None
++        self.type_id = 'sensor.other.obstacle'
++        bp = bp_library.find(self.type_id)
++        # bp.set_attribute('distance', '1000')
++        self.sensor = CarlaDataProvider.get_world().spawn_actor(bp, carla.Transform(), vehicle)
++        self._callback = lambda event: self.__class__.on_obstacle(weakref.ref(self), event)
++        self.sensor.listen(self._callback)
++
++        self._reading_frequency = reading_frequency
++        # self._callback = None
++        self._run_ps = True
++        self.run()
++
++    @threaded
++    def run(self):
++        first_time = True
++        latest_time = GameTime.get_time()
++        while self._run_ps:
++            if self._callback is not None:
++                current_time = GameTime.get_time()
++
++                # Second part forces the sensors to send data at the first tick, regardless of frequency
++                if current_time - latest_time > (1 / self._reading_frequency) \
++                        or (first_time and GameTime.get_frame() != 0):
++                    self._callback(GenericMeasurement(self._obstacle_distance, GameTime.get_frame()))
++                    latest_time = GameTime.get_time()
++                    first_time = False
++                else:
++                    time.sleep(0.001)
++
++    def listen(self, callback):
++        # Tell that this function receives what the producer does.
++        self._run_ps = True
++        self._callback = callback
++
++    def stop(self):
++        self._run_ps = False
++        # pass
++
++    def destroy(self):
++        self._run_ps = False
++        self.sensor.destroy()
++
++    @staticmethod
++    def on_obstacle(weakself, data):
++        """
++        Callback for the obstacle sensor
++
++        Sets _obstacle_distance and _obstacle_actor according to the closest obstacle
++        found by the sensor.
++        """
++        self = weakself()
++        print("ON OBSTACLE:", data)
++        print("    DIRS:", dir(data))
++        print("    DISTANCE:", data)
++        breakpoint()
++
++        if not data:
++            return
++        self._obstacle_distance = data.distance
++        self._obstacle_actor = data.other_actor
++
++
++class BaseReader(object):
++    def __init__(self, vehicle, reading_frequency=1.0):
++        self._vehicle = vehicle
++        self._reading_frequency = reading_frequency
++        self._callback = None
++        self._run_ps = True
++        self.run()
++
++    def __call__(self):
++        pass
++
++    @threaded
++    def run(self):
++        first_time = True
++        latest_time = GameTime.get_time()
++        while self._run_ps:
++            if self._callback is not None:
++                current_time = GameTime.get_time()
++
++                # Second part forces the sensors to send data at the first tick, regardless of frequency
++                if current_time - latest_time > (1 / self._reading_frequency) \
++                        or (first_time and GameTime.get_frame() != 0):
++                    self._callback(GenericMeasurement(self.__call__(), GameTime.get_frame()))
++                    latest_time = GameTime.get_time()
++                    first_time = False
++
++                else:
++                    time.sleep(0.001)
++
++    def listen(self, callback):
++        # Tell that this function receives what the producer does.
++        self._callback = callback
++
++    def stop(self):
++        self._run_ps = False
++
++    def destroy(self):
++        self._run_ps = False
++
++
++class SpeedometerReader(BaseReader):
++    """
++    Sensor to measure the speed of the vehicle.
++    """
++    MAX_CONNECTION_ATTEMPTS = 10
++
++    def __init__(self, vehicle, reading_frequency=1.0):
++        super().__init__(vehicle, reading_frequency)
++        self.type_id = 'sensor.speedometer'
++
++    def _get_forward_speed(self, transform=None, velocity=None):
++        """ Convert the vehicle transform directly to forward speed """
++        if not velocity:
++            velocity = self._vehicle.get_velocity()
++        if not transform:
++            transform = self._vehicle.get_transform()
++
++        vel_np = np.array([velocity.x, velocity.y, velocity.z])
++        pitch = np.deg2rad(transform.rotation.pitch)
++        yaw = np.deg2rad(transform.rotation.yaw)
++        orientation = np.array([np.cos(pitch) * np.cos(yaw), np.cos(pitch) * np.sin(yaw), np.sin(pitch)])
++        speed = np.dot(vel_np, orientation)
++        return speed
++
++    def __call__(self):
++        """ We convert the vehicle physics information into a convenient dictionary """
++
++        # protect this access against timeout
++        attempts = 0
++        while attempts < self.MAX_CONNECTION_ATTEMPTS:
++            try:
++                velocity = self._vehicle.get_velocity()
++                transform = self._vehicle.get_transform()
++                break
++            except Exception:
++                attempts += 1
++                time.sleep(0.2)
++                continue
++
++        return {'speed': self._get_forward_speed(transform=transform, velocity=velocity)}
++
+ 
+ class CallBack(object):
+ 
+@@ -36,14 +256,14 @@ class CallBack(object):
+     Class the sensors listen to in order to receive their data each frame
+     """
+ 
+-    def __init__(self, tag, sensor, data_provider):
++    def __init__(self, tag, sensor_type, sensor, data_provider):
+         """
+         Initializes the call back
+         """
+         self._tag = tag
+         self._data_provider = data_provider
+ 
+-        self._data_provider.register_sensor(tag, sensor)
++        self._data_provider.register_sensor(tag, sensor_type, sensor)
+ 
+     def __call__(self, data):
+         """
+@@ -59,6 +279,10 @@ class CallBack(object):
+             self._parse_gnss_cb(data, self._tag)
+         elif isinstance(data, carla.IMUMeasurement):
+             self._parse_imu_cb(data, self._tag)
++        elif isinstance(data, GenericMeasurement):
++            self._parse_pseudosensor(data, self._tag)
++        elif isinstance(data, carla.ObstacleDetectionEvent):
++            self._parse_obstacle_cb(data, self._tag)
+         else:
+             logging.error('No callback method for this sensor.')
+ 
+@@ -115,6 +339,16 @@ class CallBack(object):
+                           ], dtype=np.float64)
+         self._data_provider.update_sensor(tag, array, imu_data.frame)
+ 
++    def _parse_pseudosensor(self, package, tag):
++        self._data_provider.update_sensor(tag, package.data, package.frame)
++
++    def _parse_obstacle_cb(self, obstacle_data, tag):
++        """
++        parses obstacle sensors
++        """
++        array = np.array([obstacle_data.distance], dtype=np.float64)
++        self._data_provider.update_sensor(tag, array, obstacle_data.frame)
++
+ 
+ class SensorInterface(object):
+ 
+@@ -130,7 +364,11 @@ class SensorInterface(object):
+         self._new_data_buffers = Queue()
+         self._queue_timeout = 10
+ 
+-    def register_sensor(self, tag, sensor):
++        # Event-based sensors doesn't get the data on tick, need special treatment
++        self._event_based_tags = []
++
++
++    def register_sensor(self, tag, sensor_type, sensor):
+         """
+         Registers the sensors
+         """
+@@ -139,6 +377,9 @@ class SensorInterface(object):
+ 
+         self._sensors_objects[tag] = sensor
+ 
++        if sensor_type == 'sensor.other.obstacle' or sensor_type == 'sensor.other.collision':
++            self._event_based_tags.append(tag)
++
+     def update_sensor(self, tag, data, timestamp):
+         """
+         Updates the sensor
+@@ -156,6 +397,15 @@ class SensorInterface(object):
+             data_dict = {}
+             while len(data_dict.keys()) < len(self._sensors_objects.keys()):
+ 
++                # Don't wait for the obstacle sensor
++                signal_break = False
++                for event_based_tag in self._event_based_tags:
++                    if event_based_tag and event_based_tag not in data_dict.keys() \
++                            and any([len(self._sensors_objects.keys()) == len(data_dict.keys()) + i for i in range(len(self._event_based_tags)+1)]):
++                        signal_break = True
++                if signal_break:
++                    break
++
+                 sensor_data = self._new_data_buffers.get(True, self._queue_timeout)
+                 data_dict[sensor_data[0]] = ((sensor_data[1], sensor_data[2]))
+ 

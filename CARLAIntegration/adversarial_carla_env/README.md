@@ -20,6 +20,10 @@ Install Instructions
         ```
         pip install -r requirements.txt
         ```
+    - Apply patch to `scenario_runner`:
+        ```
+        git apply ../../../adversarial_carla_env/adv_scenario_runner.patch
+        ```
 
 1. Install `adversarial_carla_env` Python packages:
     ```
