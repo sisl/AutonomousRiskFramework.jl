@@ -226,7 +226,7 @@ function POMDPs.actions(mdp::CARLAScenarioMDP, s::ScenarioState)
             end
         end
     end
-    return nothing
+    return []
 end
 
 
