@@ -26,6 +26,7 @@ Install Instructions
         ```
         pip install -r requirements.txt
         ```
+        > If you get errors, try running this beforehand: `pip install --upgrade pip`
     - Apply patch to `scenario_runner`:
         ```
         git apply ../../../adversarial_carla_env/adv_scenario_runner.patch
