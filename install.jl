@@ -48,3 +48,10 @@ end
 
 Pkg.add("MCTS")
 Pkg.add("D3Trees")
+Pkg.add("Distributions")
+Pkg.add("Infiltrator")
+Pkg.add("POMDPModelTools")
+Pkg.add("POMDPPolicies")
+Pkg.add("POMDPs")
+Pkg.add("Parameters")
+Pkg.add("PyCall")
