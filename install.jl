@@ -45,3 +45,6 @@ if ci
     using Conda
     Conda.add("python=3.7.5")
 end
+
+Pkg.add("MCTS")
+Pkg.add("D3Trees")
