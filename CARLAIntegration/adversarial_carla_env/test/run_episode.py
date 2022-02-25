@@ -39,9 +39,10 @@ sensors = [
 weather = "Random"
 seeds = [3] # 228, 92, 103 (Random), 1 (Random Scenario4), 3 (Random Scenario2)
 scenarios = ["Scenario2"] # ["scenario2", Scenario4"]:
+agent = None
 for seed in seeds:
     for scenario_type in scenarios:
-        env = gym.make('adv-carla-v0', sensors=sensors, seed=seed, scenario_type=scenario_type, weather=weather, port=3000)
+        env = gym.make('adv-carla-v0', sensors=sensors, seed=seed, scenario_type=scenario_type, weather=weather, port=3000, agent=agent)
         obs = env.reset()
         t = r = 0
         done = False
@@ -54,6 +55,8 @@ for seed in seeds:
                 action = np.array([2*σ, 2*σ, 0, 0]) # lat/lon/alt/distance
             elif len(sensors) == 3:
                 action = np.array([2*σ, 2*σ, 0, 0, 0.05, -0.5]) # lat/lon/alt/distance/dynamic_noise_std/exposure_compensation
+            elif len(sensors) == 1:
+                action = np.array([2*σ, 2*σ, 0]) # lat/lon/alt
             obs, reward, done, info = env.step(action)
             r += reward
             env.render()

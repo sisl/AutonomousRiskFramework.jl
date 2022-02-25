@@ -149,7 +149,7 @@ class GnssAgent(AutonomousAgent):
         # retrieve relevant elements for safe navigation, i.e.: traffic lights
         # and other vehicles
         actor_list = self._agent._world.get_actors()
-        vehicle_list = actor_list.filter("*vehicle*")
+        vehicle_list = actor_list.filter("*(vehicle)|(walker)*")
         lights_list = actor_list.filter("*traffic_light*")
 
         # check possible obstacles

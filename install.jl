@@ -17,7 +17,9 @@ packages = [
     PackageSpec(url=joinpath(@__DIR__, "RiskSimulator.jl")),
 
     # [deps] ScenarioSelection.jl
-    PackageSpec(url=joinpath(@__DIR__, "ScenarioSelection.jl")),
+    # PackageSpec(url=joinpath(@__DIR__, "ScenarioSelection.jl")),
+    PackageSpec(url="https://github.com/shubhg1996/ImportanceWeightedRiskMetrics.jl"),
+    PackageSpec(url="https://github.com/shubhg1996/TreeImportanceSampling.jl"),
 
     # [deps] AutonomousRiskFramework.jl
     PackageSpec(url="https://github.com/ancorso/POMDPGym.jl"),

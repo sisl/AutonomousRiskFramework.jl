@@ -137,7 +137,7 @@ class AdvCameraCallBack(CallBack):
         self.simulated_camera = None
         self.dynamic_noise_std = 0
         self.exposure_comp = 0
-        self.save_image = True
+        self.save_image = False
         self.counter = 0
         self.dims = 2
 

@@ -1,7 +1,7 @@
 module ScenarioSelection
 
 using Random
-using BayesNets
+# using BayesNets
 using POMDPs
 
 using POMDPModelTools

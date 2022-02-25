@@ -10,6 +10,22 @@ using PyCall
 using RiskSimulator
 pyimport("adv_carla")
 
+function pyreload()
+    py"""
+    import gym
+    env_dict = gym.envs.registration.registry.env_specs.copy()
+    for env in env_dict:
+        if 'adv-carla' in env:
+            print("Remove {} from registry".format(env))
+            del gym.envs.registration.registry.env_specs[env]
+    """
+    sys = pyimport("sys")
+    for env in filter(k->contains(k, "adv_carla"), keys(sys.modules))
+        println("Reloaded $env")
+        pyimport("importlib")."reload"(pyimport(env))
+    end
+end
+
 include("generic_discrete_nonparametric.jl")
 include("ast_td3_solver.jl")
 
@@ -72,7 +88,7 @@ SCENARIO_CLASS_MAPPING = Dict(
     "Scenario3" => "DynamicObjectCrossing",
     "Scenario4" => "VehicleTurningRoute",
     "Scenario5" => "OtherLeadingVehicle",
-    "Scenario6" => "ManeuverOppositeDirection",
+    # "Scenario6" => "ManeuverOppositeDirection", # NOTE: See "test_scenario6_error.{json/xml}"
     # "Scenario7" => "SignalJunctionCrossingRoute",
     # "Scenario8" => "SignalJunctionCrossingRoute",
     # "Scenario9" => "SignalJunctionCrossingRoute",
@@ -128,7 +144,11 @@ function eval_carla(mdp::CARLAScenarioMDP, s::ScenarioState)
 
     gym_args = (sensors=sensors, seed=mdp.seed, scenario_type=scenario_type, weather=weather, no_rendering=false)
     carla_mdp = GymPOMDP(Symbol("adv-carla"); gym_args...)
-    costs = run_ast_solver(carla_mdp, sensors)
+
+    # TODO: Replace with A. Corso TD3 (costs and weights)
+    # prior_weights = POLICY_WEIGHTS[s] # IF EXISTS
+
+    costs = run_td3_solver(carla_mdp, sensors) # NOTE: Pass in `prior_weights`
     risk_metrics = RiskMetrics(costs, mdp.α)
     cvar = risk_metrics.cvar
 
@@ -152,17 +172,17 @@ function eval_carla_single(mdp::CARLAScenarioMDP, s::ScenarioState)
     @info scenario_type
     display(weather)
 
-    carla_mdp = GymPOMDP(Symbol("adv-carla"), sensors=sensors, seed=mdp.seed, scenario_type=scenario_type, weather=weather)
+    carla_mdp = GymPOMDP(Symbol("adv-carla"), sensors=sensors, seed=mdp.seed, scenario_type=scenario_type, weather=weather, no_rendering=false)
     env = carla_mdp.env
     σ = 0.0001 # noise variance
-    info = Dict("rate"=>Inf)
     while !env.done
         action = σ*rand(3) # TODO: replace with some policy?
-        reward, obs, info = step!(env, action)
+        reward, obs, info = POMDPGym.step!(env, action)
+        render(env)
     end
     close(env)
-    # TODO: CARLA info['cost']
-    cost = info["rate"]
+    display(info)
+    cost = info["delta_v"]
     return cost
 end
 
@@ -260,10 +280,18 @@ end
 ##################################################
 # Example MDP
 ##################################################
-mdp = CARLAScenarioMDP()
-Random.seed!(mdp.seed) # Determinism
-s0 = rand(initialstate(mdp))
-rollout(mdp, s0)
+function run_baseline(iters=10)
+    mdp = CARLAScenarioMDP()
+    Random.seed!(mdp.seed) # Determinism
+    Q = []
+    for i in 1:iters
+        @info "Random rollout iteration $i"
+        s0 = rand(initialstate(mdp))
+        q = rollout(mdp, s0)
+        push!(Q, q)
+    end
+    return Q
+end
 
 #=
 policy = RandomPolicy(mdp)

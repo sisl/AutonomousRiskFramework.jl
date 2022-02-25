@@ -24,6 +24,7 @@ import signal
 import sys
 import time
 import warnings
+import math
 
 import carla
 import py_trees
@@ -117,7 +118,7 @@ class AdversarialCARLAEnv(gym.Env):
     disturbance_params = []
 
 
-    def __init__(self, *, seed=0, scenario_type="Scenario2", weather="Random", agent=None, port=2000, record="recordings", params=DEFAULT_PARAMS, sensors=disturbance_params, no_rendering=False):
+    def __init__(self, *, seed=0, scenario_type="Scenario2", weather="Random", agent=None, port=3000, record="recordings", params=DEFAULT_PARAMS, sensors=disturbance_params, no_rendering=False):
         # Scenario/route selections
         dirname = os.path.dirname(__file__)
         example_scenario = False
@@ -142,7 +143,7 @@ class AdversarialCARLAEnv(gym.Env):
         # TODO: How to piggy-back on scenario_runner.py "main()" defaults?
         args = argparse.Namespace(host="127.0.0.1",
                                   port=port,
-                                  timeout=1000.0, # for both ScenarioRunner and Watchdog (with in ScenarioManager)
+                                  timeout=10000.0, # for both ScenarioRunner and Watchdog (within ScenarioManager)
                                   trafficManagerPort=8000,
                                   trafficManagerSeed=0,
                                   sync=True,
@@ -337,6 +338,7 @@ class AdversarialCARLAEnv(gym.Env):
             self._adversarial_replace_sensors()
 
             self._prev_distance = 10000 # TODO...
+            self._prev_speed = 0
             self._timestep = 0
             self._info = {
                 'timestep': 0,
@@ -379,6 +381,13 @@ class AdversarialCARLAEnv(gym.Env):
             # rate = self._distances[-1] - distance
             # self._distances.append(distance)
 
+            velocity = self.scenario_runner.manager.ego_vehicles[0].get_velocity()
+            speed_ms = math.sqrt(velocity.x**2 + velocity.y**2 + velocity.z**2)
+            ms_to_mph = 2.23694
+            speed_mph = speed_ms * ms_to_mph
+            delta_v = self._prev_speed - speed_mph
+            self._prev_speed = speed_mph
+
             self._failed_scenario = collision
 
             timestep = self._info['timestep']
@@ -397,6 +406,8 @@ class AdversarialCARLAEnv(gym.Env):
             self._info['failed_scenario'] = self._failed_scenario
             self._info['distance'] = distance
             self._info['rate'] = rate
+            self._info['speed'] = speed_mph
+            self._info['delta_v'] = delta_v
             self._info['done'] = done
             # Include all necessary state information in `info` to pass to Julia (positions, velocities, etc)
             if agent is None:
@@ -436,7 +447,7 @@ class AdversarialCARLAEnv(gym.Env):
         if collision:
             reward += 100
 
-        return reward
+        return np.float32(reward)
 
 
     def _observation(self, retdict=False):
@@ -665,18 +676,18 @@ class AdversarialCARLAEnv(gym.Env):
                 if sensor.type_id in ADVERSARIAL_SENSOR_MAPPING:
                     # Get the `id` field that is associated to the output of AutonomousAgent.sensors()
                     id = self._associate_sensor_id(sensor_interface, sensor)
+                    if id is not None:
+                        # Get the adversarial sensor callback class from the mapping
+                        if id == "VIDEO_CAMERA":
+                            AdvCallBack = VideoCameraCallBack
+                        else:
+                            AdvCallBack = ADVERSARIAL_SENSOR_MAPPING[sensor.type_id]['callback']
 
-                    # Get the adversarial sensor callback class from the mapping
-                    if id == "VIDEO_CAMERA":
-                        AdvCallBack = VideoCameraCallBack
-                    else:
-                        AdvCallBack = ADVERSARIAL_SENSOR_MAPPING[sensor.type_id]['callback']
-
-                    # Replace the sensor by first deleting it, stopping it, creating a new callback, then starting the listener.
-                    del sensor_interface._sensors_objects[id]
-                    sensor.stop()
-                    self.adv_sensor_callbacks[id] = AdvCallBack(id, sensor, sensor.type_id, sensor_interface)
-                    sensor.listen(self.adv_sensor_callbacks[id])
+                        # Replace the sensor by first deleting it, stopping it, creating a new callback, then starting the listener.
+                        del sensor_interface._sensors_objects[id]
+                        sensor.stop()
+                        self.adv_sensor_callbacks[id] = AdvCallBack(id, sensor, sensor.type_id, sensor_interface)
+                        sensor.listen(self.adv_sensor_callbacks[id])
                 else:
                     warnings.warn("No adversarial version of the sensor type: " + sensor.type_id)
 
