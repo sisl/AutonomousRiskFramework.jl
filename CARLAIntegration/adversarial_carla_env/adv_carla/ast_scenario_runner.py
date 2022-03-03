@@ -13,6 +13,7 @@ else:
 from scenario_runner import ScenarioRunner
 from srunner.scenarios.open_scenario import OpenScenario
 from srunner.scenarios.route_scenario import RouteScenario
+from srunner.scenariomanager.watchdog import Watchdog
 from srunner.scenariomanager.timer import GameTime
 from srunner.scenariomanager.carla_data_provider import CarlaDataProvider
 
@@ -33,6 +34,7 @@ class ASTScenarioRunner(ScenarioRunner):
 
 
     def _load_and_run_scenario(self, config):
+        self.finished = False
         self.scenario_config = config
 
 
@@ -40,6 +42,8 @@ class ASTScenarioRunner(ScenarioRunner):
         """
         Load and run the scenario given by config
         """
+        self.finished = False
+
         if self.running:
             result = self._stop_scenario(self.start_time, self.recorder_name, self.scenario)
             self._cleanup()
@@ -60,6 +64,12 @@ class ASTScenarioRunner(ScenarioRunner):
                 print("Could not setup required agent due to {}".format(e))
                 self._cleanup()
                 return None, None, None # load failed.
+
+        CarlaDataProvider.set_traffic_manager_port(int(self._args.trafficManagerPort))
+        tm = self.client.get_trafficmanager(int(self._args.trafficManagerPort))
+        tm.set_random_device_seed(int(self._args.trafficManagerSeed))
+        if self._args.sync:
+            tm.set_synchronous_mode(False)
 
         # Prepare scenario
         print("Preparing scenario: " + self.scenario_config.name)
@@ -110,6 +120,7 @@ class ASTScenarioRunner(ScenarioRunner):
 
             self.manager.start_system_time = time.time()
             self.start_time = GameTime.get_time()
+            self.manager._watchdog = Watchdog(float(self._args.timeout))
             self.manager._watchdog.start()
             self.manager._running = True
 
@@ -161,13 +172,13 @@ class ASTScenarioRunner(ScenarioRunner):
             print(e)
             result = False
 
+        self.finished = False
         self._cleanup()
         return result
 
 
     def _clean_scenario_ast(self, start_game_time):
-        self.manager._watchdog.stop()
-
+        # self.manager._watchdog.stop()
         self.manager.cleanup()
 
         self.manager.end_system_time = time.time()
@@ -182,6 +193,7 @@ class ASTScenarioRunner(ScenarioRunner):
 
 
     def parse_scenario(self):
+        self.finished = False
         super().run()
 
 

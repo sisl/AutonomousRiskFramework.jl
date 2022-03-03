@@ -32,15 +32,14 @@ function disturbance(m::CARLAScenarioMDP, s::ScenarioState)
 end
 
 tree_mdp = TreeMDP(mdp, 1.0, [], [], disturbance, "sum")
-N = 10
-c = 0.0
-α = 0.1
+N = 1000 # number of samples drawn from the tree (NOTE: D3Tree will have N + number of children nodes)
+c = 0.0 # exploration bonus (NOTE: keep at 0)
+α = 0.1 # VaR/CVaR risk parameter
 planner = TreeImportanceSampling.mcts_isdpw(tree_mdp; N, c, α)
 tree_in_info = true
 planner.solver.tree_in_info = tree_in_info # NOTE!
-β = 0.01
-γ = 0.01
-# a, info = action_info(planner, TreeImportanceSampling.TreeState(s0); tree_in_info=true, β, γ)
+β = 0.01 # for picking equal to Monte Carlo strategy (if β=1 then exactly MC)
+γ = 0.01 # for better estimate of VaR (γ=1 would give minimum variance estimate of VaR)
 a, info = action_info(planner, TreeImportanceSampling.TreeState(s0); tree_in_info=tree_in_info, β, γ)
 
 tis_output = (planner.mdp.costs, [], planner.mdp.IS_weights, info[:tree])

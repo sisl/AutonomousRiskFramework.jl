@@ -1,3 +1,4 @@
+using Distributed
 using Distributions
 using Infiltrator
 using LinearAlgebra
@@ -126,6 +127,41 @@ const ScenarioAction = Any
 end
 
 
+# Restart a new Julia process every X iterations
+global ITERATIONS_PER_PROCSESS = 10
+global ITERATIONS_PER_PROCSESS_COUNTER = 0
+
+function eval_carla_task(mdp::CARLAScenarioMDP, s::ScenarioState)
+    global ITERATIONS_PER_PROCSESS, ITERATIONS_PER_PROCSESS_COUNTER
+    println()
+    if nprocs() <= 1
+        procid = first(addprocs(1; topology=:master_worker))
+        println("Spawning Julia process with id $procid")
+    else
+        procid = last(procs())
+        println("Reusing Julia process id $procid ($ITERATIONS_PER_PROCSESS_COUNTER/$ITERATIONS_PER_PROCSESS)")
+    end
+
+    seed = mdp.seed
+    α = mdp.α
+    scenario_type = s.scenario_type
+    weather = s.weather
+    include("task.jl")
+    task = remotecall_wait(eval_carla_task_core, procid, seed, α, scenario_type, weather)
+    cost = fetch(task)
+
+    ITERATIONS_PER_PROCSESS_COUNTER += 1
+    if ITERATIONS_PER_PROCSESS_COUNTER >= ITERATIONS_PER_PROCSESS
+        println("Removing Julia process id $procid")
+        rmprocs(procid)
+        ITERATIONS_PER_PROCSESS_COUNTER = 0
+    end
+
+    return cost
+end
+
+
+
 function eval_carla(mdp::CARLAScenarioMDP, s::ScenarioState)
     sensors = [
         Dict(
@@ -149,6 +185,7 @@ function eval_carla(mdp::CARLAScenarioMDP, s::ScenarioState)
     # prior_weights = POLICY_WEIGHTS[s] # IF EXISTS
 
     costs = run_td3_solver(carla_mdp, sensors) # NOTE: Pass in `prior_weights`
+    @show costs
     risk_metrics = RiskMetrics(costs, mdp.α)
     cvar = risk_metrics.cvar
 
@@ -175,6 +212,7 @@ function eval_carla_single(mdp::CARLAScenarioMDP, s::ScenarioState)
     carla_mdp = GymPOMDP(Symbol("adv-carla"), sensors=sensors, seed=mdp.seed, scenario_type=scenario_type, weather=weather, no_rendering=false)
     env = carla_mdp.env
     σ = 0.0001 # noise variance
+    local info
     while !env.done
         action = σ*rand(3) # TODO: replace with some policy?
         reward, obs, info = POMDPGym.step!(env, action)
@@ -182,14 +220,14 @@ function eval_carla_single(mdp::CARLAScenarioMDP, s::ScenarioState)
     end
     close(env)
     display(info)
-    cost = info["delta_v"]
+    cost = info["cost"]
     return cost
 end
 
 
 function POMDPs.reward(mdp::CARLAScenarioMDP, s::ScenarioState, a::ScenarioAction)
     if isterminal(mdp, s)
-        cost = eval_carla(mdp, s)
+        cost = eval_carla_task(mdp, s)
         return cost
     else
         return 0

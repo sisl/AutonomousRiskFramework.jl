@@ -36,6 +36,9 @@ def read_routes(routes_xml_file_name):
       array[:,5] = [w['yaw'] for w in route]
       head["waypoints"] = array
       routes_array_list.append(head)
+   del tree
+   del routes_list
+   del waypoint_list_route
    return routes_array_list
 
 def read_scenarios(scenarios_json_file_name):
@@ -163,8 +166,9 @@ def find_route_snippet(rng, scenario_dict, routes_list, error_bound, randomize_f
 
 
 
+
 def write_route(rng, candidate, routes, weather="Random", fname=abspath("data/test.xml")):
-   def write_xml(route,route_id,town,fname):
+   def write_xml(route, route_id, town, fname):
       def rand_number_range(min,max):
          return rng.random()*(max-min)+min
 
@@ -186,6 +190,7 @@ def write_route(rng, candidate, routes, weather="Random", fname=abspath("data/te
          wx.set("fog_density",str(rand_number_range(0,100)))
          wx.set("fog_distance",str(rand_number_range(0,100)))
          wx.set("wetness",str(rand_number_range(0,100)))
+         del wx
       else:
          # `whether` is a dictionary
          wx = ET.SubElement(r,'weather')
@@ -198,6 +203,7 @@ def write_route(rng, candidate, routes, weather="Random", fname=abspath("data/te
          wx.set("fog_density",str(weather['fog_density']))
          wx.set("fog_distance",str(weather['fog_distance']))
          wx.set("wetness",str(weather['wetness']))
+         del wx
 
       # waypoints
       for i in range(no_waypoints):
@@ -208,15 +214,22 @@ def write_route(rng, candidate, routes, weather="Random", fname=abspath("data/te
          w.set("y",str(route[i,1]))
          w.set("yaw",str(route[i,5]))
          w.set("z",str(route[i,2]))
+         del w
       et = ET.ElementTree("tree")
       et._setroot(root)
       et.write(fname, encoding = "UTF-8", xml_declaration = True)
+      root.clear()
+      r.clear()
+      del root
+      del et
+      del r
 
       # #prettify
       # tree = etree.parse(fname)
       # pretty = etree.tostring(tree, encoding="UTF-8", pretty_print=True)
       # print(pretty)
       print("stop")
+
 
    route_id = candidate["id"]
    town = candidate["town"]

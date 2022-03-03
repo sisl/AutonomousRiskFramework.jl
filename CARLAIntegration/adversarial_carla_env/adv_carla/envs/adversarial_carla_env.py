@@ -102,6 +102,7 @@ class AdversarialCARLAEnv(gym.Env):
     scenario_runner = None
     carla_map = None
     spectator_loc = None
+    world = None
 
     # CARLA configuration parameters
     carla_running = False
@@ -119,13 +120,21 @@ class AdversarialCARLAEnv(gym.Env):
 
 
     def __init__(self, *, seed=0, scenario_type="Scenario2", weather="Random", agent=None, port=3000, record="recordings", params=DEFAULT_PARAMS, sensors=disturbance_params, no_rendering=False):
+        self.hardreset(seed=seed, scenario_type=scenario_type, weather=weather, agent=agent, port=port, record=record, params=params, sensors=sensors, no_rendering=no_rendering)
+
+
+    def hardreset(self, *, seed=0, scenario_type="Scenario2", weather="Random", agent=None, port=3000, record="recordings", params=DEFAULT_PARAMS, sensors=disturbance_params, no_rendering=False):
+        print("Hard resetting...")
         # Scenario/route selections
         dirname = os.path.dirname(__file__)
         example_scenario = False
         if example_scenario:
-            route_file = os.path.join(dirname, "../data/routes_ast.xml")
-            scenario_file = os.path.join(dirname, "../data/ast_scenarios.json")
-            self.carla_map = "Town01"
+            route_file = os.path.join(dirname, "../data/test.xml")
+            scenario_file = os.path.join(dirname, "../data/test.json")
+            self.carla_map = "Town04"
+            # route_file = os.path.join(dirname, "../data/routes_ast.xml")
+            # scenario_file = os.path.join(dirname, "../data/ast_scenarios.json")
+            # self.carla_map = "Town01"
             self.spectator_loc = [80.37, 25.30, 0.0]
         else:
             route_file, scenario_file, self.carla_map, self.spectator_loc = create_random_scenario(seed=seed, scenario_type=scenario_type, weather=weather)
@@ -136,14 +145,16 @@ class AdversarialCARLAEnv(gym.Env):
 
         # Agent selections
         if agent is None:
+            # agent = "E:/CARLA_0.9.13/PythonAPI/scenario_runner/srunner/autoagents/npc_agent.py"
             agent = os.path.join(dirname, "../agents/gnss_agent.py")
+
 
         ## Setup ScenarioRunner
         # Setup arguments passed to the ScenarioRunner constructor
         # TODO: How to piggy-back on scenario_runner.py "main()" defaults?
         args = argparse.Namespace(host="127.0.0.1",
                                   port=port,
-                                  timeout=10000.0, # for both ScenarioRunner and Watchdog (within ScenarioManager)
+                                  timeout=600.0, # for both ScenarioRunner and Watchdog (within ScenarioManager)
                                   trafficManagerPort=8000,
                                   trafficManagerSeed=0,
                                   sync=True,
@@ -190,8 +201,10 @@ class AdversarialCARLAEnv(gym.Env):
         if client is None:
             raise Exception("CARLA client failed to open!")
 
+        print("Getting CARLA world from client...")
         world = client.get_world()
         assert(len(self.spectator_loc)==3)
+        print("Setting spectator location...")
         spectator = world.get_spectator()
         new_location = carla.Location(x=float(self.spectator_loc[0]), y=float(self.spectator_loc[1]), z=50+float(self.spectator_loc[2]))
         spectator.set_transform(carla.Transform(new_location, carla.Rotation(pitch=-90)))
@@ -209,15 +222,19 @@ class AdversarialCARLAEnv(gym.Env):
         # else:
         #     self.video_camera = None
 
+        print("Getting CARLA world settings...")
         settings = world.get_settings()
+        print("Setting CARLA no render mode:", no_rendering)
         settings.no_rendering_mode = no_rendering
+        print("Applying CARLA world settings...")
         world.apply_settings(settings)
 
-
         # Create ScenarioRunner object to handle the core route/scenario parsing
+        print("Creating AST scenario runner...")
         self.scenario_runner = ASTScenarioRunner(args, remove_other_actors=True)
 
         # Warm up the scenario_runner
+        print("Warm-starting AST scenario runner...")
         self.scenario_runner.parse_scenario()
 
         # Environment parameters
@@ -227,7 +244,7 @@ class AdversarialCARLAEnv(gym.Env):
         self.max_past_step = params['max_past_step']
 
         # self.dataset = []
-
+        print("Resetting adversarial gym environment...")
         obs = self.reset(retdict=True)
 
         self.center = np.concatenate([v for v in obs.values()], axis=0)
@@ -261,13 +278,19 @@ class AdversarialCARLAEnv(gym.Env):
                 np.array(params['lower_actor_state']*len(self.actor_keys)),
                 np.array(params['upper_actor_state']*len(self.actor_keys)), dtype=np.float32)
 
+        print("Finished initializing AdversarialCARLAEnv.")
+
 
     def open_carla(self):
         # Set CARLA configuration (see CARLA\PythonAPI\util\config.py)
         def setup_carla(timeout=self._args.timeout):
+            print("Getting CARLA client...")
             client = carla.Client(self._args.host, self._args.port, worker_threads=1)
+            print("Setting CARLA timeout...")
             client.set_timeout(timeout)
+            print("Loading CARLA world:", self.carla_map)
             client.load_world(self.carla_map)
+            print("Finished CARLA setup.")
             return client
 
         client = None
@@ -294,7 +317,7 @@ class AdversarialCARLAEnv(gym.Env):
             #     self.carla_running = True
             #     time.sleep(self._args.timeout) # Delay while CARLA spins up
             #     print("Configuring CARLA.")
-            #     client = setup_carla()
+            #     world = setup_carla()
             # except Exception as next_exception:
             #     print("CARLA cannot be opened.")
             #     traceback.print_exc()
@@ -323,6 +346,8 @@ class AdversarialCARLAEnv(gym.Env):
         """
         print("(AdversarialCARLAEnv) Destroyed.")
         if self.scenario_runner is not None:
+            print("\t- Deleting CARLA scenario_runner...")
+            self.scenario_runner.finished = False
             self.scenario_runner.destroy()
             del self.scenario_runner
         # if self.video_camera is not None:
@@ -344,12 +369,22 @@ class AdversarialCARLAEnv(gym.Env):
                 'timestep': 0,
                 'collision': None,
                 'failed_scenario': None}
+            self.turn_on_headlights()
             return self._observation(retdict)
         except Exception as e:
             traceback.print_exc()
             print("Could not reset env due to: {}".format(e))
             self.scenario_runner._cleanup()
             exit(-1)
+
+
+    def turn_on_headlights(self):
+        light_mask = carla.VehicleLightState.NONE | carla.VehicleLightState.LowBeam | carla.VehicleLightState.Position
+        world = CarlaDataProvider.get_world()
+        all_vehicles = world.get_actors()
+        for ve in all_vehicles:
+            if "vehicle." in ve.type_id:
+                ve.set_light_state(carla.VehicleLightState(light_mask))
 
 
     def step(self, action):
@@ -386,8 +421,15 @@ class AdversarialCARLAEnv(gym.Env):
             ms_to_mph = 2.23694
             speed_mph = speed_ms * ms_to_mph
             delta_v = self._prev_speed - speed_mph
-            self._prev_speed = speed_mph
+            
+            # TODO: get force of collision.
+            if collision:
+                self._info['cost'] = self._prev_speed # NOTE: speed at time _right_ before collision (not after collision happened).
+            else:
+                self._info['cost'] = 0
 
+            # Update previous speed after we record it as a cost.
+            self._prev_speed = speed_mph
             self._failed_scenario = collision
 
             timestep = self._info['timestep']
@@ -554,7 +596,8 @@ class AdversarialCARLAEnv(gym.Env):
                 # AST: Apply disturbance
                 if self.scenario_runner.manager._agent is not None:
                     ego_action = self.scenario_runner.manager._agent()  # pylint: disable=not-callable
-                    distance = self.scenario_runner.manager._agent._agent.min_distance
+                    # TODO: Calculate minimium distance to other agents
+                    # distance = self.scenario_runner.manager._agent._agent.min_distance
 
                 if self.scenario_runner.manager._agent is not None:
                     self.scenario_runner.manager.ego_vehicles[0].apply_control(ego_action)
@@ -564,7 +607,10 @@ class AdversarialCARLAEnv(gym.Env):
 
                 if self.follow_ego:
                     spectator = world.get_spectator()
+                    # TODO: Generalize (does not work for NEAT)
+                    #  NOTE: see `self.scenario_runner.manager._agent`
                     spectator_loc = self.scenario_runner.manager._agent._agent._agent._vehicle.get_location()
+                    # spectator_loc = CarlaDataProvider.get_world().get_actors().filter('vehicle.*')[1].get_location()
                     new_location = carla.Location(x=spectator_loc.x, y=spectator_loc.y, z=50+spectator_loc.z)
                     spectator_tf = carla.Transform(new_location, carla.Rotation(pitch=-90))
                     spectator.set_transform(spectator_tf)

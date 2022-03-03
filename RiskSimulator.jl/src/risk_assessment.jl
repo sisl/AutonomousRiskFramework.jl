@@ -27,13 +27,14 @@ end
 
 function RiskMetrics(Z,α)
     # If no failures, no cost distribution.
-    Z = length(Z) == 0 ? [Inf] : Z
+    Z = length(Z) == 0 ? [0] : Z
     𝒫 = ecdf(Z)
     𝒞 = conditional_distr(𝒫, Z, α)
     𝔼 = mean(Z)
     var = VaR(𝒞)
     cvar = CVaR(𝒞)
-    return RiskMetrics(Z=Z, α=α, 𝒫=𝒫, 𝒞=𝒞, mean=𝔼, var=VaR(𝒞), cvar=CVaR(𝒞), worst=worst_case(Z))
+    worst = worst_case(Z)
+    return RiskMetrics(Z=Z, α=α, 𝒫=𝒫, 𝒞=𝒞, mean=𝔼, var=var, cvar=cvar, worst=worst)
 end
 
 function RiskMetricsModeled(Z, α, ℱ; length=1000)

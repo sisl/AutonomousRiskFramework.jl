@@ -32,7 +32,7 @@ end
 # TODO: pass (mdp, s) check isterminal(mdp, s)
 function extract_info(info)
     if info["done"] == true
-        data_point = info["delta_v"]
+        data_point = info["cost"]
     else
         data_point = missing
     end

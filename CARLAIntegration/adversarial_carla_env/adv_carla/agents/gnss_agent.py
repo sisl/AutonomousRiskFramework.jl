@@ -8,8 +8,8 @@ from __future__ import print_function
 
 import carla
 from agents.navigation.basic_agent import BasicAgent
-from agents.navigation.agent import AgentState
-from agents.tools.misc import is_within_distance_ahead, is_within_distance, compute_distance
+# from agents.navigation.agent import AgentState
+from agents.tools.misc import is_within_distance, compute_distance
 import math
 import random
 import numpy as np
@@ -111,9 +111,11 @@ class GnssAgent(AutonomousAgent):
             else:
                 obstacle_data = input_data.get('OBSTACLE')
                 if self.detect_hazard(gnss_data, obstacle_data):
-                    control = self._agent.emergency_stop()
+                    stop_control = carla.VehicleControl()
+                    stop_control.steer = 0.0
+                    control = self._agent.add_emergency_stop(stop_control)
                 else:
-                    self.update_agent_state(AgentState.NAVIGATING)
+                    # self.update_agent_state(AgentState.NAVIGATING)
                     # standard local planner behavior
                     control = self._agent._local_planner.run_step()
 
@@ -157,17 +159,15 @@ class GnssAgent(AutonomousAgent):
         if vehicle_state:
             if debug:
                 print('!!! VEHICLE BLOCKING AHEAD [{}])'.format(vehicle.id))
-
-            self.update_agent_state(AgentState.BLOCKED_BY_VEHICLE)
+            # self.update_agent_state(AgentState.BLOCKED_BY_VEHICLE)
             hazard_detected = True
 
         # check for the state of the traffic lights
-        light_state, traffic_light = self._agent._is_light_red(lights_list)
+        light_state, traffic_light = self._agent._affected_by_traffic_light(lights_list)
         if light_state:
             if debug:
                 print('=== RED LIGHT AHEAD [{}])'.format(traffic_light.id))
-
-            self.update_agent_state(AgentState.BLOCKED_RED_LIGHT)
+            # self.update_agent_state(AgentState.BLOCKED_RED_LIGHT)
             hazard_detected = True
 
         return hazard_detected
@@ -223,9 +223,11 @@ class GnssAgent(AutonomousAgent):
                     if distance <= self._agent._proximity_vehicle_threshold:
                         return (True, target_vehicle)
             else:
-                if is_within_distance_ahead(target_tf,
-                                            ego_tf,
-                                            self._agent._proximity_vehicle_threshold):
+                if is_within_distance(target_tf,
+                                      ego_tf,
+                                      self._agent._proximity_vehicle_threshold,
+                                      self._agent._base_vehicle_threshold
+                                      [0, 90]):
                     return (True, target_vehicle)
 
         return (False, None)
