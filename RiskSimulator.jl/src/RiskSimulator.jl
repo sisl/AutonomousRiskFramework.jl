@@ -1,6 +1,6 @@
 module RiskSimulator # Naming? TODO: RiskAssessment?
 
-using IntelligentDriving
+# using IntelligentDriving
 using ObservationModels
 using AutomotiveSimulator
 using AutomotiveVisualization
@@ -112,7 +112,7 @@ export Simulator,
        # AutomotiveSimulator.jl
        IntelligentDriverModel,
        PrincetonDriver,
-       MPCDriver,
+       # MPCDriver,
 
        # POMDPStressTesting.jl
        search!,

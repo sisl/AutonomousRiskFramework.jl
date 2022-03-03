@@ -96,3 +96,7 @@ Running Instructions
     ```
     python test/run_episode.py
     ```
+> **Note**: you may need to specify the correct python verion:
+> ```
+> sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.7 1
+> ```
