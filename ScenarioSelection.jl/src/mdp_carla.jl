@@ -124,6 +124,7 @@ const ScenarioAction = Any
     weather_bins = 4
     weather_distr = discretize!(Weather(), weather_bins)
     final_state = nothing
+    counter::Int = 0
 end
 
 
@@ -131,7 +132,7 @@ end
 global ITERATIONS_PER_PROCSESS = 10
 global ITERATIONS_PER_PROCSESS_COUNTER = 0
 
-function eval_carla_task(mdp::CARLAScenarioMDP, s::ScenarioState)
+function eval_carla_task!(mdp::CARLAScenarioMDP, s::ScenarioState)
     global ITERATIONS_PER_PROCSESS, ITERATIONS_PER_PROCSESS_COUNTER
     println()
     if nprocs() <= 1
@@ -142,7 +143,7 @@ function eval_carla_task(mdp::CARLAScenarioMDP, s::ScenarioState)
         println("Reusing Julia process id $procid ($ITERATIONS_PER_PROCSESS_COUNTER/$ITERATIONS_PER_PROCSESS)")
     end
 
-    seed = mdp.seed
+    seed = mdp.seed + mdp.counter
     α = mdp.α
     scenario_type = s.scenario_type
     weather = s.weather
@@ -156,6 +157,8 @@ function eval_carla_task(mdp::CARLAScenarioMDP, s::ScenarioState)
         rmprocs(procid)
         ITERATIONS_PER_PROCSESS_COUNTER = 0
     end
+
+    mdp.counter += 1
 
     return cost
 end
@@ -227,7 +230,7 @@ end
 
 function POMDPs.reward(mdp::CARLAScenarioMDP, s::ScenarioState, a::ScenarioAction)
     if isterminal(mdp, s)
-        cost = eval_carla_task(mdp, s)
+        cost = eval_carla_task!(mdp, s)
         return cost
     else
         return 0

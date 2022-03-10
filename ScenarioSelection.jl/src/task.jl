@@ -25,13 +25,14 @@
         sensors = [
             Dict(
                 "id" => "GPS",
-                "lat" => Dict("mean" => 0, "std" => 0.0001, "upper" => 10, "lower" => -10),
-                "lon" => Dict("mean" => 0, "std" => 0.0001, "upper" => 10, "lower" => -10),
+                "lat" => Dict("mean" => 0, "std" => 0.0001, "upper" => 0.000000001, "lower" => -0.000000001),
+                "lon" => Dict("mean" => 0, "std" => 0.0001, "upper" => 0.000000001, "lower" => -0.000000001),
                 "alt" => Dict("mean" => 0, "std" => 0.00000001, "upper" => 0.0000001, "lower" => 0),
             ),
         ]
 
         @info "$scenario_type: $(SCENARIO_CLASS_MAPPING[scenario_type])"
+        @info "Seed: $seed"
         display(weather)
 
         gym_args = (sensors=sensors, seed=seed, scenario_type=scenario_type, weather=weather, no_rendering=false)

@@ -451,19 +451,20 @@ class AdversarialCARLAEnv(gym.Env):
             self._info['speed'] = speed_mph
             self._info['delta_v'] = delta_v
             self._info['done'] = done
+
             # Include all necessary state information in `info` to pass to Julia (positions, velocities, etc)
-            if agent is None:
-                self._info['ego_sensor_location'] = None
-                self._info['ego_truth_location'] = None
-            else:
-                if hasattr(agent, 'ego_truth_location') and agent.ego_truth_location is not None:
-                    self._info['ego_truth_location'] = [agent.ego_truth_location.x, agent.ego_truth_location.y]
-                else:
-                    self._info['ego_sensor_location'] = 0
-                if hasattr(agent, 'ego_sensor_location') and agent.ego_sensor_location is not None:
-                    self._info['ego_sensor_location'] = [agent.ego_sensor_location.x, agent.ego_sensor_location.y]
-                else:
-                    self._info['ego_truth_location'] = 0
+            # if agent is None:
+            #     self._info['ego_sensor_location'] = None
+            #     self._info['ego_truth_location'] = None
+            # else:
+            #     if hasattr(agent, 'ego_truth_location') and agent.ego_truth_location is not None:
+            #         self._info['ego_truth_location'] = [agent.ego_truth_location.x, agent.ego_truth_location.y]
+            #     else:
+            #         self._info['ego_sensor_location'] = 0
+            #     if hasattr(agent, 'ego_sensor_location') and agent.ego_sensor_location is not None:
+            #         self._info['ego_sensor_location'] = [agent.ego_sensor_location.x, agent.ego_sensor_location.y]
+            #     else:
+            #         self._info['ego_truth_location'] = 0
 
             # Calculate the reward for this step
             reward = self._reward(self._info)
@@ -562,8 +563,8 @@ class AdversarialCARLAEnv(gym.Env):
         print("Reward:", self._info['reward'])
         print("Collision:", self._info['collision'])
         print("Failed:", self._info['failed_scenario'])
-        print("Ego sensor (x,y):", self._info['ego_sensor_location'])
-        print("Ego truth (x,y):", self._info['ego_truth_location'])
+        # print("Ego sensor (x,y):", self._info['ego_sensor_location'])
+        # print("Ego truth (x,y):", self._info['ego_truth_location'])
         print("="*50)
 
 

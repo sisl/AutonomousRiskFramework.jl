@@ -94,7 +94,8 @@ class GnssAgent(AutonomousAgent):
                         hero_actor = actor
                         break
                 if hero_actor:
-                    self._agent = BasicAgent(hero_actor, target_speed=25)
+                    target_speed = hero_actor.get_speed_limit()
+                    self._agent = BasicAgent(hero_actor, target_speed=target_speed)
 
                 return control
 
