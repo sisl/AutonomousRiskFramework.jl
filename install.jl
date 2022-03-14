@@ -23,6 +23,9 @@ packages = [
 
     # [deps] AutonomousRiskFramework.jl
     PackageSpec(url="https://github.com/ancorso/POMDPGym.jl"),
+
+    PackageSpec(url="https://github.com/rdyro/SpAutoDiff.jl"),
+
     PackageSpec(url="https://github.com/ancorso/Crux.jl"),
     PackageSpec(url=joinpath(@__DIR__)),
 ]
