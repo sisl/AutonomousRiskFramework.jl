@@ -10,14 +10,14 @@ packages = [
     PackageSpec(url=joinpath(@__DIR__, "STLCG.jl")),
 
     # [deps] IntelligentDriving.jl
-    # PackageSpec(url="https://github.com/rdyro/SpAutoDiff.jl"),
-    # PackageSpec(url=joinpath(@__DIR__, "IntelligentDriving.jl")),
+    PackageSpec(url="https://github.com/rdyro/SpAutoDiff.jl"),
+    PackageSpec(url=joinpath(@__DIR__, "IntelligentDriving.jl")),
 
     # [deps] RiskSimulator.jl
     PackageSpec(url=joinpath(@__DIR__, "RiskSimulator.jl")),
 
     # [deps] ScenarioSelection.jl
-    # PackageSpec(url=joinpath(@__DIR__, "ScenarioSelection.jl")),
+    PackageSpec(url=joinpath(@__DIR__, "ScenarioSelection.jl")),
     PackageSpec(url="https://github.com/shubhg1996/ImportanceWeightedRiskMetrics.jl"),
     PackageSpec(url="https://github.com/shubhg1996/TreeImportanceSampling.jl"),
 
@@ -55,3 +55,4 @@ Pkg.add("POMDPPolicies")
 Pkg.add("POMDPs")
 Pkg.add("Parameters")
 Pkg.add("PyCall")
+Pkg.add("Flux")
