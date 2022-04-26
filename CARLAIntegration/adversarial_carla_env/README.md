@@ -91,7 +91,7 @@ Install Instructions
 
 Running Instructions
 ========================
-1. Start CARLA using the `carla_start.sh` (Unix) or `carla_start.bat` scripts.
+1. Start CARLA using the `carla_start.sh` (Unix) or `carla_start.bat` (Windows) scripts.
 1. Execute stress testing and record the final trajectory (requires setting environment variables, see above).
     ```
     python test/run_episode.py
