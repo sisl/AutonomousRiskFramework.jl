@@ -88,7 +88,15 @@ Install Instructions
     ```
 
 1. Install fork of the NEAT agent:
-    - (Clone it into the `CARLAIntegration` directory): `git clone https://github.com/sisl/neat`
+    - (Clone it into the `CARLAIntegration` directory):
+        - `git clone https://github.com/sisl/neat`
+        - Download NEAT pretrained models (from their [README](https://github.com/sisl/neat#training)):
+        ```
+        mkdir model_ckpt
+        wget https://s3.eu-central-1.amazonaws.com/avg-projects/neat/models.zip -P model_ckpt
+        unzip model_ckpt/models.zip -d model_ckpt/
+        rm model_ckpt/models.zip
+        ```
 
 
 Running Instructions

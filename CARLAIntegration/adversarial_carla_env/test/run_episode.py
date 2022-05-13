@@ -45,7 +45,6 @@ def main():
     if USE_NEAT:
         dirname = os.path.dirname(__file__)
         agent = os.path.abspath(os.path.join(dirname, "../../neat/leaderboard/team_code/neat_agent.py"))
-        print(agent)
     else:
         agent = None
     for seed in seeds:
