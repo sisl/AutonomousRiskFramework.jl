@@ -97,6 +97,8 @@ Install Instructions
         unzip model_ckpt/models.zip -d model_ckpt/
         rm model_ckpt/models.zip
         ```
+        - (DEBUG): If you get an error `Torch not compiled with CUDA enabled` then run the following:
+            - `pip install torch===1.5.0 torchvision===0.6.0 -f https://download.pytorch.org/whl/torch_stable.html`
 
 
 Running Instructions
