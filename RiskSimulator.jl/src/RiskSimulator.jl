@@ -112,7 +112,7 @@ export Simulator,
        # AutomotiveSimulator.jl
        IntelligentDriverModel,
        PrincetonDriver,
-       # MPCDriver,
+       MPCDriver,
 
        # POMDPStressTesting.jl
        search!,

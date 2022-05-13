@@ -138,6 +138,7 @@ class ASTScenarioRunner(ScenarioRunner):
 
     def _check_failures(self):
         failure = False
+        intensity = 0
         for i, criterion in enumerate(self.manager.scenario.get_criteria()):
             if i!=1:
                 continue
@@ -145,12 +146,13 @@ class ASTScenarioRunner(ScenarioRunner):
                     criterion.test_status == "FAILURE" and
                         self.test_status != "FAILURE"):
                 failure = True
+                intensity = criterion.collision_intensity
             elif criterion.test_status == "ACCEPTABLE":
                 failure = False
         if failure:
             self.test_status = "FAILURE"
 
-        return failure
+        return failure, intensity
 
 
     def _stop_scenario(self, start_time, recorder_name, scenario):

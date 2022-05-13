@@ -125,14 +125,17 @@ const ScenarioAction = Any
     weather_distr = discretize!(Weather(), weather_bins)
     final_state = nothing
     counter::Int = 0
+    monte_carlo_run::Bool = false # indicate whether to use MC for tree search and skip DRL at leaf nodes (to simply run scenario)
+    collect_data::Bool = true
+    datasets::Vector = []
 end
 
 
 # Restart a new Julia process every X iterations
-global ITERATIONS_PER_PROCSESS = 10
+global ITERATIONS_PER_PROCSESS = 5
 global ITERATIONS_PER_PROCSESS_COUNTER = 0
 
-function eval_carla_task!(mdp::CARLAScenarioMDP, s::ScenarioState)
+function eval_carla_task!(mdp::CARLAScenarioMDP, s::ScenarioState; kwargs...)
     global ITERATIONS_PER_PROCSESS, ITERATIONS_PER_PROCSESS_COUNTER
     println()
     if nprocs() <= 1
@@ -148,8 +151,12 @@ function eval_carla_task!(mdp::CARLAScenarioMDP, s::ScenarioState)
     scenario_type = s.scenario_type
     weather = s.weather
     include("task.jl")
-    task = remotecall_wait(eval_carla_task_core, procid, seed, α, scenario_type, weather)
-    cost = fetch(task)
+    task = remotecall_wait(eval_carla_task_core, procid, seed, α, scenario_type, weather; kwargs...)
+    cost, dataset = fetch(task)
+
+    if mdp.collect_data
+        push!(mdp.datasets, dataset)
+    end
 
     ITERATIONS_PER_PROCSESS_COUNTER += 1
     if ITERATIONS_PER_PROCSESS_COUNTER >= ITERATIONS_PER_PROCSESS
@@ -173,6 +180,11 @@ function eval_carla(mdp::CARLAScenarioMDP, s::ScenarioState)
             "lon" => Dict("mean" => 0, "std" => 0.0001, "upper" => 10, "lower" => -10),
             "alt" => Dict("mean" => 0, "std" => 0.00000001, "upper" => 0.0000001, "lower" => 0),
         ),
+        Dict(
+            "id" => "rgb",
+            "dynamic_noise_std" => Dict("mean" => 0, "std" => 0.001, "upper" => 1, "lower" => 0),
+            "exposure_compensation" => Dict("mean" => 0, "std" => 0.5, "upper" => 1, "lower" => -1),
+        ),
     ]
 
     scenario_type = s.scenario_type
@@ -181,7 +193,14 @@ function eval_carla(mdp::CARLAScenarioMDP, s::ScenarioState)
     @info "$scenario_type: $(SCENARIO_CLASS_MAPPING[scenario_type])"
     display(weather)
 
-    gym_args = (sensors=sensors, seed=mdp.seed, scenario_type=scenario_type, weather=weather, no_rendering=false)
+    use_neat = false
+    if use_neat
+        agent = "C:/Users/mossr/Code/sisl/ast/Allstate/AutonomousRiskFramework/CARLAIntegration/neat/leaderboard/team_code/neat_agent.py"
+        gym_args = (sensors=sensors, seed=mdp.seed, scenario_type=scenario_type, weather=weather, no_rendering=false, agent=agent)
+    else
+        deleteat!(sensors, 2)
+        gym_args = (sensors=sensors, seed=mdp.seed, scenario_type=scenario_type, weather=weather, no_rendering=false)
+    end
     carla_mdp = GymPOMDP(Symbol("adv-carla"); gym_args...)
 
     # TODO: Replace with A. Corso TD3 (costs and weights)
@@ -230,7 +249,7 @@ end
 
 function POMDPs.reward(mdp::CARLAScenarioMDP, s::ScenarioState, a::ScenarioAction)
     if isterminal(mdp, s)
-        cost = eval_carla_task!(mdp, s)
+        cost = eval_carla_task!(mdp, s; monte_carlo_run=mdp.monte_carlo_run)
         return cost
     else
         return 0
@@ -276,14 +295,14 @@ POMDPs.discount(mdp::CARLAScenarioMDP) = mdp.γ
 
 function POMDPs.actions(mdp::CARLAScenarioMDP, s::ScenarioState)
     if isnothing(s.scenario_type)
-        return mdp.scenario_type_distr.g_support
+        return mdp.scenario_type_distr
     elseif isnothing(s.weather)
         s.weather = initialize_weather_dict()
         return actions(mdp, s)
     else
         for k in keys(s.weather)
             if isnothing(s.weather[k])
-                return getfield(mdp.weather_distr, k).g_support
+                return getfield(mdp.weather_distr, k)
             end
         end
     end

@@ -16,7 +16,7 @@ sensors = [
     #     'distance': {'mean': 0, 'std': 1, 'upper': 10, 'lower': -10},
     # },
     # {
-    #     'id': 'CAMERA',
+    #     'id': 'rgb',
     #     'dynamic_noise_std': {'mean': 0, 'std': 0.001, 'upper': 1, 'lower': 0},
     #     'exposure_compensation': {'mean': 0, 'std': 0.5, 'upper': 1, 'lower': -1},
     # },
@@ -65,7 +65,8 @@ def main():
                 if len(sensors) == 1:
                     action = np.array([2*σ, 2*σ, 0]) # lat/lon/alt
                 elif len(sensors) == 2:
-                    action = np.array([2*σ, 2*σ, 0, 0]) # lat/lon/alt/distance
+                    exposure = 2*np.random.rand() - 1 # 0.5
+                    action = np.array([2*σ, 2*σ, 0, 0.05, exposure]) # lat/lon/alt/dynamic_noise_std/exposure_compensation
                 elif len(sensors) == 3:
                     action = np.array([2*σ, 2*σ, 0, 0, 0.05, -0.5]) # lat/lon/alt/distance/dynamic_noise_std/exposure_compensation
                 elif len(sensors) == 1:

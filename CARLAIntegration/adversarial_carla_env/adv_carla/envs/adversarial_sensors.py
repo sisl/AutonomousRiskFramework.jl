@@ -150,8 +150,7 @@ class AdvCameraCallBack(CallBack):
         array = copy.deepcopy(array)
         array = np.reshape(array, (data.height, data.width, 4))
 
-        if self.simulated_camera is None:
-            self.simulated_camera = SimulatedCamera(array, exposure_compensation=self.exposure_comp)
+        self.simulated_camera = SimulatedCamera(array, exposure_compensation=self.exposure_comp)
 
         if self.save_image:
             save_camera_image(array, "./images/ego/" + str(self.counter) + "_before_image.png")

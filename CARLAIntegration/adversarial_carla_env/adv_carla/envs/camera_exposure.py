@@ -1,6 +1,5 @@
 import torch
 import torch.distributions as td
-from PyPGF import figure, colors, plots, axes
 import numpy as np
 
 def calculate_new_exposure(A_t,weights,c,gamma,ab_1_peak,ab_2_peak):
@@ -20,7 +19,19 @@ def calculate_new_exposure(A_t,weights,c,gamma,ab_1_peak,ab_2_peak):
     m = td.MixtureSameFamily(cat,b)
     #OUTPUT: Mean and std
     # return m.sample(torch.Size([1]))*2-1
-    return m.mean, m.stddev
+    return m.mean.item(), m.stddev.item()
+
+
+def exposure_mean_std(exposure):
+    weights = [0.005,0.005,0.99]
+    c = 50000
+    gamma = 0.7
+    ab_1_peak = 2
+    ab_2_peak = 55
+    if isinstance(exposure, float):
+        exposure = torch.Tensor([exposure])
+    return calculate_new_exposure(exposure, weights, c, gamma, ab_1_peak, ab_2_peak)
+
 
 if __name__=="__main__":
     A_0 = torch.FloatTensor([0])

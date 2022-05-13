@@ -37,6 +37,7 @@ else:
 from ..ast_scenario_runner import ASTScenarioRunner
 from ..generate_random_scenario import *
 from .adversarial_sensors import *
+from .camera_exposure import *
 
 from srunner.scenariomanager.carla_data_provider import CarlaDataProvider
 from srunner.scenariomanager.timer import GameTime
@@ -106,7 +107,7 @@ class AdversarialCARLAEnv(gym.Env):
 
     # CARLA configuration parameters
     carla_running = False
-    follow_ego = True
+    follow_ego = False
     save_video = True
 
     # Gym environment parameters
@@ -257,11 +258,11 @@ class AdversarialCARLAEnv(gym.Env):
         # assert(len(self.actor_keys) > 1) # Ensure other actors are around (after removing background actors)
 
         # reward parameters
-        sensor_params_list = self._associate_adv_sensor_params() # TODO: How to handle multiple adv. sensor types in the action space?
-        self.mean_disturbance, self.var_disturbance = self._get_disturbance_params(sensor_params_list)
+        self.sensor_params_list = self._associate_adv_sensor_params() # TODO: How to handle multiple adv. sensor types in the action space?
+        self.mean_disturbance, self.var_disturbance = self._get_disturbance_params(self.sensor_params_list)
 
         # action space
-        lower, upper = self._get_disturbance_action_bounds(sensor_params_list)
+        lower, upper = self._get_disturbance_action_bounds(self.sensor_params_list)
         self.action_space = spaces.Box(lower, upper, dtype=np.float32)
 
         # observation_space_dict = {}
@@ -400,7 +401,7 @@ class AdversarialCARLAEnv(gym.Env):
                 if not self.scenario_runner.running:
                     break
 
-            collision = self.scenario_runner._check_failures()
+            collision, collision_intensity = self.scenario_runner._check_failures()
 
             observation = self._observation() # done before cleanup
             # self._observations.append(observation)
@@ -424,11 +425,12 @@ class AdversarialCARLAEnv(gym.Env):
             
             # TODO: get force of collision.
             if collision:
-                self._info['cost'] = self._prev_speed # NOTE: speed at time _right_ before collision (not after collision happened).
+                self._info['cost'] = collision_intensity # self._prev_speed # NOTE: speed at time _right_ before collision (not after collision happened).
             else:
                 self._info['cost'] = 0
 
             # Update previous speed after we record it as a cost.
+            self._info['speed_before_collision'] = self._prev_speed
             self._prev_speed = speed_mph
             self._failed_scenario = collision
 
@@ -483,6 +485,16 @@ class AdversarialCARLAEnv(gym.Env):
         failed_scenario = info['failed_scenario']
         collision = info['collision']
         distance = info['distance']
+
+        exposure = action[-1] # TODO.
+        exposure_mean, exposure_std = exposure_mean_std(exposure)
+        camera_idx = 1 # TODO.
+        sensor_params_list = copy.deepcopy(self.sensor_params_list)
+        self.mean_disturbance[-1] = exposure_mean
+        self.var_disturbance[-1] = exposure_std**2
+        # sensor_params_list[camera_idx]['exposure_compensation']['mean'] = exposure_mean
+        # sensor_params_list[camera_idx]['exposure_compensation']['std'] = exposure_std
+        # self.mean_disturbance, self.var_disturbance = self._get_disturbance_params(sensor_params_list) # TODO. Cleverly only recompute the camera exposure values (not all of them)
 
         # TODO: scale to be reasonable sized (Within [-1, 1])
         reward = -utils.mahalanobis_d(action, self.mean_disturbance, self.var_disturbance)/utils.mahalanobis_d(10*self.var_disturbance, self.mean_disturbance, self.var_disturbance)
@@ -563,6 +575,7 @@ class AdversarialCARLAEnv(gym.Env):
         print("Reward:", self._info['reward'])
         print("Collision:", self._info['collision'])
         print("Failed:", self._info['failed_scenario'])
+        print("Cost:", self._info['cost'])
         # print("Ego sensor (x,y):", self._info['ego_sensor_location'])
         # print("Ego truth (x,y):", self._info['ego_truth_location'])
         print("="*50)
@@ -652,7 +665,7 @@ class AdversarialCARLAEnv(gym.Env):
             if sensor_type in ADVERSARIAL_SENSOR_MAPPING:
                 for key in ADVERSARIAL_SENSOR_MAPPING[sensor_type]['params']:
                     means = np.append(means, params[key]['mean'])
-                    variances = np.append(variances, params[key]['std'])**2
+                    variances = np.append(variances, params[key]['std']**2)
             else:
                 raise Exception("Please add the following sensor type to ADVERSARIAL_SENSOR_MAPPING: " + sensor_type)
         return means, variances
@@ -723,7 +736,7 @@ class AdversarialCARLAEnv(gym.Env):
                 if sensor.type_id in ADVERSARIAL_SENSOR_MAPPING:
                     # Get the `id` field that is associated to the output of AutonomousAgent.sensors()
                     id = self._associate_sensor_id(sensor_interface, sensor)
-                    if id is not None:
+                    if id is not None and (id is "rgb" or id is "GPS"):
                         # Get the adversarial sensor callback class from the mapping
                         if id == "VIDEO_CAMERA":
                             AdvCallBack = VideoCameraCallBack
