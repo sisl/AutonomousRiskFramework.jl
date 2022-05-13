@@ -128,6 +128,17 @@ const ScenarioAction = Any
     monte_carlo_run::Bool = false # indicate whether to use MC for tree search and skip DRL at leaf nodes (to simply run scenario)
     collect_data::Bool = true
     datasets::Vector = []
+    apply_gnss_noise::Bool = false
+    use_neat::Bool = true
+    sensor_config_gnss::Dict = Dict(
+        "id" => "GPS",
+        "lat" => Dict("mean" => 0, "std" => 0.0001, "upper" => 0.000000001, "lower" => -0.000000001),
+        "lon" => Dict("mean" => 0, "std" => 0.0001, "upper" => 0.000000001, "lower" => -0.000000001),
+        "alt" => Dict("mean" => 0, "std" => 0.00000001, "upper" => 0.0000001, "lower" => 0))
+    sensor_config_camera = Dict(
+        "id" => "rgb",
+        "dynamic_noise_std" => Dict("mean" => 0, "std" => 0.001, "upper" => 1, "lower" => 0),
+        "exposure_compensation" => Dict("mean" => 0, "std" => 0.5, "upper" => 1, "lower" => -1))
 end
 
 
@@ -173,20 +184,7 @@ end
 
 
 function eval_carla(mdp::CARLAScenarioMDP, s::ScenarioState)
-    sensors = [
-        Dict(
-            "id" => "GPS",
-            "lat" => Dict("mean" => 0, "std" => 0.0001, "upper" => 10, "lower" => -10),
-            "lon" => Dict("mean" => 0, "std" => 0.0001, "upper" => 10, "lower" => -10),
-            "alt" => Dict("mean" => 0, "std" => 0.00000001, "upper" => 0.0000001, "lower" => 0),
-        ),
-        Dict(
-            "id" => "rgb",
-            "dynamic_noise_std" => Dict("mean" => 0, "std" => 0.001, "upper" => 1, "lower" => 0),
-            "exposure_compensation" => Dict("mean" => 0, "std" => 0.5, "upper" => 1, "lower" => -1),
-        ),
-    ]
-
+    sensors = [mdp.sensor_config_gnss, mdp.sensor_config_camera]
     scenario_type = s.scenario_type
     weather = s.weather
 
@@ -216,15 +214,7 @@ end
 
 
 function eval_carla_single(mdp::CARLAScenarioMDP, s::ScenarioState)
-    sensors = [
-        Dict(
-            "id" => "GPS",
-            "lat" => Dict("mean" => 0, "std" => 0.0001, "upper" => 10, "lower" => -10),
-            "lon" => Dict("mean" => 0, "std" => 0.0001, "upper" => 10, "lower" => -10),
-            "alt" => Dict("mean" => 0, "std" => 0.00000001, "upper" => 0.0000001, "lower" => 0),
-        ),
-    ]
-
+    sensors = [mdp.sensor_config_gnss]
     scenario_type = s.scenario_type
     weather = s.weather
 
@@ -249,7 +239,9 @@ end
 
 function POMDPs.reward(mdp::CARLAScenarioMDP, s::ScenarioState, a::ScenarioAction)
     if isterminal(mdp, s)
-        cost = eval_carla_task!(mdp, s; monte_carlo_run=mdp.monte_carlo_run)
+        cost = eval_carla_task!(mdp, s; monte_carlo_run=mdp.monte_carlo_run,
+                                use_neat=mdp.use_neat, apply_gnss_noise=mdp.apply_gnss_noise,
+                                sensor_config_gnss=mdp.sensor_config_gnss, sensor_config_camera=mdp.sensor_config_camera)
         return cost
     else
         return 0

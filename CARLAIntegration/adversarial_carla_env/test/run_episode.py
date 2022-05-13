@@ -4,17 +4,20 @@ import adv_carla
 import os
 
 USE_NEAT = True
+USE_GNSS_SENSOR = False or not USE_NEAT
 USE_RANDOM_WEATHER = False
 
 # maps to the AutonomousAgent.sensors() return vector.
-sensors = [
-    {
+sensors = []
+
+if USE_GNSS_SENSOR:
+    gnss_sensor_config = {
         'id': 'GPS',
         'lat': {'mean': 0, 'std': 0.0001, 'upper': 10, 'lower': -10},
         'lon': {'mean': 0, 'std': 0.0001, 'upper': 10, 'lower': -10},
         'alt': {'mean': 0, 'std': 0.00000001, 'upper': 0.0000001, 'lower': 0},
     }
-]
+    sensors.append(gnss_sensor_config)
 
 if USE_NEAT:
     camera_sensor_config = {
@@ -56,15 +59,16 @@ def main():
             σ = 0.00001 # noise standard deviation (1.11 meters)
             while not done:
                 t += 1
-                if len(sensors) == 1:
-                    action = np.array([2*σ, 2*σ, 0]) # lat/lon/alt
-                elif len(sensors) == 2:
-                    exposure = 2*np.random.rand() - 1 # 0.5
-                    action = np.array([2*σ, 2*σ, 0, 0.05, exposure]) # lat/lon/alt/dynamic_noise_std/exposure_compensation
-                elif len(sensors) == 3:
-                    action = np.array([2*σ, 2*σ, 0, 0, 0.05, -0.5]) # lat/lon/alt/distance/dynamic_noise_std/exposure_compensation
-                elif len(sensors) == 1:
-                    action = np.array([2*σ, 2*σ, 0]) # lat/lon/alt
+                action = np.array([])
+                if USE_GNSS_SENSOR:
+                    lat = 2*σ
+                    lon = 2*σ
+                    alt = 0
+                    action = np.append(action, [lat, lon, alt])
+                if USE_NEAT:
+                    exposure = 2*np.random.rand() - 1 # random number between -1 and 1
+                    dynamic_noise_std = np.random.rand()/10 # random number between 0 and 0.1
+                    action = np.append(action, [dynamic_noise_std, exposure])
                 obs, reward, done, info = env.step(action)
                 r += reward
                 env.render()

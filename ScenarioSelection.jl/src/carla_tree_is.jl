@@ -15,7 +15,7 @@ function save_bson(planner, filename)
     @time BSON.@save filename planner
 end
 
-mdp = CARLAScenarioMDP()
+mdp = CARLAScenarioMDP(use_neat=true, apply_gnss_noise=false)
 Random.seed!(mdp.seed) # Determinism
 
 RESUME = false
