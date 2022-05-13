@@ -1,58 +1,53 @@
 import numpy as np
 import gym
 import adv_carla
+import os
+
+USE_NEAT = True
+USE_RANDOM_WEATHER = False
 
 # maps to the AutonomousAgent.sensors() return vector.
-# TODO: default these adversarial sensor parameters!
 sensors = [
     {
         'id': 'GPS',
         'lat': {'mean': 0, 'std': 0.0001, 'upper': 10, 'lower': -10},
         'lon': {'mean': 0, 'std': 0.0001, 'upper': 10, 'lower': -10},
         'alt': {'mean': 0, 'std': 0.00000001, 'upper': 0.0000001, 'lower': 0},
-    },
-    # {
-    #     'id': 'OBSTACLE',
-    #     'distance': {'mean': 0, 'std': 1, 'upper': 10, 'lower': -10},
-    # },
-    # {
-    #     'id': 'rgb',
-    #     'dynamic_noise_std': {'mean': 0, 'std': 0.001, 'upper': 1, 'lower': 0},
-    #     'exposure_compensation': {'mean': 0, 'std': 0.5, 'upper': 1, 'lower': -1},
-    # },
-    # {
-    #     'id': 'COLLISION',
-    #     'normal_impulse': {'mean': 0, 'std': 1, 'upper': 10, 'lower': -10},
-    # },
-]
-# weather = {
-#     'cloudiness': 0,
-#     'precipitation': 0,
-#     'precipitation_deposits': 0,
-#     'wind_intensity': 0,
-#     'sun_azimuth_angle': 0,
-#     'sun_altitude_angle': 70,
-#     'fog_density': 0,
-#     'fog_distance': 0,
-#     'wetness': 0,
-# }
-def main():
-    # weather = "Random"
-    weather = {
-        'cloudiness': 0.0,
-        'precipitation_deposits': 0.0,
-        'wetness': 66.6667,
-        'fog_density': 100.0,
-        'wind_intensity': 66.6667,
-        'precipitation': 33.3333,
-        'sun_altitude_angle': -30.0,
-        'sun_azimuth_angle': 120.0,
-        'fog_distance': 100.0
     }
+]
+
+if USE_NEAT:
+    camera_sensor_config = {
+        'id': 'rgb',
+        'dynamic_noise_std': {'mean': 0, 'std': 0.001, 'upper': 1, 'lower': 0},
+        'exposure_compensation': {'mean': 0, 'std': 0.5, 'upper': 1, 'lower': -1},
+    }
+    sensors.append(camera_sensor_config)
+
+
+def main():
+    if USE_RANDOM_WEATHER:
+        weather = "Random"
+    else:
+        weather = {
+            'cloudiness': 0.0,
+            'precipitation_deposits': 0.0,
+            'wetness': 66.6667,
+            'fog_density': 100.0,
+            'wind_intensity': 66.6667,
+            'precipitation': 33.3333,
+            'sun_altitude_angle': -30.0,
+            'sun_azimuth_angle': 120.0,
+            'fog_distance': 100.0
+        }
     seeds = [3] # 228, 92, 103 (Random), 1 (Random Scenario4), 3 (Random Scenario2)
     scenarios = ["Scenario2"] # ["scenario2", Scenario4"]:
-    # agent = "C:/Users/mossr/Code/sisl/ast/Allstate/AutonomousRiskFramework/CARLAIntegration/neat/leaderboard/team_code/neat_agent.py"
-    agent = None
+    if USE_NEAT:
+        dirname = os.path.dirname(__file__)
+        agent = os.path.abspath(os.path.join(dirname, "../../neat/leaderboard/team_code/neat_agent.py"))
+        print(agent)
+    else:
+        agent = None
     for seed in seeds:
         for scenario_type in scenarios:
             env = gym.make('adv-carla-v0', sensors=sensors, seed=seed, scenario_type=scenario_type, weather=weather, port=3000, agent=agent)

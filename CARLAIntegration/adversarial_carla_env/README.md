@@ -87,6 +87,8 @@ Install Instructions
     export PYTHONPATH=$PYTHONPATH:$CARLA_ROOT/PythonAPI
     ```
 
+1. Install fork of the NEAT agent:
+    - (Clone it into the `CARLAIntegration` directory): `git clone https://github.com/sisl/neat`
 
 
 Running Instructions

@@ -195,7 +195,7 @@ function eval_carla(mdp::CARLAScenarioMDP, s::ScenarioState)
 
     use_neat = false
     if use_neat
-        agent = "C:/Users/mossr/Code/sisl/ast/Allstate/AutonomousRiskFramework/CARLAIntegration/neat/leaderboard/team_code/neat_agent.py"
+        agent = joinpath(@__DIR__, "../../CARLAIntegration/neat/leaderboard/team_code/neat_agent.py")
         gym_args = (sensors=sensors, seed=mdp.seed, scenario_type=scenario_type, weather=weather, no_rendering=false, agent=agent)
     else
         deleteat!(sensors, 2)

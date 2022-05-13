@@ -96,6 +96,19 @@ index 6043ebd..0f1fc5f 100644
              self._sensors_list.append(sensor)
  
          # Tick once to spawn the sensors
+diff --git a/srunner/autoagents/autonomous_agent.py b/srunner/autoagents/autonomous_agent.py
+index 31b5ff4..11796e4 100644
+--- a/srunner/autoagents/autonomous_agent.py
++++ b/srunner/autoagents/autonomous_agent.py
+@@ -90,7 +90,7 @@ class AutonomousAgent(object):
+ 
+         timestamp = GameTime.get_time()
+         wallclock = GameTime.get_wallclocktime()
+-        print('======[Agent] Wallclock_time = {} / Sim_time = {}'.format(wallclock, timestamp))
++        # print('======[Agent] Wallclock_time = {} / Sim_time = {}'.format(wallclock, timestamp))
+ 
+         control = self.run_step(input_data, timestamp)
+         control.manual_gear_shift = False
 diff --git a/srunner/autoagents/sensor_interface.py b/srunner/autoagents/sensor_interface.py
 index 940b6f7..94ee819 100644
 --- a/srunner/autoagents/sensor_interface.py

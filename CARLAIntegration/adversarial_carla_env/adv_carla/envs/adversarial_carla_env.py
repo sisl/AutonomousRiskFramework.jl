@@ -167,7 +167,7 @@ class AdversarialCARLAEnv(gym.Env):
                                   route=route,
 
                                   agent=agent,
-                                  agentConfig="",
+                                  agentConfig=os.path.join(dirname, "../../../neat/model_ckpt/neat/"),
 
                                   output=False,
                                   file=False,
