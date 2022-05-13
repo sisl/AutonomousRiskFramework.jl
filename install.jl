@@ -48,6 +48,7 @@ end
 
 Pkg.add("MCTS")
 Pkg.add("D3Trees")
+Pkg.add("BSON")
 Pkg.add("Distributions")
 Pkg.add("Infiltrator")
 Pkg.add("POMDPModelTools")
