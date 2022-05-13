@@ -97,12 +97,14 @@ index 6043ebd..0f1fc5f 100644
  
          # Tick once to spawn the sensors
 diff --git a/srunner/autoagents/sensor_interface.py b/srunner/autoagents/sensor_interface.py
-index 940b6f7..0a6337b 100644
+index 940b6f7..94ee819 100644
 --- a/srunner/autoagents/sensor_interface.py
 +++ b/srunner/autoagents/sensor_interface.py
-@@ -10,6 +10,10 @@ handling the use of sensors for the agents
+@@ -9,7 +9,12 @@ handling the use of sensors for the agents
+ """
  
  import copy
++import math
  import logging
 +import weakref
 +import numpy as np
@@ -111,7 +113,7 @@ index 940b6f7..0a6337b 100644
  
  try:
      from queue import Queue
-@@ -18,17 +22,233 @@ except ImportError:
+@@ -18,17 +23,236 @@ except ImportError:
      from Queue import Queue
      from Queue import Empty
  
@@ -153,6 +155,7 @@ index 940b6f7..0a6337b 100644
 +class CollisionReader:
 +    def __init__(self, bp_library, vehicle, reading_frequency=1.0):
 +        self._collided = False
++        self._intensity = -1
 +        self.type_id = 'sensor.other.collision'
 +        bp = bp_library.find(self.type_id)
 +        self.sensor = CarlaDataProvider.get_world().spawn_actor(bp, carla.Transform(), vehicle)
@@ -195,6 +198,8 @@ index 940b6f7..0a6337b 100644
 +    def on_collision(weakself, data):
 +        self = weakself()
 +        self._collided = True
++        impulse = data.normal_impulse
++        self._intensity = math.sqrt(impulse.x ** 2 + impulse.y ** 2 + impulse.z ** 2)
 +
 +
 +class ObstacleReader:
@@ -347,7 +352,7 @@ index 940b6f7..0a6337b 100644
  
  class CallBack(object):
  
-@@ -36,14 +256,14 @@ class CallBack(object):
+@@ -36,14 +260,14 @@ class CallBack(object):
      Class the sensors listen to in order to receive their data each frame
      """
  
@@ -364,7 +369,7 @@ index 940b6f7..0a6337b 100644
  
      def __call__(self, data):
          """
-@@ -59,6 +279,10 @@ class CallBack(object):
+@@ -59,6 +283,10 @@ class CallBack(object):
              self._parse_gnss_cb(data, self._tag)
          elif isinstance(data, carla.IMUMeasurement):
              self._parse_imu_cb(data, self._tag)
@@ -375,7 +380,7 @@ index 940b6f7..0a6337b 100644
          else:
              logging.error('No callback method for this sensor.')
  
-@@ -115,6 +339,16 @@ class CallBack(object):
+@@ -115,6 +343,16 @@ class CallBack(object):
                            ], dtype=np.float64)
          self._data_provider.update_sensor(tag, array, imu_data.frame)
  
@@ -392,7 +397,7 @@ index 940b6f7..0a6337b 100644
  
  class SensorInterface(object):
  
-@@ -130,7 +364,11 @@ class SensorInterface(object):
+@@ -130,7 +368,11 @@ class SensorInterface(object):
          self._new_data_buffers = Queue()
          self._queue_timeout = 10
  
@@ -405,7 +410,7 @@ index 940b6f7..0a6337b 100644
          """
          Registers the sensors
          """
-@@ -139,6 +377,9 @@ class SensorInterface(object):
+@@ -139,6 +381,9 @@ class SensorInterface(object):
  
          self._sensors_objects[tag] = sensor
  
@@ -415,7 +420,7 @@ index 940b6f7..0a6337b 100644
      def update_sensor(self, tag, data, timestamp):
          """
          Updates the sensor
-@@ -156,6 +397,15 @@ class SensorInterface(object):
+@@ -156,6 +401,15 @@ class SensorInterface(object):
              data_dict = {}
              while len(data_dict.keys()) < len(self._sensors_objects.keys()):
  
@@ -431,3 +436,60 @@ index 940b6f7..0a6337b 100644
                  sensor_data = self._new_data_buffers.get(True, self._queue_timeout)
                  data_dict[sensor_data[0]] = ((sensor_data[1], sensor_data[2]))
  
+diff --git a/srunner/scenariomanager/scenarioatomics/atomic_criteria.py b/srunner/scenariomanager/scenarioatomics/atomic_criteria.py
+index 35aa46b..cd5936d 100644
+--- a/srunner/scenariomanager/scenarioatomics/atomic_criteria.py
++++ b/srunner/scenariomanager/scenarioatomics/atomic_criteria.py
+@@ -312,6 +312,7 @@ class CollisionTest(Criterion):
+         blueprint = world.get_blueprint_library().find('sensor.other.collision')
+         self._collision_sensor = world.spawn_actor(blueprint, carla.Transform(), attach_to=self.actor)
+         self._collision_sensor.listen(lambda event: self._count_collisions(weakref.ref(self), event))
++        self.collision_intensity = None
+ 
+         self.other_actor = other_actor
+         self.other_actor_type = other_actor_type
+@@ -431,6 +432,9 @@ class CollisionTest(Criterion):
+         self.registered_collisions.append(actor_location)
+         self.list_traffic_events.append(collision_event)
+ 
++        impulse = event.normal_impulse
++        self.collision_intensity = math.sqrt(impulse.x**2 + impulse.y**2 + impulse.z**2)
++
+         # Number 0: static objects -> ignore it
+         if event.other_actor.id != 0:
+             self.last_id = event.other_actor.id
+diff --git a/srunner/scenarios/follow_leading_vehicle.py b/srunner/scenarios/follow_leading_vehicle.py
+index b4c6d05..482b4fa 100644
+--- a/srunner/scenarios/follow_leading_vehicle.py
++++ b/srunner/scenarios/follow_leading_vehicle.py
+@@ -100,7 +100,7 @@ class FollowLeadingVehicle(BasicScenario):
+                            self._other_actor_transform.location.y,
+                            self._other_actor_transform.location.z - 500),
+             self._other_actor_transform.rotation)
+-        first_vehicle = CarlaDataProvider.request_new_actor('vehicle.nissan.patrol', first_vehicle_transform)
++        first_vehicle = CarlaDataProvider.request_new_actor('vehicle.audi.tt', first_vehicle_transform)
+         first_vehicle.set_simulate_physics(enabled=False)
+         self.other_actors.append(first_vehicle)
+ 
+@@ -238,7 +238,7 @@ class FollowLeadingVehicleWithObstacle(BasicScenario):
+                            second_actor_waypoint.transform.rotation.roll))
+ 
+         first_actor = CarlaDataProvider.request_new_actor(
+-            'vehicle.nissan.patrol', first_actor_transform)
++            'vehicle.audi.tt', first_actor_transform)
+         second_actor = CarlaDataProvider.request_new_actor(
+             'vehicle.diamondback.century', second_actor_transform)
+ 
+diff --git a/srunner/scenarios/other_leading_vehicle.py b/srunner/scenarios/other_leading_vehicle.py
+index fb6da7e..260d9bc 100644
+--- a/srunner/scenarios/other_leading_vehicle.py
++++ b/srunner/scenarios/other_leading_vehicle.py
+@@ -79,7 +79,7 @@ class OtherLeadingVehicle(BasicScenario):
+         second_vehicle_transform = carla.Transform(second_vehicle_waypoint.transform.location,
+                                                    second_vehicle_waypoint.transform.rotation)
+ 
+-        first_vehicle = CarlaDataProvider.request_new_actor('vehicle.nissan.patrol', first_vehicle_transform)
++        first_vehicle = CarlaDataProvider.request_new_actor('vehicle.audi.tt', first_vehicle_transform)
+         second_vehicle = CarlaDataProvider.request_new_actor('vehicle.audi.tt', second_vehicle_transform)
+ 
+         self.other_actors.append(first_vehicle)
