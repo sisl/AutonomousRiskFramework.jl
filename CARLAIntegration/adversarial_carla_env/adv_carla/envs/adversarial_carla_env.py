@@ -107,8 +107,8 @@ class AdversarialCARLAEnv(gym.Env):
 
     # CARLA configuration parameters
     carla_running = False
-    follow_ego = False
-    save_video = True
+    follow_ego = True
+    save_video = False
 
     # Gym environment parameters
     block_size = 10
@@ -620,16 +620,20 @@ class AdversarialCARLAEnv(gym.Env):
                 self.scenario_runner.manager.scenario_tree.tick_once()
 
                 if self.follow_ego:
-                    spectator = world.get_spectator()
-                    # TODO: Generalize (does not work for NEAT)
-                    #  NOTE: see `self.scenario_runner.manager._agent`
-                    spectator_loc = self.scenario_runner.manager._agent._agent._agent._vehicle.get_location()
-                    # spectator_loc = CarlaDataProvider.get_world().get_actors().filter('vehicle.*')[1].get_location()
-                    new_location = carla.Location(x=spectator_loc.x, y=spectator_loc.y, z=50+spectator_loc.z)
-                    spectator_tf = carla.Transform(new_location, carla.Rotation(pitch=-90))
-                    spectator.set_transform(spectator_tf)
-                    # if self.save_video:
-                    #     self.video_camera.set_transform(spectator_tf)
+                    hero_actor = None
+                    for actor in CarlaDataProvider.get_world().get_actors():
+                        if 'role_name' in actor.attributes and actor.attributes['role_name'] == 'hero':
+                            hero_actor = actor
+                            break
+                    if hero_actor:
+                        spectator_loc = hero_actor.get_location()
+                        # spectator_loc = CarlaDataProvider.get_world().get_actors().filter('vehicle.*')[1].get_location()
+                        new_location = carla.Location(x=spectator_loc.x, y=spectator_loc.y, z=50+spectator_loc.z)
+                        spectator_tf = carla.Transform(new_location, carla.Rotation(pitch=-90))
+                        spectator = world.get_spectator()
+                        spectator.set_transform(spectator_tf)
+                        # if self.save_video:
+                        #     self.video_camera.set_transform(spectator_tf)
 
 
                 if self.scenario_runner.manager._debug_mode:

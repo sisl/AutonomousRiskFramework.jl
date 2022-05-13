@@ -18,3 +18,4 @@ results = []
 end
 
 results
+costs = map(res->res.hist[end].r, results)
