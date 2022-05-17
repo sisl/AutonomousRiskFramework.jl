@@ -1,6 +1,6 @@
 module RiskSimulator # Naming? TODO: RiskAssessment?
 
-# using IntelligentDriving
+using IntelligentDriving
 using ObservationModels
 using AutomotiveSimulator
 using AutomotiveVisualization

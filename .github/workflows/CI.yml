@@ -18,7 +18,8 @@ jobs:
         version:
           - "1.7"
         os:
-          - windows-latest
+          - ubuntu-latest
+          # - windows-latest # NOTE: Waiting for https://github.com/xukai92/WeightsAndBiasLogger.jl/pull/2
         arch:
           - x64
     steps:
