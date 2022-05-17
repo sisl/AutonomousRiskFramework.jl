@@ -4,9 +4,9 @@ pushfirst!(
   joinpath(@__DIR__, "../resources/python"),
 )
 # install python dependencies
-pyimport_conda("matplotlib", "matplotlib")
-pyimport_conda("numpy", "numpy")
-pyimport_conda("torch", "pytorch")
+pyimport("matplotlib")
+pyimport("numpy")
+pyimport("torch")
 py_dynamics = pyimport("dynamics")
 ##$#############################################################################
 ##^# defining constants without redefinition error #############################
