@@ -44,6 +44,7 @@ if ci
     pkg"add Conda"
     using Conda
     Conda.add("python=3.7.5")
+    Conda.add("pytorch")
 end
 
 Pkg.add("MCTS")
