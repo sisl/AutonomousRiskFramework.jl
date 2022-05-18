@@ -9,6 +9,7 @@ using POMDPs
 using Parameters
 using PyCall
 using RiskSimulator
+using OrderedCollections
 pyimport("adv_carla")
 
 function pyreload()
@@ -28,7 +29,8 @@ function pyreload()
 end
 
 include("generic_discrete_nonparametric.jl")
-include("ast_td3_solver.jl")
+include("solvers.jl")
+include("task.jl")
 
 ##################################################
 # Weather and time of day
@@ -37,14 +39,23 @@ include("ast_td3_solver.jl")
 @with_kw mutable struct Weather
     cloudiness             = Uniform(0,100)
     precipitation          = Uniform(0,100)
-    precipitation_deposits = Uniform(0,100)
-    wind_intensity         = Uniform(0,100)
-    sun_azimuth_angle      = Uniform(0,360)
-    sun_altitude_angle     = Uniform(-20,90)
+    sun_altitude_angle     = Uniform(-90,90)
     fog_density            = Uniform(0,100)
-    fog_distance           = Uniform(0,100)
-    wetness                = Uniform(0,100)
 end
+
+
+"""
+Fill in default and associative weather parameters for CARLA.
+"""
+function fill_out_weather!(weather)
+    weather[:precipitation_deposits] = weather[:precipitation] # one-to-one "precipitation" with "precipitation deposits"
+    weather[:wetness] = weather[:precipitation] # one-to-one "precipitation" with "wetness"
+    weather[:fog_distance] = 3.0 # meters
+    weather[:wind_intensity] = 0.0 # not useful
+    weather[:sun_azimuth_angle] = 180.0 # fixed default
+    return weather
+end
+
 
 function Base.rand(rng::AbstractRNG, obj::Weather)
     samples = Dict()
@@ -130,15 +141,17 @@ const ScenarioAction = Any
     datasets::Vector = []
     apply_gnss_noise::Bool = false
     use_neat::Bool = true
-    sensor_config_gnss::Dict = Dict(
+    sensor_config_gnss::OrderedDict = OrderedDict(
         "id" => "GPS",
         "lat" => Dict("mean" => 0, "std" => 0.0001, "upper" => 0.000000001, "lower" => -0.000000001),
         "lon" => Dict("mean" => 0, "std" => 0.0001, "upper" => 0.000000001, "lower" => -0.000000001),
         "alt" => Dict("mean" => 0, "std" => 0.00000001, "upper" => 0.0000001, "lower" => 0))
-    sensor_config_camera = Dict(
+    sensor_config_camera::OrderedDict = OrderedDict(
         "id" => "rgb",
         "dynamic_noise_std" => Dict("mean" => 0, "std" => 0.001, "upper" => 1, "lower" => 0),
         "exposure_compensation" => Dict("mean" => 0, "std" => 0.5, "upper" => 1, "lower" => -1))
+    run_solver::Function = run_mc_solver
+    run_separate_process::Bool = true # Launch CARLA bridge in separate process (to isolate CARLA memory leak)
 end
 
 
@@ -148,22 +161,27 @@ global ITERATIONS_PER_PROCSESS_COUNTER = 0
 
 function eval_carla_task!(mdp::CARLAScenarioMDP, s::ScenarioState; kwargs...)
     global ITERATIONS_PER_PROCSESS, ITERATIONS_PER_PROCSESS_COUNTER
-    println()
-    if nprocs() <= 1
-        procid = first(addprocs(1; topology=:master_worker))
-        println("Spawning Julia process with id $procid")
-    else
-        procid = last(procs())
-        println("Reusing Julia process id $procid ($ITERATIONS_PER_PROCSESS_COUNTER/$ITERATIONS_PER_PROCSESS)")
-    end
 
+    run_solver = mdp.run_solver
     seed = mdp.seed + mdp.counter
-    α = mdp.α
     scenario_type = s.scenario_type
-    weather = s.weather
-    include("task.jl")
-    task = remotecall_wait(eval_carla_task_core, procid, seed, α, scenario_type, weather; kwargs...)
-    cost, dataset = fetch(task)
+    weather = fill_out_weather!(s.weather)
+
+    if mdp.run_separate_process
+        println()
+        if nprocs() <= 1
+            procid = first(addprocs(1; topology=:master_worker))
+            println("Spawning Julia process with id $procid")
+        else
+            procid = last(procs())
+            println("Reusing Julia process id $procid ($ITERATIONS_PER_PROCSESS_COUNTER/$ITERATIONS_PER_PROCSESS)")
+        end
+        include("task.jl")
+        task = remotecall_wait(eval_carla_task_core, procid, run_solver, seed, scenario_type, weather; kwargs...)
+        cost, dataset = fetch(task)
+    else
+        cost, dataset = eval_carla_task_core(run_solver, seed, scenario_type, weather; kwargs...)
+    end
 
     if mdp.collect_data
         push!(mdp.datasets, dataset)
@@ -182,41 +200,10 @@ function eval_carla_task!(mdp::CARLAScenarioMDP, s::ScenarioState; kwargs...)
 end
 
 
-
-function eval_carla(mdp::CARLAScenarioMDP, s::ScenarioState)
-    sensors = [mdp.sensor_config_gnss, mdp.sensor_config_camera]
-    scenario_type = s.scenario_type
-    weather = s.weather
-
-    @info "$scenario_type: $(SCENARIO_CLASS_MAPPING[scenario_type])"
-    display(weather)
-
-    use_neat = false
-    if use_neat
-        agent = joinpath(@__DIR__, "../../CARLAIntegration/neat/leaderboard/team_code/neat_agent.py")
-        gym_args = (sensors=sensors, seed=mdp.seed, scenario_type=scenario_type, weather=weather, no_rendering=false, agent=agent)
-    else
-        deleteat!(sensors, 2)
-        gym_args = (sensors=sensors, seed=mdp.seed, scenario_type=scenario_type, weather=weather, no_rendering=false)
-    end
-    carla_mdp = GymPOMDP(Symbol("adv-carla"); gym_args...)
-
-    # TODO: Replace with A. Corso TD3 (costs and weights)
-    # prior_weights = POLICY_WEIGHTS[s] # IF EXISTS
-
-    costs = run_td3_solver(carla_mdp, sensors) # NOTE: Pass in `prior_weights`
-    @show costs
-    risk_metrics = RiskMetrics(costs, mdp.α)
-    cvar = risk_metrics.cvar
-
-    return cvar
-end
-
-
 function eval_carla_single(mdp::CARLAScenarioMDP, s::ScenarioState)
     sensors = [mdp.sensor_config_gnss]
     scenario_type = s.scenario_type
-    weather = s.weather
+    weather = fill_out_weather!(s.weather)
 
     @info scenario_type
     display(weather)

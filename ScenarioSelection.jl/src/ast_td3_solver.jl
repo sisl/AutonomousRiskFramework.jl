@@ -5,8 +5,8 @@ import POMDPPolicies:FunctionPolicy
 
 function td3_solver(mdp, sensors)
     S = state_space(mdp)
-    amin = reduce(vcat, [[Float32(sensor[k]["lower"]) for k in filter(!=("id"), keys(sensor))] for sensor in sensors])
-    amax = reduce(vcat, [[Float32(sensor[k]["upper"]) for k in filter(!=("id"), keys(sensor))] for sensor in sensors])
+    amin = reduce(vcat, [[Float32(sensor[k]["lower"]) for k in filter(!=("id"), collect(keys(sensor)))] for sensor in sensors])
+    amax = reduce(vcat, [[Float32(sensor[k]["upper"]) for k in filter(!=("id"), collect(keys(sensor)))] for sensor in sensors])
     rand_policy = FunctionPolicy((s) -> Float32.(rand.(Uniform.(amin, amax))))
 
     state_dim = first(S.dims)
@@ -29,20 +29,6 @@ function td3_solver(mdp, sensors)
 end
 
 
-# TODO: pass (mdp, s) check isterminal(mdp, s)
-function extract_info(info)
-    data_point = missing
-    if info["done"] == true
-        data_point = Dict()
-        data_point["cost"] = info["cost"]
-        data_point["reward"] = info["reward"]
-        data_point["speed_before_collision"] = info["speed_before_collision"]
-        data_point["delta_v"] = info["delta_v"]
-    end
-    return data_point
-end
-
-
 function run_td3_solver(mdp, sensors)
     @info "Running TD3 to collect costs..."
     mdp_info = InfoCollector(mdp, extract_info)
@@ -50,5 +36,10 @@ function run_td3_solver(mdp, sensors)
     costs = convert(Vector{Real}, map(d->d["cost"], mdp_info.dataset))
     rewards = convert(Vector{Real}, map(d->d["reward"], mdp_info.dataset))
     close(mdp.env) # Important!
-    return costs, mdp_info.dataset
+
+    α = 0.2
+    risk_metrics = RiskMetrics(costs, α)
+    cvar = risk_metrics.cvar
+
+    return cvar, mdp_info.dataset
 end

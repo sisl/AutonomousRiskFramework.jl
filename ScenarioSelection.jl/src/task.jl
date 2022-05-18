@@ -5,7 +5,7 @@
     using PyCall
     pyimport("adv_carla")
 
-    include("ast_td3_solver.jl")
+    include("solvers.jl")
 
     SCENARIO_CLASS_MAPPING = Dict(
         # "Scenario1" => "ControlLoss",
@@ -20,7 +20,7 @@
         # "Scenario10" => "NoSignalJunctionCrossingRoute",
     )
 
-    function eval_carla_task_core(seed, α, scenario_type, weather;
+    function eval_carla_task_core(run_solver, seed, scenario_type, weather;
                                   monte_carlo_run=false, use_neat=true, apply_gnss_noise=false,
                                   sensor_config_gnss=nothing, sensor_config_camera=nothing)
         sensors = []
@@ -59,13 +59,10 @@
             cost = info["cost"]
             return cost, dataset
         else
-            costs, dataset = run_td3_solver(carla_mdp, sensors) # NOTE: Pass in `prior_weights`
-            @show costs
+            cost, dataset = run_solver(carla_mdp, sensors) # NOTE: Pass in `prior_weights`
+            @show cost
             @show dataset
-            risk_metrics = RiskMetrics(costs, α)
-            cvar = risk_metrics.cvar
-
-            return cvar, dataset
+            return cost, dataset
         end
     end
 

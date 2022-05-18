@@ -121,11 +121,6 @@ class AdversarialCARLAEnv(gym.Env):
 
 
     def __init__(self, *, seed=0, scenario_type="Scenario2", weather="Random", agent=None, port=3000, record="recordings", params=DEFAULT_PARAMS, sensors=disturbance_params, no_rendering=False):
-        self.hardreset(seed=seed, scenario_type=scenario_type, weather=weather, agent=agent, port=port, record=record, params=params, sensors=sensors, no_rendering=no_rendering)
-
-
-    def hardreset(self, *, seed=0, scenario_type="Scenario2", weather="Random", agent=None, port=3000, record="recordings", params=DEFAULT_PARAMS, sensors=disturbance_params, no_rendering=False):
-        print("Hard resetting...")
         # Scenario/route selections
         dirname = os.path.dirname(__file__)
         example_scenario = False
