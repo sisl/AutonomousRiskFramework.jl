@@ -17,7 +17,7 @@ class AdvGNSSCallBack(CallBack):
     Class the sensors listen to in order to receive their data each frame
     """
 
-    def __init__(self, tag, sensor_type, sensor, data_provider):
+    def __init__(self, tag, sensor_type, sensor, data_provider, **kwargs):
         """
         Initializes the call back
         """
@@ -56,7 +56,7 @@ class AdvObstacleCallBack(CallBack):
     Class the sensors listen to in order to receive their data each frame
     """
 
-    def __init__(self, tag, sensor_type, sensor, data_provider):
+    def __init__(self, tag, sensor_type, sensor, data_provider, **kwargs):
         """
         Initializes the call back
         """
@@ -94,7 +94,7 @@ class AdvCollisionCallBack(CallBack):
     Class the sensors listen to in order to receive their data each frame
     """
 
-    def __init__(self, tag, sensor_type, sensor, data_provider):
+    def __init__(self, tag, sensor_type, sensor, data_provider, **kwargs):
         """
         Initializes the call back
         """
@@ -129,7 +129,7 @@ class AdvCameraCallBack(CallBack):
     Class the sensors listen to in order to receive their data each frame
     """
 
-    def __init__(self, tag, sensor_type, sensor, data_provider):
+    def __init__(self, tag, sensor_type, sensor, data_provider, **kwargs):
         """
         Initializes the call back
         """
@@ -140,15 +140,19 @@ class AdvCameraCallBack(CallBack):
         self.save_image = False
         self.counter = 0
         self.dims = 2
+        self.is_stitch_camera = ('is_stitch_camera' in kwargs and kwargs['is_stitch_camera'])
 
 
     def __call__(self, data):
         """
         call function
         """
-        array = np.frombuffer(data.raw_data, dtype=np.dtype("uint8"))
-        array = copy.deepcopy(array)
-        array = np.reshape(array, (data.height, data.width, 4))
+        if self.is_stitch_camera:
+            array = copy.deepcopy(data.data) # due to GenericMeasurement callback, already reshaped.
+        else:
+            array = np.frombuffer(data.raw_data, dtype=np.dtype("uint8"))
+            array = copy.deepcopy(array)
+            array = np.reshape(array, (data.height, data.width, 4))
 
         self.simulated_camera = SimulatedCamera(array, exposure_compensation=self.exposure_comp)
 
@@ -158,7 +162,6 @@ class AdvCameraCallBack(CallBack):
         # Apply disturbance(s)
         red_std = green_std = blue_std = self.dynamic_noise_std
         self.simulated_camera.dynamic_noise_std = (red_std, green_std, blue_std)
-        # self.simulated_camera.exposure_compensation = self.exposure_comp # TODO: This is part of the create_static_noise
         array = self.simulated_camera.simulate(array)
 
         if self.save_image:

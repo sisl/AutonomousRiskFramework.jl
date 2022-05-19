@@ -1,16 +1,22 @@
 diff --git a/srunner/autoagents/agent_wrapper.py b/srunner/autoagents/agent_wrapper.py
-index 6043ebd..0f1fc5f 100644
+index 6043ebd..b380e66 100644
 --- a/srunner/autoagents/agent_wrapper.py
 +++ b/srunner/autoagents/agent_wrapper.py
-@@ -14,6 +14,7 @@ from __future__ import print_function
+@@ -13,7 +13,12 @@ from __future__ import print_function
+ 
  import carla
  
- from srunner.autoagents.sensor_interface import CallBack
-+from srunner.autoagents.sensor_interface import SpeedometerReader
+-from srunner.autoagents.sensor_interface import CallBack
++from srunner.autoagents.sensor_interface import (
++    CallBack,
++    SpeedometerReader,
++    StitchCameraReader,
++    CollisionReader
++)
  from srunner.scenariomanager.carla_data_provider import CarlaDataProvider
  
  
-@@ -47,38 +48,54 @@ class AgentWrapper(object):
+@@ -47,38 +52,62 @@ class AgentWrapper(object):
          bp_library = CarlaDataProvider.get_world().get_blueprint_library()
          for sensor_spec in self._agent.sensors():
              # These are the sensors spawned on the carla world
@@ -48,6 +54,14 @@ index 6043ebd..0f1fc5f 100644
 +                delta_time = CarlaDataProvider.get_world().get_settings().fixed_delta_seconds
 +                frame_rate = 1 / delta_time
 +                sensor = SpeedometerReader(vehicle, frame_rate)
++            elif sensor_spec['type'].startswith('sensor.stitch_camera'):
++                delta_time = CarlaDataProvider.get_world().get_settings().fixed_delta_seconds
++                frame_rate = 1 / delta_time
++                sensor = StitchCameraReader(bp_library, vehicle, sensor_spec, frame_rate)
++            elif sensor_spec['type'].startswith('sensor.collision'):
++                delta_time = CarlaDataProvider.get_world().get_settings().fixed_delta_seconds
++                frame_rate = 1 / delta_time
++                sensor = CollisionReader(bp_library, vehicle, frame_rate)
 +            else:
 +                bp = bp_library.find(str(sensor_spec['type']))
 +                if sensor_spec['type'].startswith('sensor.camera'):
@@ -110,7 +124,7 @@ index 31b5ff4..11796e4 100644
          control = self.run_step(input_data, timestamp)
          control.manual_gear_shift = False
 diff --git a/srunner/autoagents/sensor_interface.py b/srunner/autoagents/sensor_interface.py
-index 940b6f7..94ee819 100644
+index 940b6f7..899081c 100644
 --- a/srunner/autoagents/sensor_interface.py
 +++ b/srunner/autoagents/sensor_interface.py
 @@ -9,7 +9,12 @@ handling the use of sensors for the agents
@@ -126,7 +140,7 @@ index 940b6f7..94ee819 100644
  
  try:
      from queue import Queue
-@@ -18,17 +23,236 @@ except ImportError:
+@@ -18,17 +23,371 @@ except ImportError:
      from Queue import Queue
      from Queue import Empty
  
@@ -163,6 +177,118 @@ index 940b6f7..94ee819 100644
 +    def __init__(self, data, frame):
 +        self.data = data
 +        self.frame = frame
++
++
++class StitchCameraReader:
++    def __init__(self, bp_library, vehicle, sensor_spec, reading_frequency=1.0):
++        
++        # SISL: Added (to recreate StitchCameraReader)
++        self._bp_library = bp_library
++        self._vehicle = vehicle
++        self._sensor_spec = sensor_spec
++        self._reading_frequency = reading_frequency
++
++        fov = int(sensor_spec['fov'])
++        # Hack
++        self.yaws = [('left', -fov+5), ('center', 0), ('right', fov-5)]
++        self.sensor_type = 'sensor.camera.'+str(sensor_spec['type'].split('.')[-1])
++
++        bp = bp_library.find(self.sensor_type)
++        
++        bp.set_attribute('image_size_x', str(sensor_spec['width']))
++        bp.set_attribute('image_size_y', str(sensor_spec['height']))
++        bp.set_attribute('fov', str(sensor_spec['fov']))
++        bp.set_attribute('lens_circle_multiplier', str(3.0))
++        bp.set_attribute('lens_circle_falloff', str(3.0))
++        if 'rgb' in sensor_spec['type']:
++            bp.set_attribute('chromatic_aberration_intensity', str(0.5))
++            bp.set_attribute('chromatic_aberration_offset', str(0))
++
++        self.type_id = 'sensor.stitch_camera.rgb' # SISL: Added.
++        self.sensors = []
++        self.datas = {}
++        
++        sensor_location = carla.Location(x=sensor_spec['x'], y=sensor_spec['y'], z=sensor_spec['z'])
++        for prefix, yaw in self.yaws:
++            sensor_rotation = carla.Rotation(
++                pitch=sensor_spec['pitch'],
++                roll=sensor_spec['roll'],
++                yaw=sensor_spec['yaw']+yaw
++            )
++        
++            sensor = CarlaDataProvider.get_world().spawn_actor(bp, carla.Transform(sensor_location, sensor_rotation), vehicle)
++            sensor.listen(self.__class__.on_camera_func(weakref.ref(self), prefix))
++            self.sensors.append(sensor)
++            
++            
++        self._reading_frequency = reading_frequency
++        self._callback = None
++
++        self._run_ps = True
++        self.run()
++            
++    @staticmethod
++    def on_camera_func(weakself, prefix):
++        def on_camera(event):
++            self = weakself()
++            array = np.frombuffer(event.raw_data, dtype=np.dtype("uint8"))
++            array = copy.deepcopy(array)
++            array = np.reshape(array, (event.height, event.width, 4))
++
++            self.datas[prefix] = array[...,2] if 'semantic' in self.sensor_type else array[...,:3]
++
++        return on_camera
++
++    def ready(self):
++        for prefix, _ in self.yaws:
++            if prefix not in self.datas:
++                return False
++        
++        return True
++    
++    @property
++    def stitched(self):
++        images = []
++        for prefix, _ in self.yaws:
++            images.append(self.datas[prefix])
++        
++        return np.concatenate(images, axis=1)
++    
++    @threaded
++    def run(self):
++        first_time = True
++        latest_time = GameTime.get_time()
++        while self._run_ps:
++            if self._callback is not None:
++                
++                if not self.ready():
++                    continue
++                    
++                current_time = GameTime.get_time()
++                
++                # Second part forces the sensors to send data at the first tick, regardless of frequency
++                if current_time - latest_time > (1 / self._reading_frequency) \
++                        or (first_time and GameTime.get_frame() != 0):
++                    self._callback(GenericMeasurement(self.stitched, GameTime.get_frame()))
++                    latest_time = GameTime.get_time()
++                    first_time = False
++                else:
++                    time.sleep(0.001)
++
++    def listen(self, callback):
++        # Tell that this function receives what the producer does.
++        self._run_ps = True # SISL: Added (important when we stop the sensor, that we indicate to start it again when calling `listen`)
++        self._callback = callback
++
++    def stop(self):
++        self._run_ps = False
++    
++    def destroy(self):
++        self._run_ps = False
++        for sensor in self.sensors:
++            sensor.destroy()
++        
++        self.datas.clear()
 +
 +
 +class CollisionReader:
@@ -329,7 +455,7 @@ index 940b6f7..94ee819 100644
 +
 +    def __init__(self, vehicle, reading_frequency=1.0):
 +        super().__init__(vehicle, reading_frequency)
-+        self.type_id = 'sensor.speedometer'
++        self.type_id = 'sensor.speedometer' # SISL: Added
 +
 +    def _get_forward_speed(self, transform=None, velocity=None):
 +        """ Convert the vehicle transform directly to forward speed """
@@ -344,6 +470,23 @@ index 940b6f7..94ee819 100644
 +        orientation = np.array([np.cos(pitch) * np.cos(yaw), np.cos(pitch) * np.sin(yaw), np.sin(pitch)])
 +        speed = np.dot(vel_np, orientation)
 +        return speed
++        
++    def _get_location(self, transform=None):
++        if not transform:
++            transform = self._vehicle.get_transform()
++        
++        loc = transform.location
++        return [loc.x, loc.y, loc.z]
++    
++    def _get_rotation(self, transform=None):
++        if not transform:
++            transform = self._vehicle.get_transform()
++        
++        rot = transform.rotation
++        return [rot.roll, rot.pitch, rot.yaw]
++        
++    def _get_red_light(self):
++        return str(self._vehicle.get_traffic_light_state()) != 'Green'
 +
 +    def __call__(self):
 +        """ We convert the vehicle physics information into a convenient dictionary """
@@ -354,18 +497,24 @@ index 940b6f7..94ee819 100644
 +            try:
 +                velocity = self._vehicle.get_velocity()
 +                transform = self._vehicle.get_transform()
++                lights_list = CarlaDataProvider.get_world().get_actors().filter("*traffic_light*")
 +                break
 +            except Exception:
 +                attempts += 1
 +                time.sleep(0.2)
 +                continue
 +
-+        return {'speed': self._get_forward_speed(transform=transform, velocity=velocity)}
++        return {
++            'spd': self._get_forward_speed(transform=transform, velocity=velocity),
++            'loc': self._get_location(transform=transform),
++            'rot': self._get_rotation(transform=transform),
++            # 'red': self._get_red_light(),
++        }
 +
  
  class CallBack(object):
  
-@@ -36,14 +260,14 @@ class CallBack(object):
+@@ -36,14 +395,14 @@ class CallBack(object):
      Class the sensors listen to in order to receive their data each frame
      """
  
@@ -382,7 +531,7 @@ index 940b6f7..94ee819 100644
  
      def __call__(self, data):
          """
-@@ -59,6 +283,10 @@ class CallBack(object):
+@@ -59,6 +418,10 @@ class CallBack(object):
              self._parse_gnss_cb(data, self._tag)
          elif isinstance(data, carla.IMUMeasurement):
              self._parse_imu_cb(data, self._tag)
@@ -393,7 +542,7 @@ index 940b6f7..94ee819 100644
          else:
              logging.error('No callback method for this sensor.')
  
-@@ -115,6 +343,16 @@ class CallBack(object):
+@@ -115,6 +478,16 @@ class CallBack(object):
                            ], dtype=np.float64)
          self._data_provider.update_sensor(tag, array, imu_data.frame)
  
@@ -410,7 +559,7 @@ index 940b6f7..94ee819 100644
  
  class SensorInterface(object):
  
-@@ -130,7 +368,11 @@ class SensorInterface(object):
+@@ -130,7 +503,11 @@ class SensorInterface(object):
          self._new_data_buffers = Queue()
          self._queue_timeout = 10
  
@@ -423,7 +572,7 @@ index 940b6f7..94ee819 100644
          """
          Registers the sensors
          """
-@@ -139,6 +381,9 @@ class SensorInterface(object):
+@@ -139,6 +516,9 @@ class SensorInterface(object):
  
          self._sensors_objects[tag] = sensor
  
@@ -433,7 +582,7 @@ index 940b6f7..94ee819 100644
      def update_sensor(self, tag, data, timestamp):
          """
          Updates the sensor
-@@ -156,6 +401,15 @@ class SensorInterface(object):
+@@ -156,6 +536,15 @@ class SensorInterface(object):
              data_dict = {}
              while len(data_dict.keys()) < len(self._sensors_objects.keys()):
  

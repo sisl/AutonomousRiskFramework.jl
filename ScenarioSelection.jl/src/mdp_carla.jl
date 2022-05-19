@@ -31,6 +31,7 @@ end
 include("generic_discrete_nonparametric.jl")
 include("solvers.jl")
 include("task.jl")
+include("agents.jl")
 
 ##################################################
 # Weather and time of day
@@ -139,8 +140,8 @@ const ScenarioAction = Any
     monte_carlo_run::Bool = false # indicate whether to use MC for tree search and skip DRL at leaf nodes (to simply run scenario)
     collect_data::Bool = true
     datasets::Vector = []
-    apply_gnss_noise::Bool = false
-    use_neat::Bool = true
+    agent::Agent = NEAT
+    apply_gnss_noise::Bool = (agent == GNSS)
     sensor_config_gnss::OrderedDict = OrderedDict(
         "id" => "GPS",
         "lat" => Dict("mean" => 0, "std" => 0.0001, "upper" => 0.000000001, "lower" => -0.000000001),
@@ -227,7 +228,7 @@ end
 function POMDPs.reward(mdp::CARLAScenarioMDP, s::ScenarioState, a::ScenarioAction)
     if isterminal(mdp, s)
         cost = eval_carla_task!(mdp, s; monte_carlo_run=mdp.monte_carlo_run,
-                                use_neat=mdp.use_neat, apply_gnss_noise=mdp.apply_gnss_noise,
+                                agent=mdp.agent, apply_gnss_noise=mdp.apply_gnss_noise,
                                 sensor_config_gnss=mdp.sensor_config_gnss, sensor_config_camera=mdp.sensor_config_camera)
         return cost
     else

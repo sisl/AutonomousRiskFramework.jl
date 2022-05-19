@@ -41,6 +41,7 @@ from .camera_exposure import *
 
 from srunner.scenariomanager.carla_data_provider import CarlaDataProvider
 from srunner.scenariomanager.timer import GameTime
+from srunner.autoagents.sensor_interface import StitchCameraReader
 
 from pdb import set_trace as breakpoint # DEBUG. TODO!
 
@@ -74,6 +75,10 @@ ADVERSARIAL_SENSOR_MAPPING = {
         'params': ['normal_impulse']
     },
     'sensor.camera.rgb': {
+        'callback': AdvCameraCallBack,
+        'params': ['dynamic_noise_std', 'exposure_compensation']
+    },
+    'sensor.stitch_camera.rgb': {
         'callback': AdvCameraCallBack,
         'params': ['dynamic_noise_std', 'exposure_compensation']
     },
@@ -120,7 +125,7 @@ class AdversarialCARLAEnv(gym.Env):
     disturbance_params = []
 
 
-    def __init__(self, *, seed=0, scenario_type="Scenario2", weather="Random", agent=None, port=3000, record="recordings", params=DEFAULT_PARAMS, sensors=disturbance_params, no_rendering=False):
+    def __init__(self, *, seed=0, scenario_type="Scenario2", weather="Random", agent=None, agent_config=None, port=3000, record="recordings", params=DEFAULT_PARAMS, sensors=disturbance_params, no_rendering=False):
         # Scenario/route selections
         dirname = os.path.dirname(__file__)
         example_scenario = False
@@ -162,7 +167,7 @@ class AdversarialCARLAEnv(gym.Env):
                                   route=route,
 
                                   agent=agent,
-                                  agentConfig=os.path.join(dirname, "../../../neat/model_ckpt/neat/"),
+                                  agentConfig=agent_config,
 
                                   output=False,
                                   file=False,
@@ -649,11 +654,22 @@ class AdversarialCARLAEnv(gym.Env):
         ids = self._associate_adv_sensor_id()
         for i,id in enumerate(ids):
             offset = self.calc_action_space_offset(ids, i) # handle flattened actions across different sensors
-            self.adv_sensor_callbacks[id].set_disturbance(action, offset)
+            if isinstance(self.adv_sensor_callbacks[id], list): # handle StitchCameraReader which has multiple camera sensors
+                for cb in self.adv_sensor_callbacks[id]:
+                    cb.set_disturbance(action, offset)
+            else:
+                self.adv_sensor_callbacks[id].set_disturbance(action, offset)
 
 
     def calc_action_space_offset(self, ids, i):
-        return sum([self.adv_sensor_callbacks[id].dims for id in ids[:i]])
+        offset = 0
+        for id in ids[:i]:
+            if isinstance(self.adv_sensor_callbacks[id], list):
+                dims = self.adv_sensor_callbacks[id][0] # treat as single set of noise applied to the all cameras in the StitchCameraReader
+            else:
+                dims = self.adv_sensor_callbacks[id].dims
+            offset = offset + dims
+        return offset
 
 
     def _get_disturbance_params(self, params_list):
@@ -735,7 +751,7 @@ class AdversarialCARLAEnv(gym.Env):
                 if sensor.type_id in ADVERSARIAL_SENSOR_MAPPING:
                     # Get the `id` field that is associated to the output of AutonomousAgent.sensors()
                     id = self._associate_sensor_id(sensor_interface, sensor)
-                    if id is not None and (id is "rgb" or id is "GPS"):
+                    if id is not None and (id is "rgb" or id is "GPS" or id is "VIDEO_CAMERA"):
                         # Get the adversarial sensor callback class from the mapping
                         if id == "VIDEO_CAMERA":
                             AdvCallBack = VideoCameraCallBack
@@ -743,9 +759,10 @@ class AdversarialCARLAEnv(gym.Env):
                             AdvCallBack = ADVERSARIAL_SENSOR_MAPPING[sensor.type_id]['callback']
 
                         # Replace the sensor by first deleting it, stopping it, creating a new callback, then starting the listener.
+                        is_stitch_camera = isinstance(sensor_interface._sensors_objects[id], StitchCameraReader)
                         del sensor_interface._sensors_objects[id]
                         sensor.stop()
-                        self.adv_sensor_callbacks[id] = AdvCallBack(id, sensor, sensor.type_id, sensor_interface)
+                        self.adv_sensor_callbacks[id] = AdvCallBack(id, sensor, sensor.type_id, sensor_interface, is_stitch_camera=is_stitch_camera)
                         sensor.listen(self.adv_sensor_callbacks[id])
                 else:
                     warnings.warn("No adversarial version of the sensor type: " + sensor.type_id)

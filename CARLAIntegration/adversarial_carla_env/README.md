@@ -6,7 +6,9 @@ Based on [ScenarioRunner](https://github.com/carla-simulator/scenario_runner), m
 
 Install Instructions
 ========================
-1. Download CARLA 0.9.13: https://github.com/carla-simulator/carla/releases/tag/0.9.13
+
+## CARLA
+- Download CARLA 0.9.13: https://github.com/carla-simulator/carla/releases/tag/0.9.13
     - On Linux:
     ```
     wget https://carla-releases.s3.eu-west-3.amazonaws.com/Linux/CARLA_0.9.13.tar.gz
@@ -14,7 +16,8 @@ Install Instructions
     tar -xvzf CARLA_0.9.13.tar.gz -C CARLA_0.9.13
     ```     
 
-1. Download `scenario_runner` 0.9.13
+## Scenario Runner
+- Download `scenario_runner` 0.9.13
     > **NOTE: Make sure `scenario_runner` is placed in the `<CARLA_ROOT>/PythonAPI/` directory.**
     ```
     git clone https://github.com/carla-simulator/scenario_runner
@@ -32,6 +35,7 @@ Install Instructions
         git apply ../../../adversarial_carla_env/adv_scenario_runner.patch
         ```
 
+## Adversarial CARLA Gym Environment
 1. Install `adversarial_carla_env` Python packages:
     ```
     cd <PATH_TO>/adversarial_carla_env
@@ -87,7 +91,8 @@ Install Instructions
     export PYTHONPATH=$PYTHONPATH:$CARLA_ROOT/PythonAPI
     ```
 
-1. Install fork of the NEAT agent:
+## NEAT (Image-based Agent)
+- Install fork of the NEAT agent:
     - (Clone it into the `CARLAIntegration` directory):
         - `git clone https://github.com/sisl/neat`
         - Download NEAT pretrained models (from their [README](https://github.com/sisl/neat#training)):
@@ -99,6 +104,13 @@ Install Instructions
         ```
         - (DEBUG): If you get an error `Torch not compiled with CUDA enabled` then run the following:
             - `pip install torch===1.5.0 torchvision===0.6.0 -f https://download.pytorch.org/whl/torch_stable.html`
+
+
+## WorldOnRails (Image-based Agent)
+- Install fork of the WorldOnRails agent:
+    - (Clone it into the `CARLAIntegration` directory):
+        - `git clone https://github.com/sisl/WorldOnRails`
+        - [Download the WorldOnRails pretrained model `main_model_10.th` and place it in the `WorldOnRails/` directory.](https://utexas.app.box.com/s/8lcl7istkr23dtjqqiyu0v8is7ha5u2r)
 
 
 Running Instructions

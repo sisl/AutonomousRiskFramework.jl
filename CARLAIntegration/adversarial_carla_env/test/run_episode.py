@@ -3,8 +3,8 @@ import gym
 import adv_carla
 import os
 
-USE_NEAT = True
-USE_GNSS_SENSOR = False or not USE_NEAT
+AGENT = "WorldOnRails" # Choose between: ["NEAT", "WorldOnRails", "GNSS"]
+USE_GNSS_SENSOR = False or (AGENT == "GNSS")
 USE_RANDOM_WEATHER = False
 
 # maps to the AutonomousAgent.sensors() return vector.
@@ -19,7 +19,7 @@ if USE_GNSS_SENSOR:
     }
     sensors.append(gnss_sensor_config)
 
-if USE_NEAT:
+if AGENT != "GNSS":
     camera_sensor_config = {
         'id': 'rgb',
         'dynamic_noise_std': {'mean': 0, 'std': 0.001, 'upper': 1, 'lower': 0},
@@ -39,20 +39,26 @@ def main():
             'fog_density': 100.0,
             'wind_intensity': 66.6667,
             'precipitation': 33.3333,
-            'sun_altitude_angle': -30.0,
+            'sun_altitude_angle': 30.0,
             'sun_azimuth_angle': 120.0,
             'fog_distance': 100.0
         }
     seeds = [3] # 228, 92, 103 (Random), 1 (Random Scenario4), 3 (Random Scenario2)
     scenarios = ["Scenario2"] # ["scenario2", Scenario4"]:
-    if USE_NEAT:
+    if AGENT == "NEAT":
         dirname = os.path.dirname(__file__)
         agent = os.path.abspath(os.path.join(dirname, "../../neat/leaderboard/team_code/neat_agent.py"))
-    else:
+        agent_config = os.path.abspath(os.path.join(dirname, "../../neat/model_ckpt/neat"))
+    elif AGENT == "WorldOnRails":
+        dirname = os.path.dirname(__file__)
+        agent = os.path.abspath(os.path.join(dirname, "../../WorldOnRails/autoagents/image_agent.py"))
+        agent_config = os.path.abspath(os.path.join(dirname, "../../WorldOnRails/config.yaml"))
+    elif AGENT == "GNSS":
         agent = None
+        agent_config = None
     for seed in seeds:
         for scenario_type in scenarios:
-            env = gym.make('adv-carla-v0', sensors=sensors, seed=seed, scenario_type=scenario_type, weather=weather, port=3000, agent=agent)
+            env = gym.make('adv-carla-v0', sensors=sensors, seed=seed, scenario_type=scenario_type, weather=weather, port=3000, agent=agent, agent_config=agent_config)
             obs = env.reset()
             t = r = 0
             done = False
@@ -65,7 +71,7 @@ def main():
                     lon = 2*σ
                     alt = 0
                     action = np.append(action, [lat, lon, alt])
-                if USE_NEAT:
+                if AGENT != "GNSS":
                     exposure = 2*np.random.rand() - 1 # random number between -1 and 1
                     dynamic_noise_std = np.random.rand()/10 # random number between 0 and 0.1
                     action = np.append(action, [dynamic_noise_std, exposure])

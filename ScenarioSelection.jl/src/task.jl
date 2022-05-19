@@ -6,6 +6,7 @@
     pyimport("adv_carla")
 
     include("solvers.jl")
+    include("agents.jl")
 
     SCENARIO_CLASS_MAPPING = Dict(
         # "Scenario1" => "ControlLoss",
@@ -21,7 +22,7 @@
     )
 
     function eval_carla_task_core(run_solver, seed, scenario_type, weather;
-                                  monte_carlo_run=false, use_neat=true, apply_gnss_noise=false,
+                                  monte_carlo_run=false, agent=NEAT, apply_gnss_noise=false,
                                   sensor_config_gnss=nothing, sensor_config_camera=nothing)
         sensors = []
 
@@ -33,17 +34,21 @@
             push!(sensors, sensor_config_gnss)
         end
 
-        if use_neat
+        if agent == NEAT
             push!(sensors, sensor_config_camera)
-            agent = joinpath(@__DIR__, "../../CARLAIntegration/neat/leaderboard/team_code/neat_agent.py")
-        else
-            agent = nothing
+            agent_path = joinpath(@__DIR__, "../../CARLAIntegration/neat/leaderboard/team_code/neat_agent.py")
+            agent_config = joinpath(@__DIR__, "../../CARLAIntegration/neat/model_ckpt/neat")
+        elseif agent == WorldOnRails
+            push!(sensors, sensor_config_camera)
+            agent_path = joinpath(@__DIR__, "../../CARLAIntegration/WorldOnRails/autoagents/image_agent.py")
+            agent_config = joinpath(@__DIR__, "../../CARLAIntegration/WorldOnRails/config.yaml")
+        elseif agent == GNSS
+            agent_path = nothing
+            agent_config = nothing
         end
-        gym_args = (sensors=sensors, seed=seed, scenario_type=scenario_type, weather=weather, no_rendering=false, agent=agent)
-        carla_mdp = GymPOMDP(Symbol("adv-carla"); gym_args...)
 
-        # TODO: Replace with A. Corso TD3 (costs and weights)
-        # prior_weights = POLICY_WEIGHTS[s] # IF EXISTS
+        gym_args = (sensors=sensors, seed=seed, scenario_type=scenario_type, weather=weather, no_rendering=false, agent=agent_path, agent_config=agent_config)
+        carla_mdp = GymPOMDP(Symbol("adv-carla"); gym_args...)
 
         if monte_carlo_run
             env = carla_mdp.env
@@ -57,13 +62,12 @@
             end
             close(env)
             cost = info["cost"]
-            return cost, dataset
         else
-            cost, dataset = run_solver(carla_mdp, sensors) # NOTE: Pass in `prior_weights`
-            @show cost
-            @show dataset
-            return cost, dataset
+            cost, dataset = run_solver(carla_mdp, sensors)
         end
+        @show cost
+        @show dataset
+        return cost, dataset
     end
 
 end # @everywhere

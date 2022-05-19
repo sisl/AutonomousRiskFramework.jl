@@ -15,7 +15,7 @@ function save_bson(planner, filename)
     @time BSON.@save filename planner
 end
 
-mdp = CARLAScenarioMDP(use_neat=true, apply_gnss_noise=false)
+mdp = CARLAScenarioMDP(agent=WorldOnRails)
 Random.seed!(mdp.seed) # Determinism
 
 RESUME = false
@@ -24,8 +24,7 @@ RUN_DETERMINISTIC_TEST = false
 if RUN_DETERMINISTIC_TEST
     @info "Running deterministic test given a specific initial state and seed."
     mdp.seed = 12648476
-    mdp.run_separate_process = false
-    mdp.run_solver = run_mc_solver
+    mdp.run_separate_process = true
     Random.seed!(mdp.seed) # Determinism
     s0 = ScenarioState("Scenario4", Dict(
         :cloudiness             => 0.0,
@@ -47,7 +46,7 @@ else
     if RESUME
         planner = BSON.load(planner_filename)[:planner]
     else
-        N = 100 # number of samples drawn from the tree (NOTE: D3Tree will have N + number of children nodes)
+        N = 100 # number of samples drawn from the tree
         c = 0.0 # exploration bonus (NOTE: keep at 0)
         α = 0.1 # VaR/CVaR risk parameter
         s0 = rand(initialstate(mdp))
