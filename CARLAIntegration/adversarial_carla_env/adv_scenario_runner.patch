@@ -124,7 +124,7 @@ index 31b5ff4..11796e4 100644
          control = self.run_step(input_data, timestamp)
          control.manual_gear_shift = False
 diff --git a/srunner/autoagents/sensor_interface.py b/srunner/autoagents/sensor_interface.py
-index 940b6f7..899081c 100644
+index 940b6f7..af11531 100644
 --- a/srunner/autoagents/sensor_interface.py
 +++ b/srunner/autoagents/sensor_interface.py
 @@ -9,7 +9,12 @@ handling the use of sensors for the agents
@@ -505,7 +505,7 @@ index 940b6f7..899081c 100644
 +                continue
 +
 +        return {
-+            'spd': self._get_forward_speed(transform=transform, velocity=velocity),
++            'speed': self._get_forward_speed(transform=transform, velocity=velocity),
 +            'loc': self._get_location(transform=transform),
 +            'rot': self._get_rotation(transform=transform),
 +            # 'red': self._get_red_light(),
