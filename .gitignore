@@ -15,4 +15,5 @@ test.json
 test.xml
 CARLAIntegration/adversarial_carla_env/images/
 CARLAIntegration/neat
+CARLAIntegration/WorldOnRails
 CARLAIntegration/CARLA_*
