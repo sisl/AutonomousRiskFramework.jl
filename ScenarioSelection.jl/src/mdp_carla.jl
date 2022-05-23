@@ -157,7 +157,7 @@ end
 
 
 # Restart a new Julia process every X iterations
-global ITERATIONS_PER_PROCSESS = 5
+global ITERATIONS_PER_PROCSESS = 3
 global ITERATIONS_PER_PROCSESS_COUNTER = 0
 
 function eval_carla_task!(mdp::CARLAScenarioMDP, s::ScenarioState; kwargs...)

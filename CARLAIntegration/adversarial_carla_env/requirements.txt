@@ -7,3 +7,4 @@ torchvision
 stable-baselines3
 tqdm
 lmdb
+wandb

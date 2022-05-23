@@ -15,7 +15,23 @@ function save_bson(planner, filename)
     @time BSON.@save filename planner
 end
 
-mdp = CARLAScenarioMDP(agent=WorldOnRails)
+function show_tree(planner::ISDPWPlanner)
+    tree = planner.tree
+    show_tree(tree)
+end
+
+function show_tree(tree)
+    t = D3Tree(tree, init_expand=1);
+    for i in 1:length(t.text)
+        if t.text[i][1:4] == "JLD2"
+            t.text[i] = split(t.text[i], "\n")[end-1]
+        end
+    end
+    inchrome(t)
+end
+
+
+mdp = CARLAScenarioMDP(agent=NEAT)
 Random.seed!(mdp.seed) # Determinism
 
 RESUME = false
@@ -43,10 +59,11 @@ else
     planner_filename = "planner.bson"
     s0_tree_filename = "s0_tree.bson"
 
+    N = 100 # number of samples drawn from the tree
     if RESUME
         planner = BSON.load(planner_filename)[:planner]
+        planner.solver.n_iterations = N - length(planner.mdp.costs) # remaining runs.
     else
-        N = 100 # number of samples drawn from the tree
         c = 0.0 # exploration bonus (NOTE: keep at 0)
         α = 0.1 # VaR/CVaR risk parameter
         s0 = rand(initialstate(mdp))
@@ -80,14 +97,7 @@ else
         ########################################
         visualize_tree = true
         if visualize_tree
-            tree = mcts_data_tree.dpw_tree;
-            t = D3Tree(tree, init_expand=1);
-            for i in 1:length(t.text)
-                if t.text[i][1:4] == "JLD2"
-                    t.text[i] = split(t.text[i], "\n")[end-1]
-                end
-            end
-            inchrome(t)
+            show_tree(planner)
         end
 
         #######################################
