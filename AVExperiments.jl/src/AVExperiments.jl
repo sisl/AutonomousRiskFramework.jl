@@ -159,7 +159,7 @@ function run_carla_experiment(config::ExperimentConfig)
         s0 = rand(initialstate(mdp))
         policy = RandomPolicy(mdp)
         results_filename = joinpath(config.dir, "random_scenario_results.bson")
-        results = resume ? load_data(results_filename) : []
+        results = config.resume ? load_data(results_filename) : []
 
         try
             @showprogress for i in 1:N
@@ -167,7 +167,11 @@ function run_carla_experiment(config::ExperimentConfig)
                 push!(results, res)
             end
         catch err
-            @warn err
+            if config.rethrow
+                rethrow(err)
+            else
+                @warn err
+            end
         end
 
         save_data(results, results_filename)

@@ -299,11 +299,8 @@ end
 ##################################################
 
 function POMDPs.action(policy::RandomPolicy, s::ScenarioState)
-    if isnothing(s.scenario_type)
-        return rand(actions(mdp, s))
-    else
-        return rand(actions(mdp, s))
-    end
+    mdp = policy.problem
+    return rand(actions(mdp, s))
 end
 
 
