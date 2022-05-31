@@ -21,6 +21,9 @@ packages = [
     PackageSpec(url="https://github.com/shubhg1996/ImportanceWeightedRiskMetrics.jl"),
     PackageSpec(url="https://github.com/shubhg1996/TreeImportanceSampling.jl"),
 
+    # [deps] ScenarioSelection.jl
+    PackageSpec(url=joinpath(@__DIR__, "AVExperiments.jl")),
+
     # [deps] AutonomousRiskFramework.jl
     PackageSpec(url="https://github.com/ancorso/POMDPGym.jl"),
     PackageSpec(url="https://github.com/ancorso/Crux.jl"),

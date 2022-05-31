@@ -1,4 +1,4 @@
-include("ast_td3_solver.jl")
+# include("ast_td3_solver.jl")
 include("mc_solver.jl")
 
 # TODO: pass (mdp, s) check isterminal(mdp, s)
@@ -10,6 +10,7 @@ function extract_info(info)
         data_point["reward"] = info["reward"]
         data_point["speed_before_collision"] = info["speed_before_collision"]
         data_point["delta_v"] = info["delta_v"]
+        data_point["mahal"] = info["mahal"]
     end
     return data_point
 end

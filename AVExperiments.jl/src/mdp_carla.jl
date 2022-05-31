@@ -1,5 +1,8 @@
+using Reexport
+@reexport using Distributions
+@reexport using PyCall
+@reexport using OrderedCollections
 using Distributed
-using Distributions
 using Infiltrator
 using LinearAlgebra
 using POMDPGym
@@ -7,9 +10,6 @@ import POMDPModelTools: Deterministic
 using POMDPPolicies
 using POMDPs
 using Parameters
-using PyCall
-using RiskSimulator
-using OrderedCollections
 pyimport("adv_carla")
 
 function pyreload()
@@ -124,20 +124,23 @@ end
     weather::Union{Nothing, Dict} = nothing
 end
 
+Base.hash(s::ScenarioState, h::UInt) = hash((s.scenario_type, s.weather), h)
+Base.isequal(s1::ScenarioState, s2::ScenarioState) = (s1.scenario_type == s2.scenario_type) && (s1.weather == s2.weather)
+Base.:(==)(s1::ScenarioState, s2::ScenarioState) = isequal(s1, s2)
 
 const ScenarioAction = Any
 
 
 @with_kw mutable struct CARLAScenarioMDP <: MDP{ScenarioState, ScenarioAction}
     seed::Int = 0xC0FFEE
-    γ::Real = 0.99
+    γ::Real = 1.0
     α::Real = 0.2 # probability risk threshold
     scenario_type_distr = create_scenario_type_distribution()
     weather_bins = 4
     weather_distr = discretize!(Weather(), weather_bins)
     final_state = nothing
     counter::Int = 0
-    monte_carlo_run::Bool = false # indicate whether to use MC for tree search and skip DRL at leaf nodes (to simply run scenario)
+    leaf_noise::Bool = true # indicate whether to apply sequential noise at the leaf nodes (`false` will simply run scenario without noise)
     collect_data::Bool = true
     datasets::Vector = []
     agent::Agent = NEAT
@@ -177,7 +180,8 @@ function eval_carla_task!(mdp::CARLAScenarioMDP, s::ScenarioState; kwargs...)
             procid = last(procs())
             println("Reusing Julia process id $procid ($ITERATIONS_PER_PROCSESS_COUNTER/$ITERATIONS_PER_PROCSESS)")
         end
-        include("task.jl")
+        @everywhere eval(quote include(joinpath(@__DIR__, "task.jl")) end)
+        @everywhere eval(quote using AVExperiments end)
         task = remotecall_wait(eval_carla_task_core, procid, run_solver, seed, scenario_type, weather; kwargs...)
         cost, dataset = fetch(task)
     else
@@ -227,7 +231,7 @@ end
 
 function POMDPs.reward(mdp::CARLAScenarioMDP, s::ScenarioState, a::ScenarioAction)
     if isterminal(mdp, s)
-        cost = eval_carla_task!(mdp, s; monte_carlo_run=mdp.monte_carlo_run,
+        cost = eval_carla_task!(mdp, s; leaf_noise=mdp.leaf_noise,
                                 agent=mdp.agent, apply_gnss_noise=mdp.apply_gnss_noise,
                                 sensor_config_gnss=mdp.sensor_config_gnss, sensor_config_camera=mdp.sensor_config_camera)
         return cost

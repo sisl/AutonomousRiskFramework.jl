@@ -369,7 +369,8 @@ class AdversarialCARLAEnv(gym.Env):
             self._info = {
                 'timestep': 0,
                 'collision': None,
-                'failed_scenario': None}
+                'failed_scenario': None,
+                'mahal': None}
             self.turn_on_headlights()
             return self._observation(retdict)
         except Exception as e:
@@ -470,7 +471,7 @@ class AdversarialCARLAEnv(gym.Env):
 
             # Calculate the reward for this step
             reward = self._reward(self._info)
-            self._info['reward'] = reward
+            self._info['reward'] = float(reward)
 
             return (observation, reward, done, copy.deepcopy(self._info))
         except Exception as e:
@@ -497,7 +498,9 @@ class AdversarialCARLAEnv(gym.Env):
         # self.mean_disturbance, self.var_disturbance = self._get_disturbance_params(sensor_params_list) # TODO. Cleverly only recompute the camera exposure values (not all of them)
 
         # TODO: scale to be reasonable sized (Within [-1, 1])
-        reward = -utils.mahalanobis_d(action, self.mean_disturbance, self.var_disturbance)/utils.mahalanobis_d(10*self.var_disturbance, self.mean_disturbance, self.var_disturbance)
+        mahal = utils.mahalanobis_d(action, self.mean_disturbance, self.var_disturbance)
+        reward = -mahal/utils.mahalanobis_d(10*self.var_disturbance, self.mean_disturbance, self.var_disturbance)
+        self._info['mahal'] = mahal
 
         if collision:
             reward += 100

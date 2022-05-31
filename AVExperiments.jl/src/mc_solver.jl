@@ -22,7 +22,7 @@ end
 
 
 function run_mc_solver(mdp, sensors)
-    @info "Running Monte Carlo (MC) to collect a cost..."
+    @info "Running Monte Carlo (MC) noise at leaf to collect a cost..."
     mdp_info = InfoCollector(mdp, extract_info)
     cost = mc_simulate(mdp_info, sensors)
     close(mdp.env) # Important!
