@@ -4,6 +4,26 @@ Based on [ScenarioRunner](https://github.com/carla-simulator/scenario_runner), m
 
 > **⚠ WORK IN PROGRESS ⚠**
 
+
+Example Experiment
+========================
+
+```julia
+using AVExperiments
+
+config = ExperimentConfig(
+    seed=0xC0FFEE,
+    agent=WorldOnRails,
+    N=100,
+    dir="results_wor",
+    use_tree_is=true,
+    leaf_noise=true,
+    resume=false,
+)
+
+results = run_carla_experiment(config)
+```
+
 Install Instructions
 ========================
 
