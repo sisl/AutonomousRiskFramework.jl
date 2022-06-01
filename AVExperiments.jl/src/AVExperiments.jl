@@ -43,7 +43,8 @@ export
     Weather,
     Agent,
     run_carla_experiment,
-    pyreload
+    pyreload,
+    generate_dirname!
 
 
 function disturbance(m::CARLAScenarioMDP, s::ScenarioState)
@@ -81,6 +82,7 @@ load_data(filename) = BSON.load(filename, @__MODULE__)[:data]
     leaf_noise  = true      # Apply adversarial noise disturbances at the leaf nodes
     resume      = false     # Resume previous run?
     rethrow     = false     # Choose to rethrow the errors or simply provide warning.
+    retry       = true      # Restart the run if an error was encountered.
     monitor     = @task start_carla_monitor() # Task to monitor that CARLA is still running.
 end
 
@@ -89,6 +91,32 @@ end
     planner
     costs
     info
+end
+
+
+function generate_dirname!(config::ExperimentConfig)
+    dir = "results"
+    if config.agent == WorldOnRails
+        dir = "$(dir)_wor"
+    elseif config.agent == NEAT
+        dir = "$(dir)_neat"
+    elseif config.agent == GNSS
+        dir = "$(dir)_gnss"
+    end
+
+    if config.use_tree_is
+        dir = "$(dir)_SS-IS"
+    else
+        dir = "$(dir)_SS-MC"
+    end
+
+    if config.leaf_noise
+        dir = "$(dir)_leaf-MC"
+    else
+        dir = "$(dir)_leaf-none"
+    end
+
+    config.dir = dir
 end
 
 
@@ -149,6 +177,10 @@ function run_carla_experiment(config::ExperimentConfig)
                 rethrow(err)
             else
                 @warn err
+                if config.retry
+                    config.N = config.N - length(results)
+                    run_carla_experiment(config) # Retry if there was an error.
+                end
             end
         end
         save_data(planner, planner_filename)
@@ -160,6 +192,9 @@ function run_carla_experiment(config::ExperimentConfig)
         policy = RandomPolicy(mdp)
         results_filename = joinpath(config.dir, "random_scenario_results.bson")
         results = config.resume ? load_data(results_filename) : []
+        if length(results) != 0
+            Random.seed!(mdp.seed + length(results)) # Change seed to where we left off.
+        end
 
         try
             @showprogress for i in 1:N
@@ -171,6 +206,10 @@ function run_carla_experiment(config::ExperimentConfig)
                 rethrow(err)
             else
                 @warn err
+                if config.retry
+                    config.N = config.N - length(results)
+                    run_carla_experiment(config) # Retry if there was an error.
+                end
             end
         end
 

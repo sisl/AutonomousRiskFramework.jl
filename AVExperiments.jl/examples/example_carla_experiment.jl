@@ -11,4 +11,6 @@ config = ExperimentConfig(
     resume=false,
 )
 
+generate_dirname!(config)
+
 results = run_carla_experiment(config)
