@@ -178,7 +178,9 @@ function run_carla_experiment(config::ExperimentConfig)
             else
                 @warn err
                 if config.retry
+                    @info "Retrying AV experiment!"
                     config.N = config.N - length(results)
+                    config.resume = true
                     run_carla_experiment(config) # Retry if there was an error.
                 end
             end
@@ -207,7 +209,9 @@ function run_carla_experiment(config::ExperimentConfig)
             else
                 @warn err
                 if config.retry
+                    @info "Retrying AV experiment!"
                     config.N = config.N - length(results)
+                    config.resume = true
                     run_carla_experiment(config) # Retry if there was an error.
                 end
             end
