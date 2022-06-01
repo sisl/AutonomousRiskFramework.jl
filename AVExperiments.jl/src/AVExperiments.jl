@@ -68,7 +68,7 @@ end
 # load_data(filename) = load(filename)[:data]
 
 save_data(data, filename) = BSON.@save(filename, data)
-load_data(filename) = BSON.load(filename)[:data]
+load_data(filename) = BSON.load(filename, @__MODULE__)[:data]
 
 
 
