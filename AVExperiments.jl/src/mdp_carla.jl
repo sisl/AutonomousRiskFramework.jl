@@ -157,15 +157,15 @@ const ScenarioAction = Any
     run_solver::Function = run_mc_solver
     run_separate_process::Bool = true # Launch CARLA bridge in separate process (to isolate CARLA memory leak)
     render_carla::Bool = true # Show CARLA rendering.
+    iterations_per_process::Int = 3 # Number of runs to make in separate Julia process (due to CARLA memory leak).
 end
 
 
-# Restart a new Julia process every X iterations
-global ITERATIONS_PER_PROCSESS = 3
-global ITERATIONS_PER_PROCSESS_COUNTER = 0
+# Counter to monitor when to restart a new Julia process every X iterations
+global ITERATIONS_PER_PROCESS_COUNTER = 0
 
 function eval_carla_task!(mdp::CARLAScenarioMDP, s::ScenarioState; kwargs...)
-    global ITERATIONS_PER_PROCSESS, ITERATIONS_PER_PROCSESS_COUNTER
+    global ITERATIONS_PER_PROCESS_COUNTER
 
     run_solver = mdp.run_solver
     seed = mdp.seed + mdp.counter
@@ -179,7 +179,7 @@ function eval_carla_task!(mdp::CARLAScenarioMDP, s::ScenarioState; kwargs...)
             println("Spawning Julia process with id $procid")
         else
             procid = last(procs())
-            println("Reusing Julia process id $procid ($ITERATIONS_PER_PROCSESS_COUNTER/$ITERATIONS_PER_PROCSESS)")
+            println("Reusing Julia process id $procid ($ITERATIONS_PER_PROCESS_COUNTER/$(mdp.iterations_per_process))")
         end
         @everywhere eval(quote include(joinpath(@__DIR__, "task.jl")) end)
         @everywhere eval(quote using AVExperiments end)
@@ -193,11 +193,11 @@ function eval_carla_task!(mdp::CARLAScenarioMDP, s::ScenarioState; kwargs...)
         push!(mdp.datasets, dataset)
     end
 
-    ITERATIONS_PER_PROCSESS_COUNTER += 1
-    if ITERATIONS_PER_PROCSESS_COUNTER >= ITERATIONS_PER_PROCSESS
+    ITERATIONS_PER_PROCESS_COUNTER += 1
+    if ITERATIONS_PER_PROCESS_COUNTER >= mdp.iterations_per_process
         println("Removing Julia process id $procid")
         rmprocs(procid)
-        ITERATIONS_PER_PROCSESS_COUNTER = 0
+        ITERATIONS_PER_PROCESS_COUNTER = 0
     end
 
     mdp.counter += 1

@@ -45,7 +45,8 @@ export
     run_carla_experiment,
     pyreload,
     generate_dirname!,
-    load_data
+    load_data,
+    get_costs
 
 
 function disturbance(m::CARLAScenarioMDP, s::ScenarioState)
@@ -87,6 +88,8 @@ load_data(filename) = BSON.load(filename, @__MODULE__)[:data]
     retry       = true      # Restart the run if an error was encountered.
     monitor     = @task start_carla_monitor() # Task to monitor that CARLA is still running.
     render_carla = true     # Show CARLA rendered display.
+    iterations_per_process = 3 # Number of runs to make in separate Julia process (due to CARLA memory leak).
+    save_frequency = 5 # After X iterations, save results.
 end
 
 
@@ -123,6 +126,10 @@ function generate_dirname!(config::ExperimentConfig)
 end
 
 
+get_costs(results::Vector) = map(res->res.hist[end].r, results)
+get_costs(planner::ISDPWPlanner) = planner.mdp.costs
+
+
 function run_carla_experiment(config::ExperimentConfig)
     # Monitor that CARLA executable is still alive.
     if !istaskstarted(config.monitor)
@@ -132,7 +139,8 @@ function run_carla_experiment(config::ExperimentConfig)
     mdp = CARLAScenarioMDP(seed=config.seed,
                            agent=config.agent,
                            leaf_noise=config.leaf_noise,
-                           render_carla=config.render_carla)
+                           render_carla=config.render_carla,
+                           iterations_per_process=config.iterations_per_process)
     Random.seed!(mdp.seed) # Determinism
 
     !isdir(config.dir) && mkdir(config.dir)
@@ -166,8 +174,7 @@ function run_carla_experiment(config::ExperimentConfig)
 
         try
             save_callback = planner->save_data(planner, planner_filename)
-            save_frequency = 5
-            a, info = action_info(planner, s0_tree; tree_in_info=tree_in_info, save_frequency=save_frequency, save_callback=save_callback, β, γ)
+            a, info = action_info(planner, s0_tree; tree_in_info=tree_in_info, save_frequency=config.save_frequency, save_callback=save_callback, β, γ)
             
             tis_output = (planner.mdp.costs, [], planner.mdp.IS_weights, info[:tree])
             costs = tis_output[1]
@@ -201,7 +208,17 @@ function run_carla_experiment(config::ExperimentConfig)
         s0 = rand(initialstate(mdp))
         policy = RandomPolicy(mdp)
         results_filename = joinpath(config.dir, "random_scenario_results.bson")
-        results = config.resume ? load_data(results_filename) : []
+        if config.resume
+            @info "Resuming: $results_filename"
+            results = load_data(results_filename)
+            if !config.additional
+                N = N - length(results)
+            end
+            @info "Resuming for N = $N runs."
+        else
+            results = []
+        end
+
         if length(results) != 0
             Random.seed!(mdp.seed + length(results)) # Change seed to where we left off.
         end
@@ -210,6 +227,9 @@ function run_carla_experiment(config::ExperimentConfig)
             @showprogress for i in 1:N
                 res = POMDPSimulators.simulate(HistoryRecorder(), mdp, policy, s0)
                 push!(results, res)
+                if i % config.save_frequency == 0
+                    save_data(results, results_filename)
+                end
             end
         catch err
             if config.rethrow
@@ -226,7 +246,7 @@ function run_carla_experiment(config::ExperimentConfig)
         end
 
         save_data(results, results_filename)
-        costs = map(res->res.hist[end].r, results)  
+        costs = get_costs(results)
         return ExperimentResults(policy, costs, results)
     end
 end
