@@ -163,7 +163,7 @@ function run_carla_experiment(config::ExperimentConfig)
             @info "Resuming for N = $(planner.solver.n_iterations) runs."
         else
             c = 0.0 # exploration bonus (NOTE: keep at 0)
-            α = 0.1 # VaR/CVaR risk parameter
+            α = mdp.α # VaR/CVaR risk parameter
             planner = TreeImportanceSampling.mcts_isdpw(tree_mdp; N, c, α)
         end
 

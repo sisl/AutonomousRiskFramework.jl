@@ -134,7 +134,7 @@ const ScenarioAction = Any
 @with_kw mutable struct CARLAScenarioMDP <: MDP{ScenarioState, ScenarioAction}
     seed::Int = 0xC0FFEE
     γ::Real = 1.0
-    α::Real = 0.2 # probability risk threshold
+    α::Real = 0.01 # probability risk threshold
     scenario_type_distr = create_scenario_type_distribution()
     weather_bins = 4
     weather_distr = discretize!(Weather(), weather_bins)
