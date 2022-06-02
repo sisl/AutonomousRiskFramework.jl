@@ -156,6 +156,7 @@ const ScenarioAction = Any
         "exposure_compensation" => Dict("mean" => 0, "std" => 0.5, "upper" => 1, "lower" => -1))
     run_solver::Function = run_mc_solver
     run_separate_process::Bool = true # Launch CARLA bridge in separate process (to isolate CARLA memory leak)
+    render_carla::Bool = true # Show CARLA rendering.
 end
 
 
@@ -233,7 +234,8 @@ function POMDPs.reward(mdp::CARLAScenarioMDP, s::ScenarioState, a::ScenarioActio
     if isterminal(mdp, s)
         cost = eval_carla_task!(mdp, s; leaf_noise=mdp.leaf_noise,
                                 agent=mdp.agent, apply_gnss_noise=mdp.apply_gnss_noise,
-                                sensor_config_gnss=mdp.sensor_config_gnss, sensor_config_camera=mdp.sensor_config_camera)
+                                sensor_config_gnss=mdp.sensor_config_gnss, sensor_config_camera=mdp.sensor_config_camera,
+                                no_rendering=!mdp.render_carla)
         return cost
     else
         return 0

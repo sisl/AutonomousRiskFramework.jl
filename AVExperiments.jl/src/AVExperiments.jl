@@ -44,7 +44,8 @@ export
     Agent,
     run_carla_experiment,
     pyreload,
-    generate_dirname!
+    generate_dirname!,
+    load_data
 
 
 function disturbance(m::CARLAScenarioMDP, s::ScenarioState)
@@ -81,9 +82,11 @@ load_data(filename) = BSON.load(filename, @__MODULE__)[:data]
     use_tree_is = true      # Use tree importance sampling (IS) for scenario selection (SS) [`false` will use Monte Carlo SS]
     leaf_noise  = true      # Apply adversarial noise disturbances at the leaf nodes
     resume      = false     # Resume previous run?
+    additional  = true      # Resume experiment by running an additional N iterations (as opposed to "finishing" the remaining `N-length(results)`)
     rethrow     = false     # Choose to rethrow the errors or simply provide warning.
     retry       = true      # Restart the run if an error was encountered.
     monitor     = @task start_carla_monitor() # Task to monitor that CARLA is still running.
+    render_carla = true     # Show CARLA rendered display.
 end
 
 
@@ -128,27 +131,31 @@ function run_carla_experiment(config::ExperimentConfig)
 
     mdp = CARLAScenarioMDP(seed=config.seed,
                            agent=config.agent,
-                           leaf_noise=config.leaf_noise)
+                           leaf_noise=config.leaf_noise,
+                           render_carla=config.render_carla)
     Random.seed!(mdp.seed) # Determinism
 
     !isdir(config.dir) && mkdir(config.dir)
     planner_filename = joinpath(config.dir, "planner.bson")
-    s0_tree_filename = joinpath(config.dir, "s0_tree.bson")
 
     N = config.N # number of samples drawn from the tree
 
     if config.use_tree_is
         tree_mdp = TreeMDP(mdp, 1.0, [], [], disturbance, "sum")
+        s0 = rand(initialstate(mdp))
+        s0_tree = TreeImportanceSampling.TreeState(s0)
         if config.resume
             @info "Resuming: $planner_filename"
             planner = load_data(planner_filename)
-            s0_tree = load_data(s0_tree_filename)
-            planner.solver.n_iterations = N
+            if config.additional
+                planner.solver.n_iterations = N
+            else
+                planner.solver.n_iterations = N - length(planner.mdp.costs)
+            end
+            @info "Resuming for N = $(planner.solver.n_iterations) runs."
         else
             c = 0.0 # exploration bonus (NOTE: keep at 0)
             α = 0.1 # VaR/CVaR risk parameter
-            s0 = rand(initialstate(mdp))
-            s0_tree = TreeImportanceSampling.TreeState(s0)
             planner = TreeImportanceSampling.mcts_isdpw(tree_mdp; N, c, α)
         end
 
@@ -158,7 +165,9 @@ function run_carla_experiment(config::ExperimentConfig)
         γ = 0.01 # for better estimate of VaR (γ=1 would give minimum variance estimate of VaR)
 
         try
-            a, info = action_info(planner, s0_tree; tree_in_info=tree_in_info, β, γ)
+            save_callback = planner->save_data(planner, planner_filename)
+            save_frequency = 5
+            a, info = action_info(planner, s0_tree; tree_in_info=tree_in_info, save_frequency=save_frequency, save_callback=save_callback, β, γ)
             
             tis_output = (planner.mdp.costs, [], planner.mdp.IS_weights, info[:tree])
             costs = tis_output[1]
@@ -179,14 +188,13 @@ function run_carla_experiment(config::ExperimentConfig)
                 @warn err
                 if config.retry
                     @info "Retrying AV experiment!"
-                    config.N = config.N - length(results)
+                    config.N = config.N - length(planner.mdp.costs)
                     config.resume = true
                     run_carla_experiment(config) # Retry if there was an error.
                 end
             end
         end
         save_data(planner, planner_filename)
-        save_data(s0_tree, s0_tree_filename)
         return ExperimentResults(planner, planner.mdp.costs, [])
     else
         # Use Monte Carlo scenario selection instead of tree-IS.

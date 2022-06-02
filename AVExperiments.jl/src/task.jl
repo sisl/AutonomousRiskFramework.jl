@@ -21,7 +21,8 @@ SCENARIO_CLASS_MAPPING = Dict(
 
 function eval_carla_task_core(run_solver, seed, scenario_type, weather;
                               leaf_noise=true, agent=NEAT, apply_gnss_noise=false,
-                              sensor_config_gnss=nothing, sensor_config_camera=nothing)
+                              sensor_config_gnss=nothing, sensor_config_camera=nothing,
+                              no_rendering=false)
     sensors = []
 
     @info "$scenario_type: $(SCENARIO_CLASS_MAPPING[scenario_type])"
@@ -45,7 +46,7 @@ function eval_carla_task_core(run_solver, seed, scenario_type, weather;
         agent_config = nothing
     end
 
-    gym_args = (sensors=sensors, seed=seed, scenario_type=scenario_type, weather=weather, no_rendering=false, agent=agent_path, agent_config=agent_config)
+    gym_args = (sensors=sensors, seed=seed, scenario_type=scenario_type, weather=weather, no_rendering=no_rendering, agent=agent_path, agent_config=agent_config)
     carla_mdp = GymPOMDP(Symbol("adv-carla"); gym_args...)
 
     if leaf_noise
