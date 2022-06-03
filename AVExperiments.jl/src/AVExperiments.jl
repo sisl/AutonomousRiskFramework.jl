@@ -195,7 +195,7 @@ function run_carla_experiment(config::ExperimentConfig)
                 @warn err
                 if config.retry
                     @info "Retrying AV experiment!"
-                    config.N = config.N - length(planner.mdp.costs)
+                    config.additional = false
                     config.resume = true
                     run_carla_experiment(config) # Retry if there was an error.
                 end
@@ -238,7 +238,7 @@ function run_carla_experiment(config::ExperimentConfig)
                 @warn err
                 if config.retry
                     @info "Retrying AV experiment!"
-                    config.N = config.N - length(results)
+                    config.additional = false
                     config.resume = true
                     run_carla_experiment(config) # Retry if there was an error.
                 end
