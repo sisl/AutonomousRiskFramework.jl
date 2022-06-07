@@ -155,7 +155,7 @@ class AdversarialCARLAEnv(gym.Env):
         # TODO: How to piggy-back on scenario_runner.py "main()" defaults?
         args = argparse.Namespace(host="127.0.0.1",
                                   port=port,
-                                  timeout=600.0, # for both ScenarioRunner and Watchdog (within ScenarioManager)
+                                  timeout=300.0, # for both ScenarioRunner and Watchdog (within ScenarioManager)
                                   trafficManagerPort=8000,
                                   trafficManagerSeed=0,
                                   sync=True,

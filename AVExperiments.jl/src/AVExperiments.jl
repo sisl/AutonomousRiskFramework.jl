@@ -74,7 +74,6 @@ save_data(data, filename) = BSON.@save(filename, data)
 load_data(filename) = BSON.load(filename, @__MODULE__)[:data]
 
 
-
 @with_kw mutable struct ExperimentConfig
     seed        = 0xC0FFEE  # RNG seed for determinism
     agent       = NEAT      # AV policy/agent to run. Options: [NEAT, WorldOnRails, GNSS]
@@ -132,8 +131,9 @@ get_costs(planner::ISDPWPlanner) = planner.mdp.costs
 
 function run_carla_experiment(config::ExperimentConfig)
     # Monitor that CARLA executable is still alive.
-    if !istaskstarted(config.monitor)
+    if !istaskstarted(config.monitor) && !haskey(ENV, "CARLA_MONITOR_STARTED")
         schedule(config.monitor) # Done asynchronously.
+        ENV["CARLA_MONITOR_STARTED"] = true
     end
 
     mdp = CARLAScenarioMDP(seed=config.seed,
