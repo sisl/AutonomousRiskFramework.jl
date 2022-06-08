@@ -125,7 +125,7 @@ class AdversarialCARLAEnv(gym.Env):
     disturbance_params = []
 
 
-    def __init__(self, *, seed=0, scenario_type="Scenario2", weather="Random", agent=None, agent_config=None, port=3000, record="recordings", params=DEFAULT_PARAMS, sensors=disturbance_params, no_rendering=False):
+    def __init__(self, *, seed=0, scenario_type="Scenario2", other_actor_type="vehicle.audi.tt", weather="Random", agent=None, agent_config=None, port=3000, record="recordings", params=DEFAULT_PARAMS, sensors=disturbance_params, no_rendering=False):
         # Scenario/route selections
         dirname = os.path.dirname(__file__)
         example_scenario = False
@@ -138,7 +138,7 @@ class AdversarialCARLAEnv(gym.Env):
             # self.carla_map = "Town01"
             self.spectator_loc = [80.37, 25.30, 0.0]
         else:
-            route_file, scenario_file, self.carla_map, self.spectator_loc = create_random_scenario(seed=seed, scenario_type=scenario_type, weather=weather)
+            route_file, scenario_file, self.carla_map, self.spectator_loc = create_random_scenario(seed=seed, scenario_type=scenario_type, other_actor_type=other_actor_type, weather=weather)
 
         route_id = 0 # TODO: Can we use this to control the background activity?
         route = [route_file, scenario_file, route_id]

@@ -598,6 +598,15 @@ index 940b6f7..af11531 100644
                  sensor_data = self._new_data_buffers.get(True, self._queue_timeout)
                  data_dict[sensor_data[0]] = ((sensor_data[1], sensor_data[2]))
  
+diff --git a/srunner/scenarioconfigs/scenario_configuration.py b/srunner/scenarioconfigs/scenario_configuration.py
+index 388a7d2..41b3a95 100644
+--- a/srunner/scenarioconfigs/scenario_configuration.py
++++ b/srunner/scenarioconfigs/scenario_configuration.py
+@@ -84,3 +84,4 @@ class ScenarioConfiguration(object):
+     friction = None
+     subtype = None
+     route_var_name = None
++    other_actor_type = None
 diff --git a/srunner/scenariomanager/scenarioatomics/atomic_criteria.py b/srunner/scenariomanager/scenarioatomics/atomic_criteria.py
 index 35aa46b..cd5936d 100644
 --- a/srunner/scenariomanager/scenarioatomics/atomic_criteria.py
@@ -621,37 +630,126 @@ index 35aa46b..cd5936d 100644
          if event.other_actor.id != 0:
              self.last_id = event.other_actor.id
 diff --git a/srunner/scenarios/follow_leading_vehicle.py b/srunner/scenarios/follow_leading_vehicle.py
-index b4c6d05..482b4fa 100644
+index b4c6d05..ee86baf 100644
 --- a/srunner/scenarios/follow_leading_vehicle.py
 +++ b/srunner/scenarios/follow_leading_vehicle.py
-@@ -100,7 +100,7 @@ class FollowLeadingVehicle(BasicScenario):
+@@ -100,7 +100,11 @@ class FollowLeadingVehicle(BasicScenario):
                             self._other_actor_transform.location.y,
                             self._other_actor_transform.location.z - 500),
              self._other_actor_transform.rotation)
 -        first_vehicle = CarlaDataProvider.request_new_actor('vehicle.nissan.patrol', first_vehicle_transform)
-+        first_vehicle = CarlaDataProvider.request_new_actor('vehicle.audi.tt', first_vehicle_transform)
++        if config.other_actor_type is None:
++            other_actor_type = 'vehicle.audi.tt'
++        else:
++            other_actor_type = config.other_actor_type
++        first_vehicle = CarlaDataProvider.request_new_actor(other_actor_type, first_vehicle_transform)
          first_vehicle.set_simulate_physics(enabled=False)
          self.other_actors.append(first_vehicle)
  
-@@ -238,7 +238,7 @@ class FollowLeadingVehicleWithObstacle(BasicScenario):
+@@ -237,8 +241,12 @@ class FollowLeadingVehicleWithObstacle(BasicScenario):
+             carla.Rotation(second_actor_waypoint.transform.rotation.pitch, yaw_1,
                             second_actor_waypoint.transform.rotation.roll))
  
++        if config.other_actor_type is None:
++            other_actor_type = 'vehicle.audi.tt'
++        else:
++            other_actor_type = config.other_actor_type
          first_actor = CarlaDataProvider.request_new_actor(
 -            'vehicle.nissan.patrol', first_actor_transform)
-+            'vehicle.audi.tt', first_actor_transform)
++            other_actor_type, first_actor_transform)
          second_actor = CarlaDataProvider.request_new_actor(
              'vehicle.diamondback.century', second_actor_transform)
  
+diff --git a/srunner/scenarios/object_crash_intersection.py b/srunner/scenarios/object_crash_intersection.py
+index a1c3037..6cdcfb8 100644
+--- a/srunner/scenarios/object_crash_intersection.py
++++ b/srunner/scenarios/object_crash_intersection.py
+@@ -499,9 +499,13 @@ class VehicleTurningRoute(BasicScenario):
+ 
+             # Try to spawn the actor
+             try:
++                if config.other_actor_type is None:
++                    other_actor_type = 'vehicle.diamondback.century'
++                else:
++                    other_actor_type = config.other_actor_type
+                 self._other_actor_transform = get_opponent_transform(added_dist, waypoint, self._trigger_location)
+                 first_vehicle = CarlaDataProvider.request_new_actor(
+-                    'vehicle.diamondback.century', self._other_actor_transform)
++                    other_actor_type, self._other_actor_transform)
+                 first_vehicle.set_simulate_physics(enabled=False)
+                 break
+ 
+diff --git a/srunner/scenarios/object_crash_vehicle.py b/srunner/scenarios/object_crash_vehicle.py
+index e540e97..a30823a 100644
+--- a/srunner/scenarios/object_crash_vehicle.py
++++ b/srunner/scenarios/object_crash_vehicle.py
+@@ -155,7 +155,12 @@ class DynamicObjectCrossing(BasicScenario):
+         self._other_actor_target_velocity = 5
+         self._other_actor_max_brake = 1.0
+         self._time_to_reach = 10
+-        self._adversary_type = adversary_type  # flag to select either pedestrian (False) or cyclist (True)
++        if config.other_actor_type == "vehicle.diamondback.century":
++            self._adversary_type = True
++        elif config.other_actor_type == "walker.pedestrian.0001":
++            self._adversary_type = False
++        else:
++            self._adversary_type = adversary_type  # flag to select either pedestrian (False) or cyclist (True)
+         self._walker_yaw = 0
+         self._num_lane_changes = 1
+         self.transform = None
 diff --git a/srunner/scenarios/other_leading_vehicle.py b/srunner/scenarios/other_leading_vehicle.py
-index fb6da7e..260d9bc 100644
+index fb6da7e..c00cf76 100644
 --- a/srunner/scenarios/other_leading_vehicle.py
 +++ b/srunner/scenarios/other_leading_vehicle.py
-@@ -79,7 +79,7 @@ class OtherLeadingVehicle(BasicScenario):
+@@ -78,9 +78,12 @@ class OtherLeadingVehicle(BasicScenario):
+                                                   first_vehicle_waypoint.transform.rotation)
          second_vehicle_transform = carla.Transform(second_vehicle_waypoint.transform.location,
                                                     second_vehicle_waypoint.transform.rotation)
- 
+-
 -        first_vehicle = CarlaDataProvider.request_new_actor('vehicle.nissan.patrol', first_vehicle_transform)
-+        first_vehicle = CarlaDataProvider.request_new_actor('vehicle.audi.tt', first_vehicle_transform)
-         second_vehicle = CarlaDataProvider.request_new_actor('vehicle.audi.tt', second_vehicle_transform)
+-        second_vehicle = CarlaDataProvider.request_new_actor('vehicle.audi.tt', second_vehicle_transform)
++        if config.other_actor_type is None:
++            other_actor_type = 'vehicle.audi.tt'
++        else:
++            other_actor_type = config.other_actor_type
++        first_vehicle = CarlaDataProvider.request_new_actor(other_actor_type, first_vehicle_transform)
++        second_vehicle = CarlaDataProvider.request_new_actor(other_actor_type, second_vehicle_transform)
  
          self.other_actors.append(first_vehicle)
+         self.other_actors.append(second_vehicle)
+diff --git a/srunner/scenarios/route_scenario.py b/srunner/scenarios/route_scenario.py
+index 753da81..2cc4a1c 100644
+--- a/srunner/scenarios/route_scenario.py
++++ b/srunner/scenarios/route_scenario.py
+@@ -335,6 +335,7 @@ class RouteScenario(BasicScenario):
+             scenario_configuration.ego_vehicles = [ActorConfigurationData('vehicle.lincoln.mkz_2017',
+                                                                           ego_vehicle.get_transform(),
+                                                                           'hero')]
++            scenario_configuration.other_actor_type = definition['other_actor_type']
+             route_var_name = "ScenarioRouteNumber{}".format(scenario_number)
+             scenario_configuration.route_var_name = route_var_name
+ 
+diff --git a/srunner/tools/route_parser.py b/srunner/tools/route_parser.py
+index 18899a5..d27fd79 100644
+--- a/srunner/tools/route_parser.py
++++ b/srunner/tools/route_parser.py
+@@ -285,6 +285,11 @@ class RouteParser(object):
+                 if "scenario_type" not in scenario:
+                     break
+                 scenario_name = scenario["scenario_type"]
++                if 'other_actor_type' in scenario:
++                    other_actor_type = scenario['other_actor_type']
++                else:
++                    other_actor_type = None
++                scenario_name = scenario["scenario_type"]
+                 for event in scenario["available_event_configurations"]:
+                     waypoint = event['transform']  # trigger point of this scenario
+                     RouteParser.convert_waypoint_float(waypoint)
+@@ -306,6 +311,7 @@ class RouteParser(object):
+                         scenario_description = {
+                             'name': scenario_name,
+                             'other_actors': other_vehicles,
++                            'other_actor_type': other_actor_type,
+                             'trigger_position': waypoint,
+                             'scenario_type': scenario_subtype,  # some scenarios have route dependent configs
+                         }

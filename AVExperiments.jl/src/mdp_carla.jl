@@ -116,16 +116,38 @@ end
 
 
 ##################################################
+# Other agent type
+##################################################
+
+function create_other_actor_type_distribution(scenario_type)
+    if scenario_type in ["Scenario2", "Scenario5"]
+        car = "vehicle.audi.tt"
+        motorcycle = "vehicle.kawasaki.ninja"
+        vals = [car, motorcycle]
+    elseif scenario_type in ["Scenario3", "Scenario4"]
+        bicycle = "vehicle.diamondback.century"
+        pedestrian = "walker.pedestrian.0001"
+        vals = [bicycle, pedestrian]
+    else
+        error("No `other_actor_type` for scenario type $scenario_type")
+    end
+    probs = normalize(ones(length(vals)), 1)
+    return GenericDiscreteNonParametric(vals, probs)
+end
+
+
+##################################################
 # CARLA scenario selection MDP
 ##################################################
 
 @with_kw mutable struct ScenarioState
     scenario_type::Union{Nothing, String} = nothing
+    other_actor_type::Union{Nothing, String} = nothing
     weather::Union{Nothing, Dict} = nothing
 end
 
-Base.hash(s::ScenarioState, h::UInt) = hash((s.scenario_type, s.weather), h)
-Base.isequal(s1::ScenarioState, s2::ScenarioState) = (s1.scenario_type == s2.scenario_type) && (s1.weather == s2.weather)
+Base.hash(s::ScenarioState, h::UInt) = hash((s.scenario_type, s.other_actor_type, s.weather), h)
+Base.isequal(s1::ScenarioState, s2::ScenarioState) = (s1.scenario_type == s2.scenario_type) && (s1.other_actor_type == s2.other_actor_type) && (s1.weather == s2.weather)
 Base.:(==)(s1::ScenarioState, s2::ScenarioState) = isequal(s1, s2)
 
 const ScenarioAction = Any
@@ -136,6 +158,7 @@ const ScenarioAction = Any
     γ::Real = 1.0
     α::Real = 0.01 # probability risk threshold
     scenario_type_distr = create_scenario_type_distribution()
+    other_actor_type_distr = create_other_actor_type_distribution # conditional
     weather_bins = 4
     weather_distr = discretize!(Weather(), weather_bins)
     final_state = nothing
@@ -158,6 +181,15 @@ const ScenarioAction = Any
     run_separate_process::Bool = true # Launch CARLA bridge in separate process (to isolate CARLA memory leak)
     render_carla::Bool = true # Show CARLA rendering.
     iterations_per_process::Int = 3 # Number of runs to make in separate Julia process (due to CARLA memory leak).
+    scenarios = [] # Collection of specific scenarios sampled and ran.
+end
+
+
+function Base.merge(mdp1::CARLAScenarioMDP, mdp2::CARLAScenarioMDP)
+    mdp = deepcopy(mdp1)
+    mdp.datasets = vcat(mdp.datasets, mdp2.datasets)
+    mdp.scenarios = vcat(mdp.scenarios, mdp2.scenarios)
+    return mdp
 end
 
 
@@ -170,7 +202,10 @@ function eval_carla_task!(mdp::CARLAScenarioMDP, s::ScenarioState; kwargs...)
     run_solver = mdp.run_solver
     seed = mdp.seed + mdp.counter
     scenario_type = s.scenario_type
+    other_actor_type = s.other_actor_type
     weather = fill_out_weather!(s.weather)
+
+    push!(mdp.scenarios, (seed=seed, state=s))
 
     if mdp.run_separate_process
         println()
@@ -183,10 +218,10 @@ function eval_carla_task!(mdp::CARLAScenarioMDP, s::ScenarioState; kwargs...)
         end
         @everywhere eval(quote include(joinpath(@__DIR__, "task.jl")) end)
         @everywhere eval(quote using AVExperiments end)
-        task = remotecall_wait(eval_carla_task_core, procid, run_solver, seed, scenario_type, weather; kwargs...)
+        task = remotecall_wait(eval_carla_task_core, procid, run_solver, seed, scenario_type, other_actor_type, weather; kwargs...)
         cost, dataset = fetch(task)
     else
-        cost, dataset = eval_carla_task_core(run_solver, seed, scenario_type, weather; kwargs...)
+        cost, dataset = eval_carla_task_core(run_solver, seed, scenario_type, other_actor_type, weather; kwargs...)
     end
 
     if mdp.collect_data
@@ -209,12 +244,14 @@ end
 function eval_carla_single(mdp::CARLAScenarioMDP, s::ScenarioState)
     sensors = [mdp.sensor_config_gnss]
     scenario_type = s.scenario_type
+    other_actor_type = s.other_actor_type
     weather = fill_out_weather!(s.weather)
 
     @info scenario_type
+    @info other_actor_type
     display(weather)
 
-    carla_mdp = GymPOMDP(Symbol("adv-carla"), sensors=sensors, seed=mdp.seed, scenario_type=scenario_type, weather=weather, no_rendering=false)
+    carla_mdp = GymPOMDP(Symbol("adv-carla"), sensors=sensors, seed=mdp.seed, scenario_type=scenario_type, other_actor_type=other_actor_type, weather=weather, no_rendering=false)
     env = carla_mdp.env
     σ = 0.0001 # noise variance
     local info
@@ -250,14 +287,16 @@ end
 
 function POMDPs.gen(mdp::CARLAScenarioMDP, s::ScenarioState, a::ScenarioAction, rng=Random.GLOBAL_RNG)
     if isnothing(s.scenario_type)
-        sp = ScenarioState(a, nothing)
+        sp = ScenarioState(a, nothing, nothing)
+    elseif isnothing(s.other_actor_type)
+        sp = ScenarioState(s.scenario_type, a, nothing)
     elseif isnothing(s.weather)
-        sp = ScenarioState(s.scenario_type, initialize_weather_dict())
+        sp = ScenarioState(s.scenario_type, s.other_actor_type, initialize_weather_dict())
         return gen(mdp, sp, a, rng)
     else
         for k in keys(s.weather)
             if isnothing(s.weather[k])
-                sp = ScenarioState(s.scenario_type, copy(s.weather))
+                sp = ScenarioState(s.scenario_type, s.other_actor_type, copy(s.weather))
                 sp.weather[k] = a
                 break
             end
@@ -271,8 +310,9 @@ end
 function POMDPs.isterminal(mdp::CARLAScenarioMDP, s::ScenarioState)
     # terminate when all decisions have been made
     scenario_type_selected = !isnothing(s.scenario_type)
+    other_actor_type_selected = !isnothing(s.other_actor_type)
     weather_selected = !isnothing(s.weather) && all(.!isnothing.(values(s.weather)))
-    return scenario_type_selected && weather_selected
+    return scenario_type_selected && other_actor_type_selected && weather_selected
 end
 
 
@@ -282,6 +322,8 @@ POMDPs.discount(mdp::CARLAScenarioMDP) = mdp.γ
 function POMDPs.actions(mdp::CARLAScenarioMDP, s::ScenarioState)
     if isnothing(s.scenario_type)
         return mdp.scenario_type_distr
+    elseif isnothing(s.other_actor_type)
+        return mdp.other_actor_type_distr(s.scenario_type) # conditional
     elseif isnothing(s.weather)
         s.weather = initialize_weather_dict()
         return actions(mdp, s)

@@ -46,7 +46,8 @@ export
     pyreload,
     generate_dirname!,
     load_data,
-    get_costs
+    get_costs,
+    ScenarioState
 
 
 function disturbance(m::CARLAScenarioMDP, s::ScenarioState)
@@ -75,20 +76,21 @@ load_data(filename) = BSON.load(filename, @__MODULE__)[:data]
 
 
 @with_kw mutable struct ExperimentConfig
-    seed        = 0xC0FFEE  # RNG seed for determinism
-    agent       = NEAT      # AV policy/agent to run. Options: [NEAT, WorldOnRails, GNSS]
-    N           = 100       # Number of scenario selection iterations
-    dir         = "results" # Directory to save results
-    use_tree_is = true      # Use tree importance sampling (IS) for scenario selection (SS) [`false` will use Monte Carlo SS]
-    leaf_noise  = true      # Apply adversarial noise disturbances at the leaf nodes
-    resume      = false     # Resume previous run?
-    additional  = true      # Resume experiment by running an additional N iterations (as opposed to "finishing" the remaining `N-length(results)`)
-    rethrow     = false     # Choose to rethrow the errors or simply provide warning.
-    retry       = true      # Restart the run if an error was encountered.
-    monitor     = @task start_carla_monitor() # Task to monitor that CARLA is still running.
-    render_carla = true     # Show CARLA rendered display.
+    seed           = 0xC0FFEE  # RNG seed for determinism
+    agent          = NEAT      # AV policy/agent to run. Options: [NEAT, WorldOnRails, GNSS]
+    N              = 100       # Number of scenario selection iterations
+    dir            = "results" # Directory to save results
+    use_tree_is    = true      # Use tree importance sampling (IS) for scenario selection (SS) [`false` will use Monte Carlo SS]
+    leaf_noise     = true      # Apply adversarial noise disturbances at the leaf nodes
+    resume         = false     # Resume previous run?
+    additional     = true      # Resume experiment by running an additional N iterations (as opposed to "finishing" the remaining `N-length(results)`)
+    rethrow        = false     # Choose to rethrow the errors or simply provide warning.
+    retry          = true      # Restart the run if an error was encountered.
+    monitor        = @task start_carla_monitor() # Task to monitor that CARLA is still running.
+    render_carla   = true      # Show CARLA rendered display.
+    save_frequency = 1         # After X iterations, save results.
+    s0             = nothing   # initial state
     iterations_per_process = 3 # Number of runs to make in separate Julia process (due to CARLA memory leak).
-    save_frequency = 5 # After X iterations, save results.
 end
 
 
@@ -136,23 +138,37 @@ function run_carla_experiment(config::ExperimentConfig)
         ENV["CARLA_MONITOR_STARTED"] = true
     end
 
-    mdp = CARLAScenarioMDP(seed=config.seed,
-                           agent=config.agent,
-                           leaf_noise=config.leaf_noise,
-                           render_carla=config.render_carla,
-                           iterations_per_process=config.iterations_per_process)
-    Random.seed!(mdp.seed) # Determinism
+    rmdp = CARLAScenarioMDP(seed=config.seed,
+                            agent=config.agent,
+                            leaf_noise=config.leaf_noise,
+                            render_carla=config.render_carla,
+                            iterations_per_process=config.iterations_per_process)
+    Random.seed!(rmdp.seed) # Determinism
 
     !isdir(config.dir) && mkdir(config.dir)
     planner_filename = joinpath(config.dir, "planner.bson")
 
     N = config.N # number of samples drawn from the tree
 
+    if isnothing(config.s0)
+        s0 = rand(initialstate(rmdp))
+    else
+        s0 = config.s0
+    end
+
+    function new_planner()
+        tree_mdp = TreeMDP(rmdp, 1.0, [], [], disturbance, "sum")
+        c = 0.0 # exploration bonus (NOTE: keep at 0)
+        α = rmdp.α # VaR/CVaR risk parameter
+        return TreeImportanceSampling.mcts_isdpw(tree_mdp; N, c, α)
+    end
+
     if config.use_tree_is
-        tree_mdp = TreeMDP(mdp, 1.0, [], [], disturbance, "sum")
-        s0 = rand(initialstate(mdp))
         s0_tree = TreeImportanceSampling.TreeState(s0)
-        if config.resume
+        if config.resume && !isfile(planner_filename)
+            @info "Trying to resume a file that doesn't exist, starting from scratch: $planner_filename"
+            planner = new_planner()
+        elseif config.resume
             @info "Resuming: $planner_filename"
             planner = load_data(planner_filename)
             if config.additional
@@ -162,9 +178,7 @@ function run_carla_experiment(config::ExperimentConfig)
             end
             @info "Resuming for N = $(planner.solver.n_iterations) runs."
         else
-            c = 0.0 # exploration bonus (NOTE: keep at 0)
-            α = mdp.α # VaR/CVaR risk parameter
-            planner = TreeImportanceSampling.mcts_isdpw(tree_mdp; N, c, α)
+            planner = new_planner()
         end
 
         tree_in_info = true
@@ -175,19 +189,7 @@ function run_carla_experiment(config::ExperimentConfig)
         try
             save_callback = planner->save_data(planner, planner_filename)
             a, info = action_info(planner, s0_tree; tree_in_info=tree_in_info, save_frequency=config.save_frequency, save_callback=save_callback, β, γ)
-            
-            tis_output = (planner.mdp.costs, [], planner.mdp.IS_weights, info[:tree])
-            costs = tis_output[1]
-            log_weights = tis_output[2]
-            mcts_data_tree = tis_output[end]
-
-            #######################################
-            # Visualize tree if available
-            ########################################
-            visualize_tree = true
-            if visualize_tree
-                show_tree(planner)
-            end
+            show_tree(planner)
         catch err
             if config.rethrow
                 rethrow(err)
@@ -197,7 +199,8 @@ function run_carla_experiment(config::ExperimentConfig)
                     @info "Retrying AV experiment!"
                     config.additional = false
                     config.resume = true
-                    run_carla_experiment(config) # Retry if there was an error.
+                    exp_results = run_carla_experiment(config) # Retry if there was an error.
+                    planner = exp_results.planner # Make sure to copy over the recursed planner results.
                 end
             end
         end
@@ -205,30 +208,32 @@ function run_carla_experiment(config::ExperimentConfig)
         return ExperimentResults(planner, planner.mdp.costs, [])
     else
         # Use Monte Carlo scenario selection instead of tree-IS.
-        s0 = rand(initialstate(mdp))
-        policy = RandomPolicy(mdp)
+        policy = RandomPolicy(rmdp)
         results_filename = joinpath(config.dir, "random_scenario_results.bson")
         if config.resume
             @info "Resuming: $results_filename"
             results = load_data(results_filename)
             if !config.additional
-                N = N - length(results)
+                N = N - length(results.info)
             end
             @info "Resuming for N = $N runs."
         else
-            results = []
+            results = ExperimentResults(rmdp, [], [])
         end
 
-        if length(results) != 0
-            Random.seed!(mdp.seed + length(results)) # Change seed to where we left off.
+        if length(results.info) != 0
+            Random.seed!(rmdp.seed + length(results.info)) # Change seed to where we left off.
         end
 
         try
             @showprogress for i in 1:N
-                res = POMDPSimulators.simulate(HistoryRecorder(), mdp, policy, s0)
-                push!(results, res)
+                res = POMDPSimulators.simulate(HistoryRecorder(), rmdp, policy, s0)
+                push!(results.info, res)
+
                 if i % config.save_frequency == 0
-                    save_data(results, results_filename)
+                    costs = get_costs(results.info)
+                    exp_results = ExperimentResults(rmdp, costs, results.info)
+                    save_data(exp_results, results_filename)
                 end
             end
         catch err
@@ -240,14 +245,17 @@ function run_carla_experiment(config::ExperimentConfig)
                     @info "Retrying AV experiment!"
                     config.additional = false
                     config.resume = true
-                    run_carla_experiment(config) # Retry if there was an error.
+                    exp_results = run_carla_experiment(config) # Retry if there was an error.
+                    rmdp = merge(rmdp, exp_results.planner)
+                    results.info = exp_results.info
                 end
             end
         end
 
-        save_data(results, results_filename)
-        costs = get_costs(results)
-        return ExperimentResults(policy, costs, results)
+        costs = get_costs(results.info)
+        exp_results = ExperimentResults(rmdp, costs, results.info)
+        save_data(exp_results, results_filename)
+        return exp_results
     end
 end
 

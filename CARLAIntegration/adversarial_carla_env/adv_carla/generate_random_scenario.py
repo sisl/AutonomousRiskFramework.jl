@@ -251,12 +251,13 @@ def write_route(rng, candidate, routes, weather="Random", fname=abspath("data/te
    return fname, town, spectator_loc
 
 
-def write_scenario_json(scenario,obj,raw_list,fname=abspath("data/test.json")):
+def write_scenario_json(scenario, obj, raw_list, fname=abspath("data/test.json")):
    scenario_id = scenario["id"]
    scenario_type = scenario["scenario_type"]
+   other_actor_type = scenario["other_actor_type"]
    town = scenario["town"]
    json_dict = {}
-   json_dict["available_scenarios"] = [{town:[{"available_event_configurations":[raw_list[scenario_id]],"scenario_type":scenario_type}]}]       
+   json_dict["available_scenarios"] = [{town:[{"available_event_configurations":[raw_list[scenario_id]],"scenario_type":scenario_type,"other_actor_type":other_actor_type}]}]
    with open(fname,"w") as f:
       json.dump(json_dict,f,indent=4)
    return fname
@@ -273,7 +274,7 @@ def write_scenario_json(scenario,obj,raw_list,fname=abspath("data/test.json")):
 #     "Scenario9": SignalJunctionCrossingRoute,
 #     "Scenario10": NoSignalJunctionCrossingRoute
 # }
-def create_random_scenario(*, seed=None, scenario_type="Scenario4", weather="Random"):
+def create_random_scenario(*, seed=None, scenario_type="Scenario4", other_actor_type="vehicle.audi.tt", weather="Random"):
    if seed is None:
       maxint32 = np.iinfo(np.int32).max
       seed = np.random.randint(low=0, high=maxint32)
@@ -303,7 +304,8 @@ def create_random_scenario(*, seed=None, scenario_type="Scenario4", weather="Ran
       print(counter)
       counter += 1
    route_filename, town, spectator_loc = write_route(rng, candidate, routes, weather=weather)
-   scenario_filename = write_scenario_json(the_scenario,obj,raw_list)
+   the_scenario["other_actor_type"] = other_actor_type
+   scenario_filename = write_scenario_json(the_scenario, obj, raw_list)
 
    # print("Run command:")
    # print(r"python scenario_runner_ast_gym.py --route data/test.xml data/test.json --port 2222 --agent srunner/autoagents/ast_agent.py --record recordings --timeout 60")
