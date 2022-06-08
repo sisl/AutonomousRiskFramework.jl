@@ -205,8 +205,6 @@ function eval_carla_task!(mdp::CARLAScenarioMDP, s::ScenarioState; kwargs...)
     other_actor_type = s.other_actor_type
     weather = fill_out_weather!(s.weather)
 
-    push!(mdp.scenarios, (seed=seed, state=s))
-
     if mdp.run_separate_process
         println()
         if nprocs() <= 1
@@ -225,6 +223,7 @@ function eval_carla_task!(mdp::CARLAScenarioMDP, s::ScenarioState; kwargs...)
     end
 
     if mdp.collect_data
+        push!(mdp.scenarios, (seed=seed, state=s))
         push!(mdp.datasets, dataset)
     end
 

@@ -222,7 +222,7 @@ function run_carla_experiment(config::ExperimentConfig)
         end
 
         if length(results.info) != 0
-            Random.seed!(rmdp.seed + length(results.info)) # Change seed to where we left off.
+            rmdp.seed = rmdp.seed + length(results.info) # Change seed to where we left off.
         end
 
         try
