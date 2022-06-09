@@ -25,6 +25,7 @@ import sys
 import time
 import warnings
 import math
+import torch
 
 import carla
 import py_trees
@@ -139,6 +140,13 @@ class AdversarialCARLAEnv(gym.Env):
             self.spectator_loc = [80.37, 25.30, 0.0]
         else:
             route_file, scenario_file, self.carla_map, self.spectator_loc = create_random_scenario(seed=seed, scenario_type=scenario_type, other_actor_type=other_actor_type, weather=weather)
+
+        print("Setting Python seed to:", seed)
+        # torch.use_deterministic_algorithms(True)
+        torch.manual_seed(seed)
+        random.seed(seed)
+        np.random.seed(seed)
+        
 
         route_id = 0 # TODO: Can we use this to control the background activity?
         route = [route_file, scenario_file, route_id]

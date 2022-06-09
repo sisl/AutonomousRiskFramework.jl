@@ -47,7 +47,8 @@ export
     generate_dirname!,
     load_data,
     get_costs,
-    ScenarioState
+    ScenarioState,
+    run_scenario
 
 
 function disturbance(m::CARLAScenarioMDP, s::ScenarioState)
@@ -82,8 +83,8 @@ load_data(filename) = BSON.load(filename, @__MODULE__)[:data]
     dir            = "results" # Directory to save results
     use_tree_is    = true      # Use tree importance sampling (IS) for scenario selection (SS) [`false` will use Monte Carlo SS]
     leaf_noise     = true      # Apply adversarial noise disturbances at the leaf nodes
-    resume         = false     # Resume previous run?
-    additional     = true      # Resume experiment by running an additional N iterations (as opposed to "finishing" the remaining `N-length(results)`)
+    resume         = true      # Resume previous run?
+    additional     = false     # Resume experiment by running an additional N iterations (as opposed to "finishing" the remaining `N-length(results)`)
     rethrow        = false     # Choose to rethrow the errors or simply provide warning.
     retry          = true      # Restart the run if an error was encountered.
     monitor        = @task start_carla_monitor() # Task to monitor that CARLA is still running.
@@ -122,6 +123,8 @@ function generate_dirname!(config::ExperimentConfig)
     else
         dir = "$(dir)_leaf-none"
     end
+
+    dir = "$(dir)_seed-$(uppercase(string(config.seed, base=16)))"
 
     config.dir = dir
 end
@@ -210,7 +213,11 @@ function run_carla_experiment(config::ExperimentConfig)
         # Use Monte Carlo scenario selection instead of tree-IS.
         policy = RandomPolicy(rmdp)
         results_filename = joinpath(config.dir, "random_scenario_results.bson")
-        if config.resume
+        new_results = ()->ExperimentResults(rmdp, [], [])
+        if config.resume && !isfile(results_filename)
+            @info "Trying to resume a file that doesn't exist, starting from scratch: $results_filename"
+            results = new_results()
+        elseif config.resume
             @info "Resuming: $results_filename"
             results = load_data(results_filename)
             if !config.additional
@@ -218,7 +225,7 @@ function run_carla_experiment(config::ExperimentConfig)
             end
             @info "Resuming for N = $N runs."
         else
-            results = ExperimentResults(rmdp, [], [])
+            results = new_results()
         end
 
         if length(results.info) != 0
@@ -257,6 +264,14 @@ function run_carla_experiment(config::ExperimentConfig)
         save_data(exp_results, results_filename)
         return exp_results
     end
+end
+
+
+function run_scenario(planner::ISDPWPlanner, s::ScenarioState, seed::Int)
+    rmdp = deepcopy(planner.mdp.rmdp)
+    rmdp.seed = seed
+    rmdp.counter = 0
+    return POMDPs.reward(rmdp, s)
 end
 
 

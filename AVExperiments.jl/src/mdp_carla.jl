@@ -196,6 +196,7 @@ end
 # Counter to monitor when to restart a new Julia process every X iterations
 global ITERATIONS_PER_PROCESS_COUNTER = 0
 
+
 function eval_carla_task!(mdp::CARLAScenarioMDP, s::ScenarioState; kwargs...)
     global ITERATIONS_PER_PROCESS_COUNTER
 
@@ -204,6 +205,8 @@ function eval_carla_task!(mdp::CARLAScenarioMDP, s::ScenarioState; kwargs...)
     scenario_type = s.scenario_type
     other_actor_type = s.other_actor_type
     weather = fill_out_weather!(s.weather)
+
+    Random.seed!(seed)
 
     if mdp.run_separate_process
         println()
@@ -266,7 +269,7 @@ function eval_carla_single(mdp::CARLAScenarioMDP, s::ScenarioState)
 end
 
 
-function POMDPs.reward(mdp::CARLAScenarioMDP, s::ScenarioState, a::ScenarioAction)
+function POMDPs.reward(mdp::CARLAScenarioMDP, s::ScenarioState, a::ScenarioAction=nothing)
     if isterminal(mdp, s)
         cost = eval_carla_task!(mdp, s; leaf_noise=mdp.leaf_noise,
                                 agent=mdp.agent, apply_gnss_noise=mdp.apply_gnss_noise,
