@@ -18,7 +18,7 @@ for seed in [0xC0FFEE, 0xFACADE, 0x0FF1CE]
 
             generate_dirname!(config)
             @info "Running: $(config.dir)"
-            # run_carla_experiment(config)
+            run_carla_experiment(config)
         end
     end
 end
