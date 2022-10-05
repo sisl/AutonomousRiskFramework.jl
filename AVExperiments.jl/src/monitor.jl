@@ -5,23 +5,29 @@ function is_carla_running()
         tasks = read(`tasklist`, String)
         return occursin("CarlaUE4.exe", tasks)
     else
-        error("Checking CARLA executable not setup for Linux.")
+        tasks = read(`ps -aux`, String)
+        return occursin("CarlaUE4.sh", tasks)
     end
 end
 
 function start_carla_monitor(time=5)
     # Check if CARLA executable is running
-    if Sys.iswindows()
-        while is_carla_running()
-            # CARLA already open
-            sleep(time)
-        end
-        # CARLA not open, so open it.
+    while is_carla_running()
+        # CARLA already open
+        sleep(time)
+    end
+
+    # CARLA not open, so open it.
+    if Sys.iswindows()    
         carla_start = joinpath(@__DIR__, "..", "..", "CARLAIntegration", "adversarial_carla_env", "carla-start.bat")
         @info "Re-opening CARLA executable."
         run(`cmd /c $carla_start`)
-        start_carla_monitor()
+        
     else
-        @warn "CARLA monitoring only setup for Windows."
+        carla_start = joinpath(@__DIR__, "..", "..", "CARLAIntegration", "adversarial_carla_env", "carla-start.sh")
+        @info "Re-opening CARLA executable."
+        run(`$carla_start`, wait=false)
     end
+    sleep(5)  # To give CARLA a chance to fully come up.
+    start_carla_monitor()
 end
