@@ -7,8 +7,8 @@
 @techreport{moss2021autonomous,
   title={{Autonomous Vehicle Risk Assessment}},
   author={Robert J. Moss and Shubh Gupta and Robert Dyro and Karen Leung and Mykel J. Kochenderfer and Grace X. Gao and Marco Pavone and Edward Schmerling and Anthony Corso and Regina Madigan and Matei Stroila and Tim Gibson},
-  year={2021},
-  institution={Stanford Center for AI Safety, Stanford University}
+  institution={Stanford Center for AI Safety, Stanford University},
+  year={2021}
 }
 ```
 
