@@ -3,6 +3,15 @@
 [![Report](https://img.shields.io/badge/research-report-2d716f.svg)](http://web.stanford.edu/~mossr/pdf/Autonomous_Vehicle_Risk_Assessment.pdf)
 [![Build Status](https://github.com/sisl/AutonomousRiskFramework/actions/workflows/CI.yml/badge.svg)](https://github.com/sisl/AutonomousRiskFramework/actions/workflows/CI.yml)
 
+```
+@techreport{moss2021autonomous,
+  title={{Autonomous Vehicle Risk Assessment}},
+  author={Robert J. Moss and Shubh Gupta and Robert Dyro and Karen Leung and Mykel J. Kochenderfer and Grace X. Gao and Marco Pavone and Edward Schmerling and Anthony Corso and Regina Madigan and Matei Stroila and Tim Gibson},
+  year={2021},
+  institution={Stanford Center for AI Safety, Stanford University}
+}
+```
+
 ## Installation
 **Note:** Julia v1.5+ is recommended for AutomotiveSimulator and POMDPStressTesting.
 
